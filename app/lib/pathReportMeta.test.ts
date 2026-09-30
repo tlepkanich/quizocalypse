@@ -100,6 +100,57 @@ describe("pathReportHash", () => {
   });
 });
 
+describe("pathReportHash — Logic step fields (order, verb, targets, style)", () => {
+  const two = () =>
+    deciderDoc({ rules: [{ id: "r1", target: "cat_dry" }, { id: "r2", target: "cat_oily" }] });
+
+  it("flips on a rule reorder", () => {
+    const doc = two();
+    const swapped = { ...doc, decision_rules: [...doc.decision_rules!].reverse() };
+    expect(pathReportHash(swapped)).not.toBe(pathReportHash(doc));
+  });
+
+  it("flips on a verb change and on a second rule target", () => {
+    const doc = two();
+    const base = pathReportHash(doc);
+    const hide = {
+      ...doc,
+      decision_rules: doc.decision_rules!.map((r, i) => (i === 0 ? { ...r, action: "hide" as const } : r)),
+    };
+    expect(pathReportHash(hide)).not.toBe(base);
+    const multi = {
+      ...doc,
+      decision_rules: doc.decision_rules!.map((r, i) =>
+        i === 0 ? { ...r, target_ids: ["cat_dry", "cat_x"] } : r,
+      ),
+    };
+    expect(pathReportHash(multi)).not.toBe(base);
+  });
+
+  it("flips on a second answer target and on logic_style", () => {
+    const doc = deciderDoc();
+    const base = pathReportHash(doc);
+    const multi = {
+      ...doc,
+      nodes: doc.nodes.map((n) =>
+        n.type === "question"
+          ? {
+              ...n,
+              data: {
+                ...n.data,
+                answers: n.data.answers.map((a) =>
+                  a.id === "a1" ? { ...a, target_ids: [a.target_id!, "cat_x"] } : a,
+                ),
+              },
+            }
+          : n,
+      ),
+    };
+    expect(pathReportHash(multi)).not.toBe(base);
+    expect(pathReportHash({ ...doc, logic_style: "rules" })).not.toBe(base);
+  });
+});
+
 describe("isPathReportStale", () => {
   it("a never-generated report is never stale", () => {
     expect(isPathReportStale(undefined, "abc12345")).toBe(false);

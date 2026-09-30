@@ -12,6 +12,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 import { outcomeTable, type OutcomeRow } from "./pathAnalyzer";
 import type { Quiz as QuizDoc } from "./quizSchema";
+import { answerTargets, ruleTargets } from "./recommendDecider";
 
 /** Order-insensitive FNV-1a over a canonical string, hex-encoded (the exact
  *  whyCopyMeta.membershipHash algorithm, so both files stay in lockstep). */
@@ -44,7 +45,26 @@ export function pathReportHash(doc: QuizDoc): string {
     )
     .sort()
     .join("\n");
-  return fnv1a(`${canonical}\n␞\n${ruleShapes}`);
+  // Logic step (D11/D1) — ORDER is priority (a ↑/↓ reorder changes which
+  // rule wins), the verb changes what a match does, every target (not only
+  // target_id) and every picking answer's full target list are routing, and
+  // the same rules under the two styles decide differently. All join the
+  // digest, so each marks a stored AI review stale. (Every stored review
+  // reads stale once after this lands — expected.)
+  const ruleOrder = (doc.decision_rules ?? [])
+    .map((r, i) => `${i}␟${r.id}␟${r.action ?? ""}␟${ruleTargets(r).join(",")}`)
+    .join("\n");
+  const answerTargetKeys = doc.nodes
+    .flatMap((n) =>
+      n.type === "question" && n.data.role === "decides"
+        ? n.data.answers.map((a) => `${a.id}␟${answerTargets(a).join(",")}`)
+        : [],
+    )
+    .sort()
+    .join("\n");
+  return fnv1a(
+    `${canonical}\n␞\n${ruleShapes}\n␞\n${ruleOrder}\n␞\n${answerTargetKeys}\n␞\n${doc.logic_style ?? ""}`,
+  );
 }
 
 /** Stale = a report snapshot exists but the current outcome-structure hash no

@@ -80,8 +80,9 @@ describe("buildTier1Report (§7.1 Tier-1)", () => {
   it("clean doc → all 14 checks pass (incl. S1 structure, the QZY-12 V12 pair + the Live-M V13), verdict safe, outcomes named", () => {
     const r = buildTier1Report(cleanDoc(), BUCKETS);
     // 13 pre-Live-M checks + V13 (unmapped narrowing answers, index-free).
-    // V14/V15 need a productIndex and are absent here.
-    expect(r.checks).toHaveLength(14);
+    // V14/V15 need a productIndex and are absent here. Logic step D3 adds
+    // R4 (impossible all-of, warn) in both styles → 15.
+    expect(r.checks).toHaveLength(15);
     expect(r.checks.every((c) => c.status === "pass")).toBe(true);
     expect(r.verdict).toMatchObject({ blocking: 0, warnings: 0, safe: true });
     expect(r.verdict.label).toBe("0 to review · 0 blocking · safe to publish");

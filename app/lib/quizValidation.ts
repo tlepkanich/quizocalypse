@@ -2,6 +2,9 @@ import { looksLikeRatingScale } from "./smartBuild";
 import { experienceTypeOf } from "./quizSchema";
 import type { Quiz } from "./quizSchema";
 import type { z } from "zod";
+import { engineLogicStyle } from "./logicStyle";
+import { ruleStatuses } from "./ruleStatus";
+import { ruleShowsRecommendations } from "./recommendationCoverage";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
@@ -25,7 +28,12 @@ export interface NodeIssue {
     | "decider_bypass" // V2 — a reachable path can finish without the decider
     | "decider_optional" // V3 — the deciding question is not Required
     | "unmapped_decider_answer" // V4 (doc half) — a deciding answer has no target
-    | "broken_rule_reference"; // V6 (doc half) — a rule points at a missing question/answer
+    | "broken_rule_reference" // V6 (doc half) — a rule points at a missing question/answer
+    // Logic step D1/D3 — Rules only (logic_style "rules") replaces V1–V4
+    // with these three blocks:
+    | "rules_only_no_rules" // no rules at all
+    | "rules_only_incomplete_rule" // a rule with no answers (conditions)
+    | "rules_only_nothing_shows"; // rules exist but none can show anything
   message: string;
 }
 
@@ -117,12 +125,52 @@ export function validateQuiz(doc: QuizDoc): NodeIssue[] {
         message: "Remove the inherited email gate in the builder and configure Email capture in Questions. Decider quizzes use one configured capture form.",
       });
     }
-    const deciders = doc.nodes.filter(
-      (n) => n.type === "question" && n.data.role === "decides",
-    );
+    // Logic step D1/D3 — Rules only never reads the picking question, so
+    // V1–V4 do not apply; the three Rules-only blocks do. (The deleted-
+    // recommendation half — a rule whose targets are gone — is enforced at
+    // publish, where Category rows are known.)
+    const rulesOnly = engineLogicStyle(doc) === "rules";
+    const deciders = rulesOnly
+      ? []
+      : doc.nodes.filter((n) => n.type === "question" && n.data.role === "decides");
+
+    if (rulesOnly) {
+      const rules = doc.decision_rules ?? [];
+      if (rules.length === 0) {
+        issues.push({
+          nodeId: pinId,
+          kind: "rules_only_no_rules",
+          message: "Rules only needs at least one rule to show anything.",
+        });
+      } else {
+        rules.forEach((r, i) => {
+          if (r.conditions.length === 0) {
+            issues.push({
+              nodeId: pinId,
+              kind: "rules_only_incomplete_rule",
+              message: `Rule ${i + 1} has no answers left, so it never runs`,
+            });
+          }
+        });
+        const statuses = ruleStatuses(doc);
+        const canRun = rules.some((r) => statuses.get(r.id)?.canRun);
+        const shows = rules.some((r) =>
+          ruleShowsRecommendations(r, statuses.get(r.id), "rules"),
+        );
+        if (!canRun || !shows) {
+          issues.push({
+            nodeId: pinId,
+            kind: "rules_only_nothing_shows",
+            message: !canRun
+              ? "None of your rules can ever run."
+              : "No rule shows anything yet. Add a Show rule.",
+          });
+        }
+      }
+    }
 
     // V1 — exactly one deciding question.
-    if (deciders.length !== 1) {
+    if (!rulesOnly && deciders.length !== 1) {
       issues.push({
         nodeId: deciders[1]?.id ?? pinId,
         kind: "missing_decider",

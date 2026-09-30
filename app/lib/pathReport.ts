@@ -1,19 +1,16 @@
 import type { z } from "zod";
 import type { Quiz } from "./quizSchema";
 import { isFreeformType } from "./quizSchema";
-import {
-  answersReachDecider,
-  brokenRuleRefs,
-  deadRules,
-  halfBuiltRules,
-  outcomeTable,
-  shadowedRules,
-} from "./pathAnalyzer";
+import { answersReachDecider, brokenRuleRefs, outcomeTable } from "./pathAnalyzer";
 import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 import { answerFilterValues, filterAnswerMatchCount } from "./filterMatching";
 import { bandCoverage, sliderBandAnswers } from "./sliderBands";
 import { isSellable, type IndexedProduct } from "./recommendationEngine";
 import { ruleTargets } from "./recommendDecider";
+import { engineLogicStyle, resolveLogicStyle } from "./logicStyle";
+import { orderedQuestions } from "./questionOrder";
+import { ruleStatuses } from "./ruleStatus";
+import { recommendationCoverage, ruleShowsRecommendations } from "./recommendationCoverage";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
@@ -32,11 +29,18 @@ export type CheckSeverity = "block" | "warn" | "info";
 export type CheckStatus = "pass" | "fail";
 
 export interface Tier1Link {
-  kind: "question" | "rule";
-  /** question node id (kind=question) */
+  /** "question" → select nodeId; "rule" → the rule ruleId; "rules" → the
+   *  rules list itself (no single rule — e.g. "needs at least one rule");
+   *  "recommendation" → categoryId (Filter style also names the picking
+   *  question in nodeId); "style" → the header's logic-style menu. Hosts
+   *  ignore kinds they do not handle. */
+  kind: "question" | "rule" | "rules" | "recommendation" | "style";
+  /** question node id (kind=question; optional on kind=recommendation) */
   nodeId?: string;
   /** rule id (kind=rule) */
   ruleId?: string;
+  /** recommendation (Category) id (kind=recommendation) */
+  categoryId?: string;
 }
 
 export interface Tier1Finding {
@@ -63,7 +67,14 @@ export interface Tier1Check {
     | "V15"
     | "V16"
     | "S1"
-    | "S2";
+    | "S2"
+    // Logic step D3 — style-aware checks:
+    | "R0" // style shown but not saved (warn)
+    | "R1" // Rules only: needs at least one rule (block)
+    | "R2" // Rules only: no rule can show anything (block)
+    | "R3" // Rules only: a rule missing its answers / recommendations (block)
+    | "R4" // an impossible all-of (warn, both styles)
+    | "R5"; // a recommendation nothing can show (warn, both styles)
   severity: CheckSeverity;
   status: CheckStatus;
   title: string;
@@ -95,13 +106,29 @@ export function buildTier1Report(
   // `productIds` is optional-per-bucket: hosts that have it (the funnel and
   // builder pass full Category rows) unlock the Live-M starting-set
   // coverage check; hosts that don't simply omit it.
-  buckets: Array<{ id: string; name: string; productIds?: string[] }>,
+  buckets: Array<{
+    id: string;
+    name: string;
+    productIds?: string[];
+    /** Category.quizId — when hosts pass it, R5 ("never recommended")
+     *  iterates only quiz-scoped rows (the tray's filter). */
+    quizId?: string | null;
+  }>,
   // QZY-1 (quiz-logic spec §5/§8) — pass the product index to enable the V11
   // filter dead-end check (a filter answer matching 0 products is BLOCKING).
   // Absent (some hosts have no catalog handy) → the check is omitted, never
   // rendered as a hollow "pass".
   productIndex?: readonly IndexedProduct[],
+  // Logic step D3 — `recommendationIds` = the quiz-scoped recommendations
+  // R5 checks. Absent → derived from buckets carrying `quizId`; when no
+  // bucket says, R5 is omitted (never a hollow pass over account groups).
+  // `styleNote` opts into R0 (see below).
+  opts: { recommendationIds?: readonly string[]; styleNote?: boolean } = {},
 ): Tier1Report {
+  // Logic step D1/D3 — the report checks the ENGINE style (the stored field;
+  // absent = Filter Results + Rules), never the inferred screen style, so it
+  // can never read safer than the publish gate.
+  const rulesOnly = engineLogicStyle(doc) === "rules";
   const bucketIds = new Set(buckets.map((b) => b.id));
   // Distinguish "never picked" from "picked, then the bucket was deleted" —
   // the outcome table should match the V4/V5 finding wording.
@@ -110,9 +137,12 @@ export function buildTier1Report(
       ? buckets.find((b) => b.id === id)?.name ?? "(deleted result)"
       : "(no result picked)";
   const questions = doc.nodes.filter((n) => n.type === "question");
-  const qIndex = new Map(questions.map((n, i) => [n.id, i + 1]));
+  // Numbered the way the rail numbers them (flow order), not node order.
+  const qIndex = new Map(orderedQuestions(doc).map((q) => [q.node.id, q.qIndex]));
   const qLabel = (id: string) => (qIndex.has(id) ? `Q${qIndex.get(id)}` : "a deleted question");
-  const deciders = questions.filter((n) => n.type === "question" && n.data.role === "decides");
+  const deciders = rulesOnly
+    ? []
+    : questions.filter((n) => n.type === "question" && n.data.role === "decides");
   const decider = deciders.length === 1 ? deciders[0]! : null;
   const rules = doc.decision_rules ?? [];
   const check = (
@@ -133,7 +163,13 @@ export function buildTier1Report(
     "decider_optional",
     "unmapped_decider_answer",
     "broken_rule_reference",
+    "rules_only_no_rules",
+    "rules_only_incomplete_rule",
+    "rules_only_nothing_shows",
   ]);
+  // The ONE per-rule status (rule rows, the Table and coverage read it too).
+  const statuses = ruleStatuses(doc, bucketIds);
+  const statusOf = (id: string) => statuses.get(id);
 
   // V1 — exactly one deciding question. BLOCK. Each EXTRA decider gets its own
   // deep-linked finding (§7.3: every fail deep-links where a target exists).
@@ -215,6 +251,7 @@ export function buildTier1Report(
   const v5: Tier1Finding[] = rules
     .map((r, i) => ({ r, i }))
     .filter(({ r }) => ruleTargets(r).some((t) => !bucketIds.has(t)))
+    .filter(({ r }) => !(rulesOnly && statusOf(r.id)?.missing.recommendations))
     .map(({ r, i }) => ({
       message: `Rule ${i + 1} recommends a deleted bucket — pick a new result.`,
       link: { kind: "rule" as const, ruleId: r.id },
@@ -227,14 +264,119 @@ export function buildTier1Report(
     link: { kind: "rule", ruleId: f.ruleId },
   }));
 
-  // V7/V8/V9 — rule warnings straight from the analyzer.
-  const wrapRule = (f: { ruleId: string; message: string }): Tier1Finding => ({
-    message: `Rule ${ruleNo.get(f.ruleId) ?? "?"}: ${f.message}`,
-    link: { kind: "rule", ruleId: f.ruleId },
-  });
-  const v7 = deadRules(doc).map(wrapRule);
-  const v8 = shadowedRules(doc).map(wrapRule);
-  const v9 = halfBuiltRules(doc).map(wrapRule);
+  // V7/V8/V9 + R3/R4 — all read the one per-rule status (ruleStatus.ts), so
+  // a rule tagged "never runs" always has a finding with the same words.
+  const ruleLink = (ruleId: string): Tier1Link => ({ kind: "rule", ruleId });
+  const v7: Tier1Finding[] = [];
+  const v8: Tier1Finding[] = [];
+  const v9: Tier1Finding[] = [];
+  const r3: Tier1Finding[] = [];
+  const r4: Tier1Finding[] = [];
+  for (const st of statuses.values()) {
+    for (const f of st.flags) {
+      if (f.kind === "unreachable" || f.kind === "exclusive") {
+        v7.push({
+          message: `Rule ${st.number}: ${
+            f.kind === "unreachable"
+              ? "A condition depends on a question no shopper can reach — this rule can never fire."
+              : "Two of this rule's conditions live on paths that never co-occur — no shopper can match both."
+          }`,
+          link: ruleLink(st.ruleId),
+        });
+      }
+    }
+    if (st.reason === "incomplete") {
+      const finding = {
+        message: `Rule ${st.number} has ${st.neverRuns}, so it never runs`,
+        link: ruleLink(st.ruleId),
+      };
+      // Rules only: a rule missing its answers or recommendations BLOCKS
+      // (D3). Filter Results + Rules: no answers warns (V9); a rule whose
+      // targets are all deleted already blocks through V5.
+      if (rulesOnly) r3.push(finding);
+      else if (st.missing.answers) v9.push(finding);
+    } else if (st.reason === "impossible" && st.impossible) {
+      r4.push({
+        message: `Rule ${st.number} never runs: it needs all ${st.impossible.needs} of its ${
+          st.impossible.qNumber !== null ? `Q${st.impossible.qNumber}` : "question's"
+        } answers and they can pick ${st.impossible.canPick}`,
+        link: ruleLink(st.ruleId),
+      });
+    } else if (st.reason === "shadowed") {
+      v8.push({ message: `Rule ${st.number} never runs: ${st.neverRuns}`, link: ruleLink(st.ruleId) });
+    }
+  }
+
+  // R1/R2 — Rules only needs a rule that can show something (D3).
+  const r1: Tier1Finding[] = [];
+  const r2: Tier1Finding[] = [];
+  if (rulesOnly) {
+    if (rules.length === 0) {
+      r1.push({
+        message: "Rules only needs at least one rule to show anything.",
+        link: { kind: "rules" },
+      });
+    } else {
+      const canRun = rules.some((r) => statusOf(r.id)?.canRun);
+      const shows = rules.some((r) => ruleShowsRecommendations(r, statusOf(r.id), "rules"));
+      if (!canRun || !shows) {
+        r2.push({
+          message: !canRun
+            ? "None of your rules can ever run."
+            : "No rule shows anything yet. Add a Show rule.",
+          link: { kind: "rules" },
+        });
+      }
+    }
+  }
+
+  // R5 — a quiz-scoped recommendation nothing can show (warn, both styles):
+  // the shared coverage helper, so the strip and this finding agree.
+  const recIds =
+    opts.recommendationIds ??
+    (buckets.some((b) => b.quizId !== undefined)
+      ? buckets.filter((b) => b.quizId).map((b) => b.id)
+      : null);
+  const r5: Tier1Finding[] = [];
+  if (recIds) {
+    const coverage = recommendationCoverage(
+      doc,
+      rulesOnly ? "rules" : "attributes",
+      recIds,
+      statuses,
+    );
+    for (const id of recIds) {
+      if (coverage.get(id)?.covered) continue;
+      r5.push({
+        message: `“${buckets.find((b) => b.id === id)?.name ?? id}” is never recommended`,
+        link: {
+          kind: "recommendation",
+          categoryId: id,
+          ...(decider ? { nodeId: decider.id } : {}),
+        },
+      });
+    }
+  }
+
+  // R0 — the screen opens on Rules only (inferred / legacy session key) but
+  // the doc stores no style, so shoppers still get Filter Results + Rules.
+  // A warning only; nothing here ever writes the style (D5). Opt-in
+  // (`opts.styleNote`): only a host with the title switch (the funnel Logic
+  // step) can act on it — the builder has no style control while D6 is
+  // parked, so it never sees this row.
+  const r0: Tier1Finding[] =
+    opts.styleNote &&
+    !rulesOnly &&
+    doc.logic_style === undefined &&
+    resolveLogicStyle(doc) === "rules"
+      ? [
+          {
+            message:
+              "This quiz still decides results the Filter Results + Rules way. Choose 'Rules only' in the title menu to save it.",
+            link: { kind: "style" },
+          },
+        ]
+      : [];
 
   // V10 — answer length advisory (§10 — NEVER blocks).
   const v10: Tier1Finding[] = [];
@@ -379,27 +521,49 @@ export function buildTier1Report(
     }
   }
 
+  // Logic step D3 — Rules only skips every picking-question check (V1–V4)
+  // and every filter-value check (V11, V13, V15), blocks on R1–R3, and
+  // downgrades a slider band gap to a warning (the rules that needed that
+  // band just don't fire; the safety net catches the shopper).
+  const pickingChecks: Tier1Check[] = rulesOnly
+    ? []
+    : [
+        check("V1", "block", "Exactly one deciding question", v1),
+        check("V2", "block", "Every path reaches the decider", v2),
+        check("V3", "block", "The deciding question is required", v3),
+        check("V4", "block", "Every deciding answer has a result", v4),
+      ];
+  const rulesOnlyChecks: Tier1Check[] = rulesOnly
+    ? [
+        check("R1", "block", "Rules only has a rule", r1),
+        check("R2", "block", "A rule can show something", r2),
+        check("R3", "block", "Every rule has answers and a recommendation", r3),
+      ]
+    : [];
   const checks: Tier1Check[] = [
-    check("V1", "block", "Exactly one deciding question", v1),
-    check("V2", "block", "Every path reaches the decider", v2),
-    check("V3", "block", "The deciding question is required", v3),
-    check("V4", "block", "Every deciding answer has a result", v4),
+    ...(r0.length > 0 ? [check("R0", "warn", "The logic style is saved", r0)] : []),
+    ...pickingChecks,
+    ...rulesOnlyChecks,
     check("V5", "block", "Rules point at existing buckets", v5),
     check("V6", "block", "Rule conditions reference existing answers", v6),
     check("V7", "warn", "No rule sits on paths that never co-occur", v7),
     check("V8", "warn", "No rule is shadowed by a higher one", v8),
-    check("V9", "warn", "No half-built rules", v9),
+    ...(rulesOnly ? [] : [check("V9", "warn", "No half-built rules", v9)]),
+    check("R4", "warn", "No rule needs more answers than shoppers can pick", r4),
+    ...(recIds ? [check("R5", "warn", "Every recommendation can be shown", r5)] : []),
     check("V10", "info", "Answer text fits comfortably", v10),
-    ...(productIndex
+    ...(productIndex && !rulesOnly
       ? [check("V11", "block", "Every filter answer matches products", v11)]
       : []),
-    check("V12", "block", "Slider bands cover the whole range", v12),
+    check("V12", rulesOnly ? "warn" : "block", "Slider bands cover the whole range", v12),
     check("V12", "warn", "Slider bands don't overlap", v12warn),
-    check("V13", "warn", "Every narrowing answer is mapped", v13),
+    ...(rulesOnly ? [] : [check("V13", "warn", "Every narrowing answer is mapped", v13)]),
     ...(productIndex
       ? [
           check("V14", "info", "Every product in scope is live", v14),
-          check("V15", "warn", "Narrowing questions split the catalog", v15),
+          ...(rulesOnly
+            ? []
+            : [check("V15", "warn", "Narrowing questions split the catalog", v15)]),
         ]
       : []),
     ...(productIndex && bucketsWithMembers.length > 0
@@ -408,7 +572,10 @@ export function buildTier1Report(
     check("S1", "block", "Structure (orphans, dead ends, routing)", s1),
   ];
 
-  const outcomes: Tier1OutcomeRow[] = outcomeTable(doc).map((row) => ({
+  const outcomes: Tier1OutcomeRow[] = outcomeTable(doc)
+    // Rules only never reads answer mappings — only rule outcomes exist.
+    .filter((row) => !(rulesOnly && row.kind === "mapping"))
+    .map((row) => ({
     kind: row.kind,
     label:
       row.kind === "rule"
@@ -450,9 +617,12 @@ export function buildTier1Report(
 // ════════════════════════════════════════════════════════════════════════════
 export function buildBuilderHealthReport(
   doc: QuizDoc,
-  buckets: Array<{ id: string; name: string }>,
+  buckets: Array<{ id: string; name: string; productIds?: string[]; quizId?: string | null }>,
+  // Logic step — optional so existing callers are unchanged; passing it
+  // runs V11/V14–V16 in the builder too (the server gate already does).
+  productIndex?: readonly IndexedProduct[],
 ): Tier1Report {
-  if (doc.logic_model === "decider") return buildTier1Report(doc, buckets);
+  if (doc.logic_model === "decider") return buildTier1Report(doc, buckets, productIndex);
   const gate = validateQuiz(doc);
   const advisories = validateQuizWarnings(doc);
   // Tier1Link's "question" kind means "focus this node" to every consumer —
