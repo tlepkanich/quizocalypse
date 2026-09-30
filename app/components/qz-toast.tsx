@@ -67,6 +67,10 @@ export type QzToastOptions = {
   key?: string;
   /** Called once when this toast leaves the screen. */
   onHide?: (reason: QzToastHideReason) => void;
+  /** A plain message that replaces even a live action toast (the rare call
+      site whose news outranks a pending Undo, e.g. "Added 3
+      recommendations"). Default false: B7 keeps the Undo. */
+  replace?: boolean;
 };
 
 export type QzToastState = {
@@ -91,7 +95,12 @@ export function nextToastState(
   id: number,
   options?: QzToastOptions,
 ): QzToastState {
-  if (current?.action && !options?.action && (options?.key === undefined || options.key !== current.key)) {
+  if (
+    current?.action &&
+    !options?.action &&
+    !options?.replace &&
+    (options?.key === undefined || options.key !== current.key)
+  ) {
     return current;
   }
   const next: QzToastState = { id, message };

@@ -670,7 +670,9 @@ export function CreateRuleModal({
     // click flushes its effects synchronously), the Undo takes it (B32).
     window.setTimeout(() => {
       undo?.push({
-        message: RULE_COPY.deleted(at + 1),
+        // The card's ONE run counts the deletes (a row delete then this one
+        // reads "2 rules deleted"), so the message is built there.
+        message: RULE_COPY.deletedRun(at + 1),
         inverse: (d) => restoreDecisionRules(d, [{ rule, index: at }]),
         isDelete: true,
         focusAction: true,

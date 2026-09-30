@@ -211,7 +211,9 @@ export function LogicTabCard({
   const hasNarrowFields = useMemo(() => narrowFieldOptions(productIndex).length > 0, [productIndex]);
   const deciderQIndex = questions.find((q) => q.node.data.role === "decides")?.qIndex ?? null;
 
-  // ONE Undo run for the whole view (rows, the rule window, the Table).
+  // ONE Undo run for the whole view (rows, the rule window, the Table). It
+  // is dropped, and its toast hidden, when this card unmounts (D7: a late
+  // Undo must never commit over a document the card no longer tracks).
   const noopCommit = useCallback(() => {}, []);
   const undo = useLogicUndo<QuizDoc>({ getLatestDoc, commit: commit ?? noopCommit });
 

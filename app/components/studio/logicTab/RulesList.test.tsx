@@ -120,7 +120,10 @@ describe("delete and move (D7 inverse mutations)", () => {
     });
     expect(latest.decision_rules!.map((r) => r.id)).toEqual(["r1", "r3"]);
     const p = push.mock.calls[0]![0];
-    expect(p.message).toBe("Rule 2 deleted");
+    // The card's run builds the text from its delete count.
+    const say = p.message as (deletes: number) => string;
+    expect(say(1)).toBe("Rule 2 deleted");
+    expect(say(3)).toBe("3 rules deleted");
     expect(p.isDelete).toBe(true);
     // An unrelated edit made while the toast is up survives the Undo.
     const edited = { ...latest, decision_rules: [...latest.decision_rules!, rule("r9", [["q1", "a3"]], "cat3")] };

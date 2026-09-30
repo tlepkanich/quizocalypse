@@ -206,7 +206,9 @@ export function AddRecommendationsDialog({
     if (skipped.length) {
       say(skipped.length === 1 ? A.skipped(skipped[0]!) : A.skippedMany(skipped.length));
     } else if (addedKeys.length) {
-      say(forRule ? RULE_WINDOW_COPY.addedPicked : A.added(addedKeys.length));
+      // The mock's plain toast() replaces whatever is up, a pending Undo
+      // included: this news must not be dropped (B7 opt-out).
+      say(forRule ? RULE_WINDOW_COPY.addedPicked : A.added(addedKeys.length), { replace: true });
     }
     setPicked([]);
     onClose();

@@ -539,7 +539,7 @@ export function QuestionRoleControl({
 
   const announce = (message: string, snap: ReturnType<typeof snapshotQuestionLogic>) => {
     if (!message) return;
-    if (undo) undo.push({ message, inverse: (d) => restoreQuestionLogic(d, snap) });
+    if (undo) undo.push({ message, kind: "question", inverse: (d) => restoreQuestionLogic(d, snap) });
     else toast(message);
   };
 

@@ -6,6 +6,7 @@ import type { BuilderCategory } from "../../builder/stepProps";
 import { describeRuleTokens, type RuleTokens } from "../../../lib/ruleSummary";
 import { neverRunsTag, type RuleStatus } from "../../../lib/ruleStatus";
 import { moveDecisionRule, removeDecisionRule, restoreDecisionRules } from "../../../lib/quizMutations";
+import type { LogicUndoPush } from "./useLogicUndo";
 import { RULE_COPY, VERBS } from "./logicCopy";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -24,7 +25,8 @@ import { RULE_COPY, VERBS } from "./logicCopy";
 // on a focused row moves it. Delete and move commit at once (no confirm) and
 // raise an Undo toast whose inverse is a mutation against the LATEST doc
 // (D7): delete → restoreDecisionRules at the ORIGINAL index; move → move the
-// rule back. Deletes inside one toast accumulate ("2 rules deleted").
+// rule back. Deletes inside one toast accumulate ("2 rules deleted"): the
+// card's ONE run counts them (useLogicUndo), whichever surface deleted.
 // Focus: after a delete the trash is gone, so the toast's Undo takes focus
 // and, when the toast leaves, focus lands on the row that took its place
 // (B30/B32); after a move focus follows the rule.
@@ -37,14 +39,7 @@ type QuizDoc = Quiz;
  *  for the whole Logic view, so a row delete and a rule-window delete
  *  accumulate into the same toast). */
 export type RulesUndo = {
-  push: (p: {
-    message: string;
-    inverse: (doc: QuizDoc) => QuizDoc;
-    isDelete?: boolean;
-    focusAfter?: () => void;
-    focusAction?: boolean;
-    returnFocus?: () => void;
-  }) => void;
+  push: (p: LogicUndoPush<QuizDoc>) => void;
   isLive: () => boolean;
 };
 
@@ -213,8 +208,6 @@ export function RulesList({
   const rules = useMemo(() => doc.decision_rules ?? [], [doc.decision_rules]);
   const editable = !!commit;
   const listRef = useRef<HTMLOListElement>(null);
-  // Deletes counted inside the live Undo run ("2 rules deleted").
-  const runDeletes = useRef(0);
   // Focus follows a moved rule once the re-render lands.
   const pendingFocus = useRef<PendingFocus>(null);
   const [drag, setDrag] = useState<{ from: number; over: { index: number; after: boolean } | null } | null>(
@@ -277,10 +270,8 @@ export function RulesList({
     if (next === latest) return;
     commit(next);
     if (!undo) return;
-    if (!undo.isLive()) runDeletes.current = 0;
-    runDeletes.current += 1;
     undo.push({
-      message: runDeletes.current > 1 ? RULE_COPY.deletedMany(runDeletes.current) : RULE_COPY.deleted(index + 1),
+      message: RULE_COPY.deletedRun(index + 1),
       inverse: (d) => restoreDecisionRules(d, [{ rule, index }]),
       isDelete: true,
       focusAction: true,
@@ -300,7 +291,6 @@ export function RulesList({
     pendingFocus.current = { ruleId, control };
     commit(next);
     if (!undo) return;
-    if (!undo.isLive()) runDeletes.current = 0;
     undo.push({
       message: RULE_COPY.moved(from + 1, to + 1),
       inverse: (d) => {
@@ -438,7 +428,7 @@ export function RulesList({
                     className="qz-lg-xone"
                     data-move="up"
                     aria-label={RULE_COPY.moveUp(n)}
-                    title="Move up"
+                    title={RULE_COPY.moveUpTip}
                     disabled={i === 0}
                     onClick={() => moveRule(rule.id, i, i - 1, "up")}
                   >
@@ -449,7 +439,7 @@ export function RulesList({
                     className="qz-lg-xone"
                     data-move="down"
                     aria-label={RULE_COPY.moveDown(n)}
-                    title="Move down"
+                    title={RULE_COPY.moveDownTip}
                     disabled={i === rules.length - 1}
                     onClick={() => moveRule(rule.id, i, i + 1, "down")}
                   >

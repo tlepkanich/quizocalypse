@@ -16,7 +16,7 @@ import {
 } from "../../../lib/logicSheets";
 import type { BuilderCategory } from "../../builder/stepProps";
 import { useQzToast } from "../../qz-toast";
-import type { RulesUndo } from "./RulesList";
+import type { LogicUndoPush } from "./useLogicUndo";
 import { IMPORT_COPY, IO_COPY } from "./logicCopy";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -117,7 +117,7 @@ function download(bytes: ArrayBuffer, name: string) {
 
 /** The card's Undo run, as this control uses it (useLogicUndo). */
 export type ImportUndo = {
-  push: (p: Parameters<RulesUndo["push"]>[0] & { duration?: number }) => void;
+  push: (p: LogicUndoPush<Quiz>) => void;
   isLive: () => boolean;
 };
 
@@ -229,7 +229,16 @@ export function LogicImportExport({
         return;
       }
       commit(res.doc);
-      if (undo) undo.push({ message, inverse, duration: IMPORT_TOAST_MS });
+      // Its own Undo slot (mock IMP_UNDO): it replaces whatever toast is up
+      // and never joins a rules run.
+      if (undo)
+        undo.push({
+          message,
+          inverse,
+          kind: "import",
+          duration: IMPORT_TOAST_MS,
+          staleMessage: IMPORT_COPY.undoStale,
+        });
       else toast(message);
     } finally {
       setImporting(false);

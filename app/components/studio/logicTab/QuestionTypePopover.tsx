@@ -167,8 +167,9 @@ export function QuestionTypePopover({
     commit(next);
     if (anyOfRuleIds.length) {
       const message = TYPE_COPY.anyOf(q.qIndex);
-      const inverse = (d: QuizDoc) => restoreQuestionType(d, snap, anyOfRuleIds);
-      if (undo) undo.push({ message, inverse });
+      const after = snapshotType(next, node.id);
+      const inverse = (d: QuizDoc) => restoreQuestionType(d, snap, anyOfRuleIds, after);
+      if (undo) undo.push({ message, kind: "question", inverse });
       else toast(message);
     }
   };
@@ -222,7 +223,7 @@ export function QuestionTypePopover({
         a.product_type_filters?.length || a.collection_filters?.length);
       const message = TYPE_COPY.pointRemoved(removed.index + 1, q.qIndex, mapped);
       const inverse = (d: QuizDoc) => restoreScalePoint(d, removed);
-      if (undo) undo.push({ message, inverse, isDelete: true });
+      if (undo) undo.push({ message, kind: "question", inverse, isDelete: true });
       else toast(message);
     }
   };

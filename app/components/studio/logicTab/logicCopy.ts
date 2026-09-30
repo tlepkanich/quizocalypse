@@ -124,8 +124,13 @@ export const RULE_COPY = {
   deleteTip: "Delete rule",
   deleteLabel: (n: number) => `Delete rule ${n}`,
   editLabel: (n: number, sentence: string) => `Edit rule ${n}: ${sentence}`,
+  moveUpTip: "Move up",
+  moveDownTip: "Move down",
   deleted: (n: number) => `Rule ${n} deleted`,
   deletedMany: (count: number) => `${count} rules deleted`,
+  /** The delete toast from the run's delete count (mock delRule, UNDO.dels). */
+  deletedRun: (n: number) => (deletes: number) =>
+    deletes > 1 ? `${deletes} rules deleted` : `Rule ${n} deleted`,
   moved: (from: number, to: number) => `Rule ${from} moved to position ${to}`,
   /** A stored Hide rule in Rules only resolves to no result (D1, 2.2). */
   hidesTag: "shows nothing · this rule hides",
@@ -423,6 +428,8 @@ export const IMPORT_COPY = {
   infoValue: (q: number) => `Q${q} is Info only, so it doesn't show or keep anything`,
   badThen: (q: number, v: string) => `Q${q}: “${v}” isn't somewhere this answer can go`,
   forwardOnly: (text: string, q: number) => `“${text}” on Q${q}: routes only go forward`,
+  /** Handoff §10: an import Undo that no longer changes anything. */
+  undoStale: "Can't undo the import: the quiz changed after it",
   // Rules sheet reasons (each follows "Rules row N: ").
   rowPrefix: (row: number) => `Rules row ${row}`,
   unknownRuleId: "this rule ID isn't in the quiz. Clear it to add the row as a new rule",
