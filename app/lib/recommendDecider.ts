@@ -177,6 +177,16 @@ export function productRating(
 
 export type ResolvedRecPageConfig = RecPageGlobalT & typeof REC_PAGE_DEFAULTS;
 
+/** Results handoff §4 — the guided loading screen's named steps when the
+ *  merchant kept the defaults (the builder never stores a default-equal
+ *  value). One constant, so the preview and the live quiz name the same
+ *  three steps. */
+export const GUIDED_LOADING_STEPS: readonly string[] = [
+  "Reading your answers",
+  "Scoring products",
+  "Picking your best matches",
+];
+
 /** The global config with spec defaults filled in. */
 export function resolveRecPageGlobal(
   settings: RecPageSettingsT | undefined,

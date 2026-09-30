@@ -20,6 +20,7 @@ import {
 } from "../../lib/recommendationEngine";
 import {
   deciderFallbackProducts,
+  GUIDED_LOADING_STEPS,
   resolveTarget,
   settingsForTarget,
 } from "../../lib/recommendDecider";
@@ -118,6 +119,9 @@ export interface QuizRuntimeProps {
   quizId: string;
   version: number;
   shopDomain: string;
+  // Results handoff §9 — the store's display name (baked shop_name) for the
+  // fixed consent wording. Absent → the wording names the sender as "us".
+  shopName?: string;
   // QD-7 — which commerce platform this published quiz belongs to. "shopify"
   // (the default for every pre-existing quiz) keeps add-to-cart + /products/
   // permalinks; "standalone" gates the Shopify cart off and links product
@@ -237,6 +241,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     quizId,
     version,
     shopDomain,
+    shopName,
     platform = "shopify",
     fillBackground = false,
     mode = "live",
@@ -1609,10 +1614,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               ...dec.grid.map((p) => p.product_id),
             ]);
             const count = Math.max(1, Math.min(6, cfg.extrasCount ?? 3));
+            // Hand-picked extras skip matches already on the page, exactly
+            // as the auto-fill path does (results handoff §4).
             const picks = cfg.extrasProductIds?.length
               ? cfg.extrasProductIds
                   .map((id) => productIndex.find((p) => p.product_id === id))
                   .filter((p): p is (typeof productIndex)[number] => Boolean(p))
+                  .filter((p) => !shownIds.has(p.product_id))
               : productIndex.filter((p) => !shownIds.has(p.product_id)).slice(0, count);
             const products = picks.slice(0, count).map((p) => ({ ...p, score: 0 }));
             if (products.length === 0) return undefined;
@@ -1625,7 +1633,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           content = (
             <DeciderResultView
               decider={explained.decider}
-              inlineCapture={captureMode(cfg) === "inline" ? <InlineDeciderCapture config={cfg} styles={styles} quizId={quizId} sessionId={sessionIdRef.current} shopDomain={shopDomain} /> : undefined}
+              inlineCapture={captureMode(cfg) === "inline" ? <InlineDeciderCapture config={cfg} styles={styles} quizId={quizId} sessionId={sessionIdRef.current} shopDomain={shopDomain} storeName={shopName} onCaptured={() => analyticsRef.current?.track("email_captured", {})} /> : undefined}
               fallback={fallback}
               quizId={quizId}
               sessionId={sessionIdRef.current}
@@ -1664,12 +1672,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                   enabled: true,
                   delayMs: cfg.loadingMs ?? 2000,
                   style:
-                    (cfg.loadingNamed ?? true) && (cfg.loadingSteps?.length ?? 0) > 0
+                    (cfg.loadingNamed ?? true) &&
+                    (cfg.loadingSteps ?? GUIDED_LOADING_STEPS).length > 0
                       ? ("stepped" as const)
                       : ("progress" as const),
+                  // Results handoff §4 — default-equal labels are never stored,
+                  // so absent steps mean the builder's three defaults.
                   steps:
                     (cfg.loadingNamed ?? true)
-                      ? (cfg.loadingSteps ?? []).filter((s) => s.trim())
+                      ? (cfg.loadingSteps ?? GUIDED_LOADING_STEPS).filter((s) => s.trim())
                       : [],
                   headline: "",
                 }
@@ -1684,7 +1695,15 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               <DeciderLoadingView
                 poolSize={explained.poolSize}
                 onDone={() => setBeatsDone(true)}
-                interstitial={engagement?.interstitial ?? guidedLoading}
+                // resolveEngagement ALWAYS returns an interstitial, so the old
+                // `engagement ?? guided` ignored the guided settings on every
+                // doc with an engagement key. Only an interstitial the merchant
+                // actually set in engagement outranks the guided one.
+                interstitial={
+                  doc.engagement?.interstitial
+                    ? engagement?.interstitial
+                    : (guidedLoading ?? engagement?.interstitial)
+                }
               />
             );
           }
@@ -1698,6 +1717,7 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               <DeciderCaptureView
                 config={cfg}
                 shopDomain={shopDomain}
+                storeName={shopName}
                 styles={styles}
                 quizId={quizId}
                 sessionId={sessionIdRef.current}
@@ -1705,6 +1725,9 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                   if (contact && Object.keys(contact).length > 0) {
                     contactRef.current = { ...contactRef.current, ...contact };
                   }
+                  // Results handoff §4 — the decider capture never fired
+                  // email_captured; only the legacy paths did.
+                  if (contact?.email) analyticsRef.current?.track("email_captured", {});
                   setCaptureDone(true);
                 }}
               />

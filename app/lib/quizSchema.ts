@@ -1891,6 +1891,18 @@ export const RecPageGlobal = z.object({
   termsUrl: z.string().optional(),
   privacyLabel: z.string().optional(),
   privacyUrl: z.string().optional(),
+  // Results handoff §9 — the fixed-wording consent form. Present (the
+  // wording version the builder last wrote, e.g. "2026-09-17") → the live
+  // form renders app/lib/consentWording.ts's sentences, in the handoff's
+  // order; captureTermsText/smsConsentText are then ignored (still parsed).
+  // Absent → today's form, DOM-identical.
+  consentVersion: z.string().optional(),
+  // Results handoff §7 — "Require the email to unlock it": the discount is
+  // shown only after the email is submitted. Needs a per-shopper code
+  // (discount_config.code_mode "dynamic"). setRecPageGlobal clears it when
+  // captureEmail is false. Supersedes capturePlacement "discount", which
+  // still parses and reads as inline + unlock.
+  captureUnlocksOffer: z.boolean().optional(),
   // Loading screen (§4 step 4 · Loading tab) — off by default at read time.
   loadingOn: z.boolean().optional(),
   loadingMs: z.number().int().min(1000).max(5000).optional(),

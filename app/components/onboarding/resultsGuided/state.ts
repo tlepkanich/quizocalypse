@@ -1,5 +1,9 @@
 import type { Quiz, RecPageGlobal, DiscountConfig } from "../../../lib/quizSchema";
-import { resolveRecPageGlobal, type ResolvedRecPageConfig } from "../../../lib/recommendDecider";
+import {
+  GUIDED_LOADING_STEPS,
+  resolveRecPageGlobal,
+  type ResolvedRecPageConfig,
+} from "../../../lib/recommendDecider";
 import { setRecPageGlobal } from "../../../lib/quizMutations";
 
 /* Results-guided handoff (master.md) — the guided flow's read/write seam.
@@ -30,7 +34,7 @@ export const GUIDED_DEFAULTS = {
   loadingOn: true,
   loadingMs: 1600,
   loadingNamed: true,
-  loadingSteps: ["Reading your answers", "Scoring products", "Picking your best matches"],
+  loadingSteps: [...GUIDED_LOADING_STEPS],
   extrasOn: false,
   // QRTZ-S6 (mock .q-alt-head) — read-time default only; a doc that stored
   // its own heading keeps it.

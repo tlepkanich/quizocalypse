@@ -263,6 +263,22 @@ export async function handleQuizEditorAction(request: Request, id: string) {
   return handleQuizEditorActionForShop(shop, id, request, () => Promise.resolve(admin));
 }
 
+// Results handoff §9 — the store's display name for the fixed consent
+// wording. Best-effort: the standalone surface may have no admin session, and
+// a missing name only means the wording falls back to "us".
+async function fetchShopName(
+  getAdmin: () => Promise<Parameters<typeof ensureQuizDiscount>[0]>,
+): Promise<string | null> {
+  try {
+    const admin = await getAdmin();
+    const res = await admin.graphql(`{ shop { name } }`);
+    const body = (await res.json()) as { data?: { shop?: { name?: string } } };
+    return body.data?.shop?.name?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 // Shop-resolved core of the action — NO Shopify auth. `getAdmin` is a lazy
 // Admin API client used ONLY by the publish intent's discount creation; the
 // embedded route passes its live admin, the standalone surface an offline one
@@ -431,7 +447,13 @@ async function handleQuizEditorActionImpl(
         // LOGIC v2 — inject the collection-order fetcher (server-only module;
         // quizPublish stays client-safe). Only consulted for decider docs with
         // collection-sourced targets; any failure falls back to synced order.
-        { collectionOrder: (targets) => resolveCollectionOrders(shop.shopDomain, targets) },
+        {
+          collectionOrder: (targets) => resolveCollectionOrders(shop.shopDomain, targets),
+          shopName:
+            parsedDraft?.success && parsedDraft.data.logic_model === "decider"
+              ? await fetchShopName(getAdmin)
+              : null,
+        },
       );
       // Gap 7 — a publish-time AI pass that failed still ships (never blocks),
       // but leaves a visible trace instead of silently missing copy. The AI

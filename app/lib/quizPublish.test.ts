@@ -569,6 +569,13 @@ describe("publishQuiz — byte-stability when net-new optional fields are unset"
     expect(JSON.stringify(wire)).not.toContain("Dana");
   });
 
+  // Results handoff §9 — a legacy publish never gains shop_name (byte-stability).
+  it("never bakes shop_name on a legacy doc", async () => {
+    const legacy = mockPrisma(minimalDraft());
+    await publishQuiz(legacy.prisma, { quizId: "q1row", shopId: "shop1" }, { shopName: "Acme" });
+    expect(JSON.parse(JSON.stringify(legacy.getCaptured()))).not.toHaveProperty("shop_name");
+  });
+
   it("strips draft scratch + omits every unset net-new optional key from publishedJson", async () => {
     const { prisma, getCaptured } = mockPrisma(minimalDraft());
     const result = await publishQuiz(prisma, { quizId: "q1row", shopId: "shop1" });
@@ -763,6 +770,22 @@ describe("publishQuiz — decider target bake (L2-3)", () => {
     };
     return { prisma: prisma as unknown as PrismaClient, getCaptured: () => captured };
   }
+
+  // Results handoff §9 — the fixed consent wording names the store.
+  it("bakes shop_name: the fetched name, else the previous publish's", async () => {
+    const fetched = mockDeciderPrisma(deciderDraft(), CATEGORY_ROWS);
+    await publishQuiz(fetched.prisma, { quizId: "qrow", shopId: "s1" }, { shopName: " Acme " });
+    expect((fetched.getCaptured() as PublishedQuiz).shop_name).toBe("Acme");
+
+    const relaunch = mockDeciderPrisma(deciderDraft(), CATEGORY_ROWS);
+    const findFirst = relaunch.prisma.quiz.findFirst as unknown as () => Promise<unknown>;
+    (relaunch.prisma.quiz as unknown as { findFirst: () => Promise<unknown> }).findFirst = async () => ({
+      ...((await findFirst()) as object),
+      publishedJson: { shop_name: "Acme Previously" },
+    });
+    await publishQuiz(relaunch.prisma, { quizId: "qrow", shopId: "s1" });
+    expect((relaunch.getCaptured() as PublishedQuiz).shop_name).toBe("Acme Previously");
+  });
 
   it("bakes the ordered target map + target index (synced order when no fetcher)", async () => {
     const { prisma, getCaptured } = mockDeciderPrisma(deciderDraft(), CATEGORY_ROWS);

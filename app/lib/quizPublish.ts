@@ -159,6 +159,22 @@ function pickUsedMetafields(
   return kept;
 }
 
+function resolveBakedShopName(
+  fetched: string | null | undefined,
+  previousPublished: unknown,
+  brandGuidelines: unknown,
+): string | undefined {
+  const previous = (previousPublished as { shop_name?: unknown } | null)?.shop_name;
+  const guidelinesName = parseBrandGuidelinesSafe(brandGuidelines)?.name;
+  const candidates = [
+    fetched,
+    typeof previous === "string" ? previous : undefined,
+    // "Brand" is the schema's placeholder default, not a name.
+    guidelinesName && guidelinesName !== "Brand" ? guidelinesName : undefined,
+  ];
+  return candidates.map((c) => c?.trim()).find((c) => Boolean(c));
+}
+
 export interface PublishedQuiz extends QuizDoc {
   product_index: IndexedProduct[];
   published_at: string;
@@ -167,6 +183,9 @@ export interface PublishedQuiz extends QuizDoc {
   // construct PDP URLs (https://<shop>/products/<handle>) without an
   // extra DB lookup.
   shop_domain: string;
+  // Results handoff §9 — the store's display name for the fixed consent
+  // wording. Decider docs only; absent when no name could be resolved.
+  shop_name?: string;
   // Spin-off: "shopify" (Shopify cart + PDP) | "standalone" (the merchant's own
   // product URLs, "Shop now"). Absent on pre-existing quizzes → runtime reads it
   // as "shopify", so nothing changes for installed Shopify shops.
@@ -483,6 +502,10 @@ export async function publishQuiz(
     collectionOrder?: (
       targets: Array<{ targetId: string; collectionRef: string }>,
     ) => Promise<Record<string, string[]> | null>;
+    // Results handoff §9 — the store's display name for the fixed consent
+    // wording, resolved by the (server-only) caller. Absent → the name baked
+    // by the previous publish, then the brand-guidelines name.
+    shopName?: string | null;
   },
 ): Promise<PublishResult> {
   const quiz = await prisma.quiz.findFirst({
@@ -760,6 +783,11 @@ export async function publishQuiz(
     where: { id: args.shopId },
     select: { brandTokens: true, shopDomain: true, brandGuidelines: true, source: true },
   });
+  // Decider docs only — every legacy publish stays byte-identical.
+  const bakedShopName =
+    doc.logic_model === "decider"
+      ? resolveBakedShopName(opts?.shopName, quiz.publishedJson, shop?.brandGuidelines)
+      : undefined;
   const shopParsed = BrandTokens.safeParse(shop?.brandTokens ?? {});
   const shopTokens: DesignTokensT | null = shopParsed.success
     ? shopParsed.data
@@ -929,6 +957,7 @@ export async function publishQuiz(
     shop_domain: shop?.shopDomain ?? "",
     platform: shop?.source === "standalone" ? "standalone" : "shopify",
     ...(bakedCurrency ? { currency: bakedCurrency } : {}),
+    ...(bakedShopName ? { shop_name: bakedShopName } : {}),
     ...(answerWeights ? { answer_weights: answerWeights } : {}),
     // LOGIC v2 — the baked target data (decider docs only; absent on every
     // legacy publish → byte-identical, pinned by the H3 harness).

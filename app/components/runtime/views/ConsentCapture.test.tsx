@@ -168,3 +168,102 @@ describe("consent evidence and inline capture", () => {
     expect(html).not.toContain("{privacy}");
   });
 });
+
+// Results handoff §9 — the fixed-wording form, gated on consentVersion.
+describe("fixed-wording consent form (consentVersion)", () => {
+  const FIXED: RecPageGlobal = {
+    consentVersion: "2026-09-17",
+    consentOn: true,
+    consentCopy: "Email me news and offers from Acme.",
+    captureTermsOn: true,
+    captureTermsMode: "notice",
+    capturePhone: true,
+    smsConsentMode: "checkbox",
+    // A merchant's old custom sentence is ignored once the quiz moves over.
+    captureTermsText: "OLD {terms} SENTENCE",
+  };
+
+  it("renders marketing box, then the legal lines, then the button — no phone until an SMS destination exists", () => {
+    mount(FIXED);
+    const text = host.textContent ?? "";
+    expect(text).toContain("Email me news and offers from Acme.");
+    expect(text).toContain(
+      "By continuing, you agree to our Terms & Conditions and acknowledge our Privacy Policy.",
+    );
+    expect(text).toContain("You can unsubscribe from our emails at any time.");
+    expect(text).not.toContain("OLD");
+    expect(text).not.toContain("{terms}");
+    expect(document.querySelector('input[type="tel"]')).toBeNull();
+    expect(text).not.toContain("Text me offers");
+    // Order: checkbox, legal text, then the button.
+    const order = [...host.querySelectorAll("[data-qz-consent], button")].map(
+      (el) => el.getAttribute("data-qz-consent") ?? "button",
+    );
+    expect(order.slice(0, 3)).toEqual(["marketing", "legal", "button"]);
+    // Links default to the store's policy pages, resolved on the STORE's domain.
+    const hrefs = [...host.querySelectorAll("a")].map((a) => a.getAttribute("href"));
+    expect(hrefs).toEqual([
+      "https://shop.example/policies/terms-of-service",
+      "https://shop.example/policies/privacy-policy",
+    ]);
+  });
+
+  it("marketing never blocks submit; the evidence records version, links and the box's text", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetcher);
+    const onDone = mount(FIXED);
+    input("email", "shopper@example.com");
+    expect(document.querySelector<HTMLButtonElement>("button")?.disabled).toBe(false);
+    await submit();
+    const body = JSON.parse(fetcher.mock.calls[0]![1].body as string);
+    expect(body.marketing_consent).toBe(false);
+    expect(body).not.toHaveProperty("phone");
+    expect(body.consent).toEqual({
+      version: "2026-09-17",
+      placement: "gate",
+      links: {
+        terms: "https://shop.example/policies/terms-of-service",
+        privacy: "https://shop.example/policies/privacy-policy",
+      },
+      marketing: { checked: false, text: "Email me news and offers from Acme." },
+      terms: {
+        mode: "notice",
+        checked: false,
+        text: "By continuing, you agree to our Terms & Conditions and acknowledge our Privacy Policy.",
+      },
+    });
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it("a terms box is the only thing that blocks submit, and it renders last", () => {
+    mount({ ...FIXED, captureTermsMode: "checkbox" });
+    input("email", "shopper@example.com");
+    const button = document.querySelector<HTMLButtonElement>("button")!;
+    expect(button.disabled).toBe(true);
+    const boxes = [...host.querySelectorAll("label[data-qz-consent]")].map((l) =>
+      l.getAttribute("data-qz-consent"),
+    );
+    expect(boxes).toEqual(["marketing", "terms"]);
+    expect(host.textContent).toContain("I agree to the Terms & Conditions and acknowledge the Privacy Policy.");
+    act(() =>
+      host.querySelector<HTMLInputElement>('label[data-qz-consent="terms"] input')!.click(),
+    );
+    expect(button.disabled).toBe(false);
+  });
+
+  it("refuses javascript: and http: links, and never renders them as hrefs", () => {
+    // eslint-disable-next-line no-script-url
+    mount({ ...FIXED, termsUrl: "javascript:alert(1)", privacyUrl: "http://plain.example/p" });
+    expect(host.querySelectorAll("a")).toHaveLength(0);
+    expect(host.textContent).toContain("Terms & Conditions");
+  });
+});
+
+describe("policyHref (tightened)", () => {
+  it("accepts https and store paths only", () => {
+    expect(policyHref("https://x.example/terms", "shop.example")).toBe("https://x.example/terms");
+    expect(policyHref("http://x.example/terms", "shop.example")).toBeUndefined();
+    expect(policyHref("//evil.example/x", "shop.example")).toBeUndefined();
+    expect(policyHref("evil.example/x", "shop.example")).toBeUndefined();
+  });
+});

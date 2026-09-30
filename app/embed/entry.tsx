@@ -55,6 +55,7 @@ interface EmbedPayload {
   chrome: Parameters<typeof QuizRuntime>[0]["chrome"];
   buddySessionId: string | null;
   aiCopyEnabled: boolean;
+  shopName?: string;
 }
 
 const STYLE_ID = "wiskr-embed-styles";
@@ -213,6 +214,7 @@ async function mount(host: HTMLElement): Promise<void> {
       locale={data.locale}
       buddySessionId={data.buddySessionId}
       aiCopyEnabled={data.aiCopyEnabled}
+      shopName={data.shopName}
     />,
   );
 }

@@ -1,3 +1,4 @@
+import { checkPolicyLink } from "../../../lib/consentWording";
 import type { ResolvedRecPageConfig } from "../../../lib/recommendDecider";
 
 export const TERMS_NOTICE =
@@ -24,22 +25,16 @@ export const SMS_CHECKBOX =
 export const SMS_NOTICE =
   "By continuing, you acknowledge the SMS notice for the phone number provided.";
 
+// Results handoff §4 defect 1(c) — every mode resolves links here: https://
+// or a store path resolved against the STORE's domain (the quiz is served
+// from the app's, where "/policies/…" 404s). http:, javascript:, bare domains
+// and //host never become an href.
 export function policyHref(
   value: string | undefined,
   shopDomain: string | undefined,
 ): string | undefined {
-  if (!value) return undefined;
-  try {
-    const base = shopDomain
-      ? shopDomain.includes("://")
-        ? shopDomain
-        : `https://${shopDomain}`
-      : undefined;
-    const url = new URL(value, base);
-    return ["https:", "http:"].includes(url.protocol) ? url.href : undefined;
-  } catch {
-    return undefined;
-  }
+  const check = checkPolicyLink(value, shopDomain);
+  return check.ok ? check.href : undefined;
 }
 
 // Only the new notice mode uses substitution. Existing checkbox text stays
