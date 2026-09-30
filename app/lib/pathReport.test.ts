@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildTier1Report } from "./pathReport";
 import { Quiz } from "./quizSchema";
+import { REPORT_COPY } from "./reportCopy";
 
 // ── QZY-1 — V11 filter dead ends + the cycle guard ───────────────────────────
 
@@ -213,7 +214,7 @@ describe("buildTier1Report (§7.1 Tier-1)", () => {
     // One bucket vanishes → the answer targeting it is a V4 finding.
     const v4 = byId(buildTier1Report(base, [BUCKETS[0]!]), "V4");
     expect(v4.status).toBe("fail");
-    expect(v4.findings[0]!.message).toMatch(/deleted bucket/);
+    expect(v4.findings.map((f) => f.message)).toEqual([REPORT_COPY.answersDeletedRec("Q2", 1)]);
   });
 
   it("V5/V6 block on rule refs to deleted buckets/answers; V9 warns on half-built; verdict counts", () => {
@@ -303,7 +304,7 @@ describe("QZY-1 V11 — filter answers must match products", () => {
     const v11 = r.checks.find((c) => c.id === "V11")!;
     expect(v11.status).toBe("fail");
     expect(v11.severity).toBe("block");
-    expect(v11.findings[0]!.message).toContain("matches 0 products");
+    expect(v11.findings[0]!.message).toBe(REPORT_COPY.keepsNoProducts("Q1", "Beginner"));
     expect(r.verdict.blocking).toBeGreaterThan(0);
   });
 

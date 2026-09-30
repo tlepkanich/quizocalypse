@@ -10,8 +10,8 @@ import { CHECK_COPY } from "../../../studio/logicTab/logicCopy";
 // the CONTENT only.
 //
 // Fed by the SAME Tier-1 report instance as the CTA's count, so the two can
-// never disagree. Rows: blocking findings first, then warnings (R0, the
-// unsaved-style note, first among them), then notes. V10 and V16 are
+// never disagree. Rows: R0 (the unsaved-style note) first whenever it fires,
+// then blocking findings, then warnings, then notes. V10 and V16 are
 // computed but not listed here (they stay in the builder's Tier1CheckList).
 // A row with a target is a real button that jumps (the host closes the
 // popover and sends a focus request); a row without one is plain text.
@@ -48,8 +48,10 @@ export function checkRows(report: Tier1Report): CheckRow[] {
       });
     });
   }
+  // P1-4: the style-mismatch row (R0) is always listed first, above the
+  // blocks it explains (handoff §13 "A warning row always listed first").
   const rank = (r: CheckRow) =>
-    r.severity === "crit" ? 0 : r.severity === "warn" ? (r.checkId === "R0" ? 1 : 2) : 3;
+    r.checkId === "R0" ? 0 : r.severity === "crit" ? 1 : r.severity === "warn" ? 2 : 3;
   return rows
     .map((r, i) => ({ r, i }))
     .sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i)

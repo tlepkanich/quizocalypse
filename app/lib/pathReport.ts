@@ -6,7 +6,8 @@ import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 import { answerFilterValues, filterAnswerMatchCount } from "./filterMatching";
 import { bandCoverage, sliderBandAnswers } from "./sliderBands";
 import { isSellable, type IndexedProduct } from "./recommendationEngine";
-import { ruleTargets } from "./recommendDecider";
+import { answerTargets, ruleTargets } from "./recommendDecider";
+import { REPORT_COPY, structureMessage } from "./reportCopy";
 import { engineLogicStyle, resolveLogicStyle } from "./logicStyle";
 import { orderedQuestions } from "./questionOrder";
 import { ruleStatuses } from "./ruleStatus";
@@ -177,41 +178,59 @@ export function buildTier1Report(
     deciders.length === 1
       ? []
       : deciders.length === 0
-        ? [
-            {
-              message:
-                "No question decides the result yet — promote one with the Make decider toggle.",
-            },
-          ]
+        ? [{ message: REPORT_COPY.noPicker }]
         : deciders.slice(1).map((d) => ({
-            message: `${qLabel(d.id)} is ALSO marked as deciding — keep exactly one (demote the extras).`,
+            message: REPORT_COPY.alsoPicks(qLabel(d.id)),
             link: { kind: "question" as const, nodeId: d.id },
           }));
 
   // V2 — every reachable path passes through the decider before the quiz ends.
   // ANSWER-level (spec: "REACHABILITY IS ANSWER-LEVEL") via the dominator-
-  // consistent answersReachDecider; then a GATE FALLBACK: if the publish
-  // gate's own dominator walk found a bypass this answer-level pass missed
-  // (e.g. the intro wired straight to a terminal — no answer to pin it on),
-  // surface the gate's finding so the report can never read safer. BLOCK.
+  // consistent answersReachDecider, then narrowed to the answers whose OWN
+  // route causes the skip (handoff §13 "V2: report the route"): a route to
+  // the results or to a question numbered after the picking question. An
+  // answer that only feeds an earlier question is dropped (that question's
+  // answer carries the finding). If the narrowing leaves nothing, every
+  // flagged answer is kept; then a GATE FALLBACK: if the publish gate's own
+  // dominator walk found a bypass this answer-level pass missed (e.g. the
+  // intro wired straight to a terminal — no answer to pin it on), surface
+  // it so the report can never read safer. BLOCK.
   const v2: Tier1Finding[] = [];
   if (decider) {
     const reach = answersReachDecider(doc);
+    const pickerNo = qIndex.get(decider.id) ?? 0;
+    const nodeById = new Map(doc.nodes.map((n) => [n.id, n] as const));
+    const flagged: Tier1Finding[] = [];
     for (const n of questions) {
       if (n.type !== "question" || n.id === decider.id) continue;
+      const out = doc.edges.filter((e) => e.source === n.id);
+      const defaultEdge = out.find((e) => !e.source_handle) ?? out[0];
       for (const a of n.data.answers) {
-        if (reach.get(a.id) === false) {
-          v2.push({
-            message: `Picking “${a.text || "an answer"}” on ${qLabel(n.id)} ends the quiz without reaching the deciding question.`,
-            link: { kind: "question", nodeId: n.id },
-          });
+        if (reach.get(a.id) !== false) continue;
+        const text = a.text || "an answer";
+        const link = { kind: "question" as const, nodeId: n.id };
+        flagged.push({ message: REPORT_COPY.canFinishWithout(qLabel(n.id), text), link });
+        // A question after the picking one is only reached by a skip; the
+        // route that caused the skip carries the finding (mock `findings()`).
+        if ((qIndex.get(n.id) ?? 0) > pickerNo) continue;
+        const route = out.find((e) => e.source_handle === a.edge_handle_id) ?? defaultEdge;
+        const to = route ? nodeById.get(route.target) : undefined;
+        if (!to) continue;
+        if (to.type === "result" || to.type === "end") {
+          v2.push({ message: REPORT_COPY.straightToResults(qLabel(n.id), text), link });
+        } else if (to.type === "question") {
+          const toNo = qIndex.get(to.id) ?? 0;
+          if (toNo > pickerNo) {
+            v2.push({ message: REPORT_COPY.skipsTo(qLabel(n.id), text, qLabel(to.id)), link });
+          }
+        } else {
+          v2.push({ message: REPORT_COPY.canFinishWithout(qLabel(n.id), text), link });
         }
       }
     }
-    if (v2.length === 0) {
-      for (const issue of gateIssues.filter((i) => i.kind === "decider_bypass")) {
-        v2.push({ message: issue.message });
-      }
+    if (v2.length === 0) v2.push(...flagged);
+    if (v2.length === 0 && gateIssues.some((i) => i.kind === "decider_bypass")) {
+      v2.push({ message: REPORT_COPY.pathSkipsPicker });
     }
   }
 
@@ -220,28 +239,24 @@ export function buildTier1Report(
     decider && decider.type === "question" && decider.data.required === false
       ? [
           {
-            message: "The deciding question is optional — a shopper could skip it and get no result.",
+            message: REPORT_COPY.pickerOptional(qLabel(decider.id)),
             link: { kind: "question", nodeId: decider.id },
           },
         ]
       : [];
 
-  // V4 — every deciding answer maps to a bucket THAT EXISTS. BLOCK.
+  // V4 — every deciding answer maps to targets THAT EXIST. BLOCK. Checks
+  // every answerTargets entry (publish throws on any missing row), and
+  // groups per question per case: "Q1 · 3 answers have no recommendation"
+  // counts once (handoff §13 count rule).
   const v4: Tier1Finding[] = [];
   if (decider && decider.type === "question") {
-    for (const a of decider.data.answers) {
-      if (!a.target_id) {
-        v4.push({
-          message: `The deciding answer “${a.text || "Untitled"}” doesn't point at a result yet.`,
-          link: { kind: "question", nodeId: decider.id },
-        });
-      } else if (!bucketIds.has(a.target_id)) {
-        v4.push({
-          message: `The deciding answer “${a.text || "Untitled"}” points at a deleted bucket — pick a new result.`,
-          link: { kind: "question", nodeId: decider.id },
-        });
-      }
-    }
+    const answers = decider.data.answers;
+    const unset = answers.filter((a) => answerTargets(a).length === 0).length;
+    const deleted = answers.filter((a) => answerTargets(a).some((t) => !bucketIds.has(t))).length;
+    const link = { kind: "question" as const, nodeId: decider.id };
+    if (unset) v4.push({ message: REPORT_COPY.answersNoRec(qLabel(decider.id), unset), link });
+    if (deleted) v4.push({ message: REPORT_COPY.answersDeletedRec(qLabel(decider.id), deleted), link });
   }
 
   // V5 — no rule references a deleted bucket. BLOCK. Covers EVERY target of
@@ -253,16 +268,23 @@ export function buildTier1Report(
     .filter(({ r }) => ruleTargets(r).some((t) => !bucketIds.has(t)))
     .filter(({ r }) => !(rulesOnly && statusOf(r.id)?.missing.recommendations))
     .map(({ r, i }) => ({
-      message: `Rule ${i + 1} recommends a deleted bucket — pick a new result.`,
+      message: ruleTargets(r).every((t) => !bucketIds.has(t))
+        ? REPORT_COPY.ruleNoRec(i + 1)
+        : REPORT_COPY.ruleDeletedRec(i + 1),
       link: { kind: "rule" as const, ruleId: r.id },
     }));
 
-  // V6 — no rule references a deleted question/answer. BLOCK.
+  // V6 — no rule references a deleted question/answer. BLOCK. "is" never
+  // runs; a broken "is not" now matches every shopper (ruleStatus flags).
   const ruleNo = new Map(rules.map((r, i) => [r.id, i + 1]));
-  const v6: Tier1Finding[] = brokenRuleRefs(doc).map((f) => ({
-    message: `Rule ${ruleNo.get(f.ruleId) ?? "?"}: ${f.message}`,
-    link: { kind: "rule", ruleId: f.ruleId },
-  }));
+  const v6: Tier1Finding[] = brokenRuleRefs(doc).map((f) => {
+    const n = ruleNo.get(f.ruleId) ?? "?";
+    const always = statusOf(f.ruleId)?.flags.some((x) => x.kind === "broken_always");
+    return {
+      message: always ? REPORT_COPY.ruleDeletedAnswerMatchesAll(n) : REPORT_COPY.ruleDeletedAnswer(n),
+      link: { kind: "rule", ruleId: f.ruleId },
+    };
+  });
 
   // V7/V8/V9 + R3/R4 — all read the one per-rule status (ruleStatus.ts), so
   // a rule tagged "never runs" always has a finding with the same words.
@@ -276,18 +298,17 @@ export function buildTier1Report(
     for (const f of st.flags) {
       if (f.kind === "unreachable" || f.kind === "exclusive") {
         v7.push({
-          message: `Rule ${st.number}: ${
+          message:
             f.kind === "unreachable"
-              ? "A condition depends on a question no shopper can reach — this rule can never fire."
-              : "Two of this rule's conditions live on paths that never co-occur — no shopper can match both."
-          }`,
+              ? REPORT_COPY.ruleUnreachable(st.number)
+              : REPORT_COPY.ruleExclusive(st.number),
           link: ruleLink(st.ruleId),
         });
       }
     }
     if (st.reason === "incomplete") {
       const finding = {
-        message: `Rule ${st.number} has ${st.neverRuns}, so it never runs`,
+        message: REPORT_COPY.ruleIncomplete(st.number, st.neverRuns ?? ""),
         link: ruleLink(st.ruleId),
       };
       // Rules only: a rule missing its answers or recommendations BLOCKS
@@ -297,13 +318,19 @@ export function buildTier1Report(
       else if (st.missing.answers) v9.push(finding);
     } else if (st.reason === "impossible" && st.impossible) {
       r4.push({
-        message: `Rule ${st.number} never runs: it needs all ${st.impossible.needs} of its ${
-          st.impossible.qNumber !== null ? `Q${st.impossible.qNumber}` : "question's"
-        } answers and they can pick ${st.impossible.canPick}`,
+        message: REPORT_COPY.ruleImpossible(
+          st.number,
+          st.impossible.needs,
+          st.impossible.qNumber !== null ? `Q${st.impossible.qNumber}` : null,
+          st.impossible.canPick,
+        ),
         link: ruleLink(st.ruleId),
       });
     } else if (st.reason === "shadowed") {
-      v8.push({ message: `Rule ${st.number} never runs: ${st.neverRuns}`, link: ruleLink(st.ruleId) });
+      v8.push({
+        message: REPORT_COPY.ruleNeverRuns(st.number, st.neverRuns ?? ""),
+        link: ruleLink(st.ruleId),
+      });
     }
   }
 
@@ -312,18 +339,13 @@ export function buildTier1Report(
   const r2: Tier1Finding[] = [];
   if (rulesOnly) {
     if (rules.length === 0) {
-      r1.push({
-        message: "Rules only needs at least one rule to show anything.",
-        link: { kind: "rules" },
-      });
+      r1.push({ message: REPORT_COPY.rulesOnlyNeedsRule, link: { kind: "rules" } });
     } else {
       const canRun = rules.some((r) => statusOf(r.id)?.canRun);
       const shows = rules.some((r) => ruleShowsRecommendations(r, statusOf(r.id), "rules"));
       if (!canRun || !shows) {
         r2.push({
-          message: !canRun
-            ? "None of your rules can ever run."
-            : "No rule shows anything yet. Add a Show rule.",
+          message: !canRun ? REPORT_COPY.noRuleCanRun : REPORT_COPY.noRuleShows,
           link: { kind: "rules" },
         });
       }
@@ -338,7 +360,9 @@ export function buildTier1Report(
       ? buckets.filter((b) => b.quizId).map((b) => b.id)
       : null);
   const r5: Tier1Finding[] = [];
-  if (recIds) {
+  // P1-3: Rules only with ZERO rules lists only "needs at least one rule";
+  // the mock names uncovered recommendations only once rules exist.
+  if (recIds && !(rulesOnly && rules.length === 0)) {
     const coverage = recommendationCoverage(
       doc,
       rulesOnly ? "rules" : "attributes",
@@ -348,7 +372,7 @@ export function buildTier1Report(
     for (const id of recIds) {
       if (coverage.get(id)?.covered) continue;
       r5.push({
-        message: `“${buckets.find((b) => b.id === id)?.name ?? id}” is never recommended`,
+        message: REPORT_COPY.neverRecommended(buckets.find((b) => b.id === id)?.name ?? id),
         link: {
           kind: "recommendation",
           categoryId: id,
@@ -369,13 +393,7 @@ export function buildTier1Report(
     !rulesOnly &&
     doc.logic_style === undefined &&
     resolveLogicStyle(doc) === "rules"
-      ? [
-          {
-            message:
-              "This quiz still decides results the Filter Results + Rules way. Choose 'Rules only' in the title menu to save it.",
-            link: { kind: "style" },
-          },
-        ]
+      ? [{ message: REPORT_COPY.styleNotSaved, link: { kind: "style" } }]
       : [];
 
   // V10 — answer length advisory (§10 — NEVER blocks).
@@ -385,7 +403,7 @@ export function buildTier1Report(
     for (const a of n.data.answers) {
       if (a.text.length >= ANSWER_ADVISORY_LEN) {
         v10.push({
-          message: `${qLabel(n.id)}: “${a.text.slice(0, 40)}…” is long — it may wrap on small screens.`,
+          message: REPORT_COPY.answerLong(qLabel(n.id), a.text.slice(0, 40)),
           link: { kind: "question", nodeId: n.id },
         });
       }
@@ -396,10 +414,19 @@ export function buildTier1Report(
   // missing fallbacks, …). Without this fold-in the footer could say "safe to
   // publish" while quizPublish throws on the very same doc — the one thing a
   // path tester must never do. Decider kinds are excluded (V1–V6 cover them).
+  // The gate's own messages stay as they are; the report shows each kind in
+  // merchant words (reportCopy.structureMessage, D18).
+  const typeOf = (id: string) => doc.nodes.find((n) => n.id === id)?.type;
+  const placeOf = (id: string): string => {
+    if (qIndex.has(id)) return qLabel(id);
+    const t = typeOf(id);
+    const P = REPORT_COPY.place;
+    return t === "intro" ? P.intro : t === "result" ? P.result : t === "end" ? P.end : P.step;
+  };
   const s1: Tier1Finding[] = gateIssues
     .filter((i) => !DECIDER_KINDS.has(i.kind))
     .map((i) => ({
-      message: i.message,
+      message: structureMessage(i.kind, i.message, placeOf(i.nodeId), typeOf(i.nodeId)),
       ...(qIndex.has(i.nodeId) ? { link: { kind: "question" as const, nodeId: i.nodeId } } : {}),
     }));
 
@@ -412,14 +439,16 @@ export function buildTier1Report(
     const sellable = productIndex.filter(isSellable);
     for (const q of questions) {
       if (q.type !== "question" || q.data.role !== "filter") continue;
-      for (const a of q.data.answers) {
-        if (filterAnswerMatchCount(a, sellable) === 0) {
-          v11.push({
-            message: `${qLabel(q.id)} “${q.data.text}” → answer “${a.text}” matches 0 products — every path through it dead-ends. Re-map it, AI-tag products, or set it to no preference.`,
-            link: { kind: "question", nodeId: q.id },
-          });
-        }
-      }
+      // One finding per question (handoff §13 count rule).
+      const empty = q.data.answers.filter((a) => filterAnswerMatchCount(a, sellable) === 0);
+      if (empty.length === 0) continue;
+      v11.push({
+        message:
+          empty.length === 1
+            ? REPORT_COPY.keepsNoProducts(qLabel(q.id), empty[0]!.text)
+            : REPORT_COPY.answersKeepNoProducts(qLabel(q.id), empty.length),
+        link: { kind: "question", nodeId: q.id },
+      });
     }
   }
 
@@ -438,13 +467,13 @@ export function buildTier1Report(
     const cov = bandCoverage(q.data.answers, min, max, step);
     for (const [from, to] of cov.gaps) {
       v12.push({
-        message: `${qLabel(q.id)} “${q.data.text}” — slider values ${from}–${to} land in NO band; shoppers there dead-end. Extend a band to cover them.`,
+        message: REPORT_COPY.bandGap(qLabel(q.id), from, to),
         link: { kind: "question", nodeId: q.id },
       });
     }
     for (const [from, to] of cov.overlaps) {
       v12warn.push({
-        message: `${qLabel(q.id)} “${q.data.text}” — bands overlap at ${from}–${to}; the first band wins.`,
+        message: REPORT_COPY.bandOverlap(qLabel(q.id), from, to),
         link: { kind: "question", nodeId: q.id },
       });
     }
@@ -457,14 +486,15 @@ export function buildTier1Report(
   const v13: Tier1Finding[] = [];
   for (const q of questions) {
     if (q.type !== "question" || q.data.role !== "filter") continue;
-    for (const a of q.data.answers) {
-      if (a.no_preference === true) continue;
-      if (answerFilterValues(a) === null) {
-        v13.push({
-          message: `${qLabel(q.id)} “${q.data.text}” → answer “${a.text}” maps to nothing — it never narrows, so that choice is silently ignored. Map it or set it to no preference.`,
-          link: { kind: "question", nodeId: q.id },
-        });
-      }
+    // One row per question; "Keeps everything" answers are chosen, not unset.
+    const unset = q.data.answers.filter(
+      (a) => a.no_preference !== true && answerFilterValues(a) === null,
+    ).length;
+    if (unset) {
+      v13.push({
+        message: REPORT_COPY.keepsEverything(qLabel(q.id), unset),
+        link: { kind: "question", nodeId: q.id },
+      });
     }
   }
   // V14 (INFO): not-live products. isSellable now drops non-active products
@@ -477,7 +507,7 @@ export function buildTier1Report(
     ).length;
     if (notLive > 0) {
       v14.push({
-        message: `${notLive} of ${productIndex.length} products are not live (draft or archived) — they are excluded from every recommendation.`,
+        message: REPORT_COPY.notLive(notLive, productIndex.length),
       });
     }
   }
@@ -496,7 +526,7 @@ export function buildTier1Report(
         const largest = Math.max(...counts);
         if (largest > 0.9 * sellable.length) {
           v15.push({
-            message: `${qLabel(q.id)} “${q.data.text}” narrows weakly — its biggest answer keeps ${largest} of ${sellable.length} products, so most shoppers land in the same place.`,
+            message: REPORT_COPY.weakNarrowing(qLabel(q.id), largest, sellable.length),
             link: { kind: "question", nodeId: q.id },
           });
         }
@@ -516,7 +546,7 @@ export function buildTier1Report(
     const uncovered = sellable.filter((p) => !inAnySet.has(p.product_id)).length;
     if (uncovered > 0) {
       v16.push({
-        message: `${uncovered} of ${sellable.length} products belong to no result set — shoppers can never be shown them through the starting sets (rules and narrowing can't reach a product outside every set).`,
+        message: REPORT_COPY.outsideEverySet(uncovered, sellable.length),
       });
     }
   }
@@ -525,51 +555,54 @@ export function buildTier1Report(
   // and every filter-value check (V11, V13, V15), blocks on R1–R3, and
   // downgrades a slider band gap to a warning (the rules that needed that
   // band just don't fire; the safety net catches the shopper).
+  // Handoff §13 (D1/D5): while R0 fires, the screen shows Rules only but
+  // the engine still runs Filter Results + Rules. Every Filter block that
+  // fires beside it carries the same sentence, so the merchant is never told
+  // to fix a control the screen does not draw without knowing why.
+  const explain = (fs: Tier1Finding[]): Tier1Finding[] =>
+    r0.length > 0
+      ? fs.map((f) => ({ ...f, message: `${f.message} ${REPORT_COPY.styleNotSaved}` }))
+      : fs;
+  const T = REPORT_COPY.titles;
   const pickingChecks: Tier1Check[] = rulesOnly
     ? []
     : [
-        check("V1", "block", "Exactly one deciding question", v1),
-        check("V2", "block", "Every path reaches the decider", v2),
-        check("V3", "block", "The deciding question is required", v3),
-        check("V4", "block", "Every deciding answer has a result", v4),
+        check("V1", "block", T.V1, explain(v1)),
+        check("V2", "block", T.V2, explain(v2)),
+        check("V3", "block", T.V3, explain(v3)),
+        check("V4", "block", T.V4, explain(v4)),
       ];
   const rulesOnlyChecks: Tier1Check[] = rulesOnly
     ? [
-        check("R1", "block", "Rules only has a rule", r1),
-        check("R2", "block", "A rule can show something", r2),
-        check("R3", "block", "Every rule has answers and a recommendation", r3),
+        check("R1", "block", T.R1, r1),
+        check("R2", "block", T.R2, r2),
+        check("R3", "block", T.R3, r3),
       ]
     : [];
   const checks: Tier1Check[] = [
-    ...(r0.length > 0 ? [check("R0", "warn", "The logic style is saved", r0)] : []),
+    ...(r0.length > 0 ? [check("R0", "warn", T.R0, r0)] : []),
     ...pickingChecks,
     ...rulesOnlyChecks,
-    check("V5", "block", "Rules point at existing buckets", v5),
-    check("V6", "block", "Rule conditions reference existing answers", v6),
-    check("V7", "warn", "No rule sits on paths that never co-occur", v7),
-    check("V8", "warn", "No rule is shadowed by a higher one", v8),
-    ...(rulesOnly ? [] : [check("V9", "warn", "No half-built rules", v9)]),
-    check("R4", "warn", "No rule needs more answers than shoppers can pick", r4),
-    ...(recIds ? [check("R5", "warn", "Every recommendation can be shown", r5)] : []),
-    check("V10", "info", "Answer text fits comfortably", v10),
-    ...(productIndex && !rulesOnly
-      ? [check("V11", "block", "Every filter answer matches products", v11)]
-      : []),
-    check("V12", rulesOnly ? "warn" : "block", "Slider bands cover the whole range", v12),
-    check("V12", "warn", "Slider bands don't overlap", v12warn),
-    ...(rulesOnly ? [] : [check("V13", "warn", "Every narrowing answer is mapped", v13)]),
+    check("V5", "block", T.V5, v5),
+    check("V6", "block", T.V6, v6),
+    check("V7", "warn", T.V7, v7),
+    check("V8", "warn", T.V8, v8),
+    ...(rulesOnly ? [] : [check("V9", "warn", T.V9, v9)]),
+    check("R4", "warn", T.R4, r4),
+    ...(recIds ? [check("R5", "warn", T.R5, r5)] : []),
+    check("V10", "info", T.V10, v10),
+    ...(productIndex && !rulesOnly ? [check("V11", "block", T.V11, explain(v11))] : []),
+    check("V12", rulesOnly ? "warn" : "block", T.V12gap, v12),
+    check("V12", "warn", T.V12overlap, v12warn),
+    ...(rulesOnly ? [] : [check("V13", "warn", T.V13, v13)]),
     ...(productIndex
       ? [
-          check("V14", "info", "Every product in scope is live", v14),
-          ...(rulesOnly
-            ? []
-            : [check("V15", "warn", "Narrowing questions split the catalog", v15)]),
+          check("V14", "info", T.V14, v14),
+          ...(rulesOnly ? [] : [check("V15", "warn", T.V15, v15)]),
         ]
       : []),
-    ...(productIndex && bucketsWithMembers.length > 0
-      ? [check("V16", "info", "The starting set covers the catalog", v16)]
-      : []),
-    check("S1", "block", "Structure (orphans, dead ends, routing)", s1),
+    ...(productIndex && bucketsWithMembers.length > 0 ? [check("V16", "info", T.V16, v16)] : []),
+    check("S1", "block", T.S1, s1),
   ];
 
   const outcomes: Tier1OutcomeRow[] = outcomeTable(doc)

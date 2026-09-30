@@ -10,7 +10,7 @@ const report = (checks: Tier1Report["checks"]): Tier1Report => ({
 });
 
 describe("check popover rows", () => {
-  it("orders blocks, then the style note, then warnings, then notes; drops V10/V16", () => {
+  it("orders the style note first, then blocks, then warnings, then notes; drops V10/V16", () => {
     const rows = checkRows(
       report([
         { id: "R5", severity: "warn", status: "fail", title: "", findings: [{ message: "w1" }] },
@@ -22,9 +22,9 @@ describe("check popover rows", () => {
         { id: "V5", severity: "block", status: "pass", title: "", findings: [] },
       ]),
     );
-    expect(rows.map((r) => r.message)).toEqual(["b1", "style", "w1", "n1"]);
-    expect(rows.map((r) => r.severity)).toEqual(["crit", "warn", "warn", "note"]);
-    expect(rows[0]!.link).toEqual({ kind: "rules" });
+    expect(rows.map((r) => r.message)).toEqual(["style", "b1", "w1", "n1"]);
+    expect(rows.map((r) => r.severity)).toEqual(["warn", "crit", "warn", "note"]);
+    expect(rows[1]!.link).toEqual({ kind: "rules" });
   });
 
   it("titles: fix / review / nothing (mock checkPop)", () => {
