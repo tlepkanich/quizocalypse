@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc, QuestionType } from "../../../../lib/quizSchema";
 import { isFreeformType } from "../../../../lib/quizSchema";
-import { addAnswer, removeAnswer, setQuestionType } from "../../../../lib/quizMutations";
+import { pickQuestionType, setScalePoints } from "../../../studio/logicTab/questionTypeChange";
 import { updateNodeData } from "../../../studio/studioDoc";
 import type { QuestionNode } from "../../../../lib/questionOrder";
 import { IconCaret } from "../icons";
@@ -175,31 +175,9 @@ export function TypeChipSelector({
   const currentLabel =
     options.find((o) => o.value === current)?.label ?? TYPE_CHIP_LABEL[current] ?? current;
 
-  const apply = (pickValue: PickValue) => {
-    const storedType: QuestionType = pickValue === "rating5" ? "rating" : pickValue;
-    let next = setQuestionType(doc, node.id, storedType);
-    // Five-point = rating + the 1–5 preset; the plain Rating pick clears an
-    // old preset so the two picks stay distinguishable in the chip.
-    next = {
-      ...next,
-      nodes: next.nodes.map((n) =>
-        n.id === node.id && n.type === "question"
-          ? {
-              ...n,
-              data: {
-                ...n.data,
-                ...(pickValue === "rating5"
-                  ? { scale_config: { ...(n.data.scale_config ?? {}), min: 1, max: 5 } }
-                  : storedType === "rating"
-                    ? { scale_config: undefined }
-                    : {}),
-              },
-            }
-          : n,
-      ),
-    };
-    onCommit(next);
-  };
+  // The one type-change implementation, shared with the Logic step's
+  // Question type popover (logicTab/questionTypeChange.ts).
+  const apply = (pickValue: PickValue) => onCommit(pickQuestionType(doc, node.id, pickValue));
 
   const handlePick = (pickValue: PickValue) => {
     if (pickValue === current) return;
@@ -232,55 +210,11 @@ export function TypeChipSelector({
         scale_config: { ...(node.data.scale_config ?? {}), [which]: v },
       }),
     );
-  // Scale point count — every point is a REAL answer. Grow: addAnswer (rename
-  // the fresh answer to its point number); shrink: removeAnswer(last) — its
-  // mapping/route prune with it (honest). scale_config.max stays in sync when
-  // the five-point preset is present.
+  // Scale point count — every point is a REAL answer (the shared stepper
+  // write: grow appends a numbered point, shrink removes the last one).
   const setScaleCount = (nextCount: number) => {
-    const count = answers.length;
-    if (nextCount === count || nextCount < 2 || nextCount > 10) return;
-    let next: QuizDoc;
-    if (nextCount > count) {
-      const before = new Set(answers.map((a) => a.id));
-      next = addAnswer(doc, node.id);
-      next = {
-        ...next,
-        nodes: next.nodes.map((n) =>
-          n.id === node.id && n.type === "question"
-            ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  answers: n.data.answers.map((a) =>
-                    before.has(a.id) ? a : { ...a, text: String(nextCount) },
-                  ),
-                },
-              }
-            : n,
-        ),
-      };
-    } else {
-      const last = answers[answers.length - 1];
-      if (!last) return;
-      next = removeAnswer(doc, node.id, last.id);
-    }
-    if (node.data.scale_config?.max !== undefined) {
-      next = {
-        ...next,
-        nodes: next.nodes.map((n) =>
-          n.id === node.id && n.type === "question"
-            ? {
-                ...n,
-                data: {
-                  ...n.data,
-                  scale_config: { ...(n.data.scale_config ?? {}), max: nextCount },
-                },
-              }
-            : n,
-        ),
-      };
-    }
-    onCommit(next);
+    const { doc: next } = setScalePoints(doc, node.id, nextCount);
+    if (next !== doc) onCommit(next);
   };
 
   const multiMin = Math.max(1, Math.min(node.data.min_selections ?? 1, answers.length));

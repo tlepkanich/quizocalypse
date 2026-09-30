@@ -121,6 +121,28 @@ export function insertContentRelative(
   return spliceQuestion(doc, node, refId, where);
 }
 
+/** The last question reached from the intro by following only handle-less
+ *  (default) edges; null when the path has no question (or no intro). */
+function mainPathLastQuestion(doc: QuizDoc): string | null {
+  const intro = doc.nodes.find((n) => n.type === "intro");
+  if (!intro) return null;
+  const byId = new Map(doc.nodes.map((n) => [n.id, n] as const));
+  const seen = new Set<string>([intro.id]);
+  let last: string | null = null;
+  let cur = intro.id;
+  for (;;) {
+    const from = cur;
+    const out = doc.edges.find((e) => e.source === from && !e.source_handle);
+    const next = out ? byId.get(out.target) : undefined;
+    if (!next || seen.has(next.id)) break;
+    if (next.type === "result" || next.type === "end" || next.type === "branch") break;
+    seen.add(next.id);
+    if (next.type === "question") last = next.id;
+    cur = next.id;
+  }
+  return last;
+}
+
 // Question-Builder spec (Question Bank) — append a pre-built library question to the
 // END of the spine (after the last question, before the result), with fresh ids +
 // edge handles. Mappings start empty; the merchant maps in the right panel. Pure.
@@ -130,10 +152,20 @@ export function appendBankQuestion(
     text: string;
     question_type: Extract<QuizNodeDoc, { type: "question" }>["data"]["question_type"];
     answers: string[];
+    /** Logic step (handoff "Add a question", Five point): the 1–5 preset the
+     *  type controls read as "Five-point scale". Absent = today's node. */
+    scale_config?: { min: number; max: number };
   },
 ): QuizDoc {
   const { head, run } = straightThroughRun(doc);
-  const anchor = run.length ? run[run.length - 1]! : head;
+  // Logic step redesign (handoff "Where the new question lands"): on a
+  // decider doc the straight-through run stops at the first per-answer
+  // route, which used to land the new question in FRONT of that question.
+  // Decider docs anchor after the last question on the MAIN path (the
+  // handle-less edges from the intro); every per-answer route is kept.
+  // Legacy docs keep today's anchor (dual-model rule).
+  const mainAnchor = doc.logic_model === "decider" ? mainPathLastQuestion(doc) : null;
+  const anchor = mainAnchor ?? (run.length ? run[run.length - 1]! : head);
   const node: QuizNodeDoc = {
     id: uid("q"),
     type: "question",
@@ -143,6 +175,7 @@ export function appendBankQuestion(
       question_type: entry.question_type,
       required: true,
       show_preview_after: false,
+      ...(entry.scale_config ? { scale_config: { ...entry.scale_config } } : {}),
       answers: entry.answers.slice(0, 12).map((t) => ({
         id: uid("a"),
         text: t.slice(0, 60),
