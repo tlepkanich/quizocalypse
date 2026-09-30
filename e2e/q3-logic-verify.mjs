@@ -209,32 +209,32 @@ try {
     (await ltab.locator(".qz-lg-rcol-h .qz-lg-btn", { hasText: "+ Add" }).count()) === 1);
   ok("three columns: the rules column sits right of the pane (D22)",
     await ltab.evaluate((el) => {
-      const pane = el.querySelector(".qz-lw-pane");
+      const pane = el.querySelector(".qz-lg-pane");
       const rc = el.querySelector(".qz-lg-rcol");
       return Boolean(pane && rc && rc.getBoundingClientRect().left >= pane.getBoundingClientRect().right - 1);
     }));
   ok("lgrid renders one rail row per question (3)",
-    (await ltab.locator(".qz-lw-qi").count()) === 3);
+    (await ltab.locator(".qz-lg-qi").count()) === 3);
   ok("ONE detail panel, showing the selected (first) question's 2 rows",
-    (await ltab.locator(".qz-lw-pane").count()) === 1 &&
-    (await ltab.locator(".qz-lw-pane .qz-lw-arow").count()) === 2);
+    (await ltab.locator(".qz-lg-pane").count()) === 1 &&
+    (await ltab.locator(".qz-lg-pane .qz-lg-arow").count()) === 2);
   ok("exactly one Picks-results role control (decider guard carried over)",
-    (await ltab.locator(".qz-lw-rolebtn", { hasText: "Picks results" }).count()) === 1);
+    (await ltab.locator(".qz-lg-rolebtn", { hasText: "Picks results" }).count()) === 1);
   ok("route column live on every detail row (Then-go-to KEPT)",
-    (await ltab.locator(".qz-lw-arow .qz-lw-go").evaluateAll(
+    (await ltab.locator(".qz-lg-arow .qz-lg-go").evaluateAll(
       (cells) => cells.length > 0 &&
         cells.every((c) => c.textContent.trim().length > 0))));
   // every rail row selects — click row 2 (the multi question, 4 answers)
-  await ltab.locator(".qz-lw-qi").nth(1).click();
+  await ltab.locator(".qz-lg-qi").nth(1).click();
   await page.waitForTimeout(200);
   ok("rail row selects — the panel now shows the multi question (4 rows)",
-    (await ltab.locator(".qz-lw-qi").nth(1).getAttribute("class"))?.includes("is-on") &&
-    (await ltab.locator(".qz-lw-pane .qz-lw-arow").count()) === 4);
-  await ltab.locator(".qz-lw-qi").nth(2).click();
+    (await ltab.locator(".qz-lg-qi").nth(1).getAttribute("class"))?.includes("is-on") &&
+    (await ltab.locator(".qz-lg-pane .qz-lg-arow").count()) === 4);
+  await ltab.locator(".qz-lg-qi").nth(2).click();
   await page.waitForTimeout(200);
   ok("…and row 3 too (the rating question, 5 rows)",
-    (await ltab.locator(".qz-lw-pane .qz-lw-arow").count()) === 5);
-  await ltab.locator(".qz-lw-qi").first().click();
+    (await ltab.locator(".qz-lg-pane .qz-lg-arow").count()) === 5);
+  await ltab.locator(".qz-lg-qi").first().click();
   await page.waitForTimeout(200);
   ok("nothing else on the Logic surface (subhead/explainer/fallback/capture gone)",
     (await page.locator(
