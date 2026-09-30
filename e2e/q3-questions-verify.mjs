@@ -1,14 +1,13 @@
 // WIS-025 Questions walkthrough: real autosave, capture invariants and stage seam.
-// Local named fixture only; restored in finally. Logic coverage: q3-logic-verify.mjs.
+// Runs on its own throwaway quiz (same shop as the local Logic fixture), deleted in finally. Logic coverage: q3-logic-verify.mjs.
 import { chromium } from "playwright";
 import { PrismaClient } from "@prisma/client";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 
 const BASE = process.env.BASE ?? "http://localhost:3200";
 const KEY = process.env.STUDIO_ACCESS_TOKEN;
-const QUIZ = "cmr7khgd50001vkhscvox8dgt";
+const FIXTURE = "cmr7khgd50001vkhscvox8dgt"; // borrowed for its shop only
 const SHOTS = "/tmp/qs-shots";
-const BACKUP = `${SHOTS}/qs-${QUIZ}-backup.json`;
 
 if (!KEY) {
   console.error("STUDIO_ACCESS_TOKEN missing — source .env first");
@@ -26,32 +25,25 @@ const ok = (name, v, extra = "") => {
   console.log(`${v ? "✓" : "✗"} ${name}${extra ? ` — ${mask(extra)}` : ""}`);
 };
 
-// ── snapshot ────────────────────────────────────────────────────────────────
-const quiz = await prisma.quiz.findUnique({ where: { id: QUIZ } });
-if (!quiz) {
-  console.error("fixture quiz not found");
+// ── a throwaway quiz of its own (same shop as the local Logic fixture) ─────
+// The probe seeds its whole document, so it never needs the shared fixture:
+// it creates a fresh draft quiz + its own categories and deletes both in
+// `finally`. Other agents' probes keep using cmr7khgd5… undisturbed.
+const source = await prisma.quiz.findUnique({ where: { id: FIXTURE }, select: { shopId: true } });
+if (!source) {
+  console.error("fixture quiz not found (needed only for its shop)");
   process.exit(1);
 }
-const originalCats = await prisma.category.findMany({ where: { quizId: QUIZ } });
-writeFileSync(
-  BACKUP,
-  JSON.stringify({ draftJson: quiz.draftJson, categories: originalCats }, null, 2),
-);
-console.log(`snapshot written: ${BACKUP} (${originalCats.length} quiz-scoped categories)`);
+const quiz = await prisma.quiz.create({
+  data: { shopId: source.shopId, name: "[probe] q3-questions", status: "draft", draftJson: {} },
+});
+const QUIZ = quiz.id;
+console.log(`probe quiz created: ${QUIZ}`);
 
-let seeded = false;
-async function restore() {
-  if (!seeded) return;
-  await prisma.quiz.update({ where: { id: QUIZ }, data: { draftJson: quiz.draftJson } });
+async function cleanup() {
   await prisma.category.deleteMany({ where: { quizId: QUIZ } });
-  for (const c of originalCats) {
-    const { id, shopId, quizId, name, description, tags, productIds, source, sourceRef, manualProductIds, rationale, discoveryRunId, createdAt } = c;
-    await prisma.category.create({
-      data: { id, shopId, quizId, name, description, tags, productIds, source, sourceRef, manualProductIds, rationale, discoveryRunId, createdAt },
-    });
-  }
-  seeded = false;
-  console.log("fixture restored (doc + categories, byte-for-byte)");
+  await prisma.quiz.delete({ where: { id: QUIZ } }).catch(() => {});
+  console.log("probe quiz deleted");
 }
 
 const draftDoc = async () => {
@@ -72,6 +64,7 @@ const waitDraft = async (pred, ms = 6000) => {
 const edgeChain = (d) => (d?.edges ?? []).map((e) => `${e.source}→${e.target}`).join(",");
 
 let browser = null;
+let page = null;
 try {
   // ── seed: 2 probe buckets + the decider doc the task pins ─────────────────
   const products = await prisma.product.findMany({
@@ -85,8 +78,6 @@ try {
   });
   const fallbackCol = collection?.collectionId ?? "manual";
 
-  seeded = true;
-  await prisma.category.deleteMany({ where: { quizId: QUIZ } });
   const catA = await prisma.category.create({
     data: {
       shopId: quiz.shopId, quizId: QUIZ, name: "QS Boards", description: "", tags: [],
@@ -148,7 +139,7 @@ try {
   // ── drive the Questions step ──────────────────────────────────────────────
   browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 950 } });
-  const page = await ctx.newPage();
+  page = await ctx.newPage();
   page.on("pageerror", (e) => out.pageErrors.push(mask(String(e)).slice(0, 300)));
 
   const goto = async (url) => {
@@ -164,7 +155,7 @@ try {
   await page.waitForSelector('[data-testid="questions-walkthrough"]');
   ok("phone editor and rail are inactive", await page.locator('.qz-qf-panel,.qz-qf-navcol,.qz-qf-resizer,.qz-s3-device').count() === 0);
   const beforeReview = JSON.stringify(await draftDoc());
-  await page.getByRole('button',{name:'Start →',exact:true}).click();
+  // The walkthrough opens straight on Q1 (the old "Start →" screen is gone).
   await page.getByRole('button',{name:'Overview',exact:true}).click();
   ok("early overview is read-only", await page.locator('[data-mode="read"] input,[data-mode="read"] [contenteditable]').count() === 0);
   await page.keyboard.press('Escape');
@@ -190,6 +181,7 @@ try {
   await composer.getByLabel('Question',{exact:true}).fill('What else should we know?');
   await composer.getByLabel('Answer 1',{exact:true}).fill('One');
   await composer.getByLabel('Answer 2',{exact:true}).fill('Two');
+  await page.waitForTimeout(350); // let the dialog finish its fade-in before the picture
   await page.screenshot({path:`${SHOTS}/composer.png`});
   await composer.getByRole('button',{name:'Add question',exact:true}).click();
   ok("composer appends and selects a real question", await waitDraft(d=>d.nodes.some(n=>n.type==='question'&&n.data.text==='What else should we know?')) && (await title.textContent())==='What else should we know?');
@@ -220,9 +212,14 @@ try {
   ok("zero page errors", out.pageErrors.length === 0, out.pageErrors.join(" | "));
   await browser.close();
   browser = null;
+} catch (e) {
+  // A failed step leaves a picture of the page it stopped on.
+  if (page) await page.screenshot({ path: `${SHOTS}/failure.png`, fullPage: true }).catch(() => {});
+  console.error(`probe stopped: ${mask(e?.message ?? e).split("\n")[0]} (screenshot ${SHOTS}/failure.png)`);
+  process.exitCode = 1;
 } finally {
   if (browser) await browser.close().catch(() => {});
-  await restore();
+  await cleanup();
   await prisma.$disconnect();
 }
 
