@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { Quiz } from "../../../lib/quizSchema";
+import type { DecisionRule, Quiz } from "../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
 import type { BuilderCategory } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
-import { createDecisionRule } from "../../../lib/quizMutations";
+import { createDecisionRule, splitCrossQuestionOr } from "../../../lib/quizMutations";
 import { parsePastedRules, type PasteVocab } from "../../../lib/rulePaste";
 import { useFocusTrap } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
+import { PASTE_COPY } from "./logicCopy";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Logic-step handoff §6 — written rules (paste), rendered to the Live · Made
@@ -109,23 +110,37 @@ export function PasteRulesModal({
   const handleCreate = () => {
     if (okLines.length === 0) return;
     // One commit over the LATEST doc (the autosave seam's post-await rule).
+    // D13: the frozen parser still emits match "any" for a line whose
+    // across-question connectors include "or"; the write splits such a line
+    // into adjacent rules, one per question group, with the same verb and
+    // recommendations and no `match` (identical under first-match-wins, and
+    // every result is expressible in the rule window).
     let next = getLatestDoc();
+    let created = 0;
     for (const line of okLines) {
       if (!line.ok) continue;
-      next = createDecisionRule(next, {
+      const parsed: DecisionRule = {
+        id: "paste",
         conditions: line.conditions,
-        target_ids: [line.targetId],
+        target_id: line.targetId,
         action: line.action,
         ...(line.match ? { match: line.match } : {}),
         ...(line.any_of ? { any_of: line.any_of } : {}),
-      });
+      };
+      for (const part of splitCrossQuestionOr(parsed, () => "paste")) {
+        const before = next;
+        next = createDecisionRule(next, {
+          conditions: part.conditions,
+          target_ids: [part.target_id],
+          ...(part.action ? { action: part.action } : {}),
+          ...(part.match ? { match: part.match } : {}),
+          ...(part.any_of?.length ? { any_of: part.any_of } : {}),
+        });
+        if (next !== before) created++;
+      }
     }
     commit(next);
-    toast(
-      okLines.length === 1
-        ? "✓ 1 rule created — checked top down, first match applies"
-        : `✓ ${okLines.length} rules created — checked top down, first match applies`,
-    );
+    toast(PASTE_COPY.created(created));
     onClose();
   };
 
