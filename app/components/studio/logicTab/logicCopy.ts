@@ -293,6 +293,8 @@ export const ADD_RECS_COPY = {
 export const PASTE_COPY = {
   created: (n: number) =>
     `${n} rule${n === 1 ? "" : "s"} created. Rules run top to bottom, first match applies`,
+};
+
 // ── Table view · Export · Import (agent F; mock sheets, tableHTML,
 //    headRight, applyImport, importFile, toastImp; handoff D16) ──
 
