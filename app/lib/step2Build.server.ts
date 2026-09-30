@@ -723,6 +723,7 @@ export async function buildQuizFromPicked(
     design_tokens?: DesignTokensT;
     logic_model?: string;
     rec_page_settings?: unknown;
+    logic_style?: unknown;
   } | null;
   let draftTokens = draftRaw?.design_tokens ?? null;
   // DGN-1 late-adopt — a draft created before the shop's brand identity finished
@@ -748,6 +749,10 @@ export async function buildQuizFromPicked(
   const recPageSettings = logicModel
     ? (draftRaw?.rec_page_settings as QuizDocT["rec_page_settings"] | undefined)
     : undefined;
+  // Logic step (§18 S1): a rebuild keeps the saved logic style.
+  const logicStyleRaw = logicModel ? draftRaw?.logic_style : undefined;
+  const logicStyle =
+    logicStyleRaw === "rules" || logicStyleRaw === "attributes" ? logicStyleRaw : undefined;
 
   // FAST F2 — resolve the concurrent prep (already settled or nearly so by the
   // time the template pass + category writes above finish). undefined (absent
@@ -775,6 +780,7 @@ export async function buildQuizFromPicked(
       experienceType: rich.experience_type,
       ...(logicModel ? { logicModel } : {}),
       ...(recPageSettings ? { recPageSettings } : {}),
+      ...(logicStyle ? { logicStyle } : {}),
       ...(enabledBuckets.length ? { preResolvedBuckets: enabledBuckets } : {}),
       ...(directionOk
         ? { directionAngle: rich.angle, sampleQuestionSeeds: rich.sample_questions }
