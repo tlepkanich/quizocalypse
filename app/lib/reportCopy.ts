@@ -35,6 +35,7 @@ export const REPORT_COPY = {
     V9: "No half-built rules",
     R4: "No rule needs more answers than shoppers can pick",
     R5: "Every recommendation can be shown",
+    R6: "Shoppers no rule catches",
     V10: "Answer text fits comfortably",
     V11: "Every narrowing answer keeps products",
     V12gap: "Slider bands cover the whole range",
@@ -97,6 +98,15 @@ export const REPORT_COPY = {
   rulesOnlyNeedsRule: "Rules only needs at least one rule to show anything.",
   noRuleCanRun: "None of your rules can ever run.",
   noRuleShows: "No rule shows anything yet. Add a Show rule.",
+
+  /** R6 (note, Rules only): what the safety net shows a shopper no rule
+   *  catches. Never claims every shopper gets a recommendation. */
+  unmatchedSee: {
+    best_sellers: "Shoppers no rule catches see your best sellers.",
+    collection: "Shoppers no rule catches see products from your fallback collection.",
+    picks: "Shoppers no rule catches see your fallback picks.",
+    none: "Shoppers no rule catches see a “no match” message.",
+  },
 
   /** R5 (mock). */
   neverRecommended: (name: string) => `“${name}” is never recommended`,

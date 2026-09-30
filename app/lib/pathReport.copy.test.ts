@@ -179,7 +179,7 @@ describe("report copy (D18)", () => {
     }
     expect(offenders).toEqual([]);
     // The sweep really reached every check.
-    const expected = ["R0", "R1", "R2", "R3", "R4", "R5", "S1", ...Array.from({ length: 16 }, (_, i) => `V${i + 1}`)];
+    const expected = ["R0", "R1", "R2", "R3", "R4", "R5", "R6", "S1", ...Array.from({ length: 16 }, (_, i) => `V${i + 1}`)];
     expect([...failing].sort()).toEqual(expected.sort());
   });
 

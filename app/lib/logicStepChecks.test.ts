@@ -304,3 +304,54 @@ describe("unpublishedChanges — a style switch counts", () => {
     expect(countUnpublishedChanges({ ...published, logic_style: "rules" }, published)).toBe(1);
   });
 });
+
+describe("R6 — what shoppers no rule catches see (D1 safety net, a note)", () => {
+  const rules: DecisionRule[] = [rule("r1", [["q2", "b1"]], "catX", { action: "show" })];
+  type Doc = ReturnType<typeof logicDoc>;
+  const rulesDoc = (patch: Record<string, unknown> = {}) =>
+    ({ ...logicDoc({ rules, logic_style: "rules" }), ...patch }) as Doc;
+  const gf = (g: Record<string, unknown>) => ({
+    global_fallback: { ...logicDoc().global_fallback, enabled: true, ...g },
+  });
+  const settings = (global: Record<string, unknown>) => ({
+    rec_page_settings: { global, overrides: {} },
+  });
+  const noteOf = (doc: Doc) => {
+    const c = byId(buildTier1Report(doc, BUCKETS), "R6");
+    return c ? { severity: c.severity, messages: c.findings.map((f) => f.message) } : null;
+  };
+  const COLLECTION = ["Shoppers no rule catches see products from your fallback collection."];
+  const NONE = ["Shoppers no rule catches see a “no match” message."];
+
+  it("names the source the fallback chain would use, as an info note", () => {
+    expect(noteOf(rulesDoc(gf({ mode: "best_sellers" })))).toEqual({
+      severity: "info",
+      messages: ["Shoppers no rule catches see your best sellers."],
+    });
+    expect(noteOf(rulesDoc(gf({ mode: "collection", collection_id: "c" })))!.messages).toEqual(COLLECTION);
+    expect(noteOf(rulesDoc(gf({ mode: "featured", product_ids: ["p"] })))!.messages).toEqual([
+      "Shoppers no rule catches see your fallback picks.",
+    ]);
+    expect(noteOf(rulesDoc(settings({ safetyNetCol: "net" })))!.messages).toEqual(COLLECTION);
+  });
+
+  it("says 'no match' when nothing is set, the fallback is off, or the collections are hidden", () => {
+    expect(noteOf(rulesDoc())!.messages).toEqual(NONE);
+    expect(
+      noteOf(rulesDoc({ ...gf({ mode: "best_sellers" }), ...settings({ fallbackOn: false }) }))!.messages,
+    ).toEqual(NONE);
+    expect(
+      noteOf(rulesDoc(settings({ emptyFallback: "hide", safetyNetCol: "net" })))!.messages,
+    ).toEqual(NONE);
+  });
+
+  it("never counts toward the verdict, and is absent in Filter Results + Rules and with zero rules", () => {
+    const r = buildTier1Report(rulesDoc(), BUCKETS);
+    const counted = r.checks
+      .filter((c) => c.id !== "R6" && (c.severity === "block" || c.severity === "warn"))
+      .reduce((n, c) => n + c.findings.length, 0);
+    expect(r.verdict.blocking + r.verdict.warnings).toBe(counted);
+    expect(byId(buildTier1Report(logicDoc({ rules }), BUCKETS), "R6")).toBeUndefined();
+    expect(byId(buildTier1Report(logicDoc({ logic_style: "rules" }), BUCKETS), "R6")).toBeUndefined();
+  });
+});

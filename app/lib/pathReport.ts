@@ -6,7 +6,7 @@ import { validateQuiz, validateQuizWarnings } from "./quizValidation";
 import { answerFilterValues, filterAnswerMatchCount } from "./filterMatching";
 import { bandCoverage, sliderBandAnswers } from "./sliderBands";
 import { isSellable, type IndexedProduct } from "./recommendationEngine";
-import { answerTargets, ruleTargets } from "./recommendDecider";
+import { answerTargets, resolveRecPageGlobal, ruleTargets } from "./recommendDecider";
 import { REPORT_COPY, structureMessage } from "./reportCopy";
 import { engineLogicStyle, resolveLogicStyle } from "./logicStyle";
 import { orderedQuestions } from "./questionOrder";
@@ -75,7 +75,8 @@ export interface Tier1Check {
     | "R2" // Rules only: no rule can show anything (block)
     | "R3" // Rules only: a rule missing its answers / recommendations (block)
     | "R4" // an impossible all-of (warn, both styles)
-    | "R5"; // a recommendation nothing can show (warn, both styles)
+    | "R5" // a recommendation nothing can show (warn, both styles)
+    | "R6"; // Rules only: what shoppers no rule catches see (note)
   severity: CheckSeverity;
   status: CheckStatus;
   title: string;
@@ -94,6 +95,33 @@ export interface Tier1Report {
   outcomes: Tier1OutcomeRow[];
   /** §7.3 footer verdict: "N to review · M blocking · safe/not safe to publish." */
   verdict: { blocking: number; warnings: number; safe: boolean; label: string };
+}
+
+/** D1 safety net — which part of the fallback chain a shopper no rule catches
+ *  lands on, read from the SETTINGS only (the report cannot see the catalog,
+ *  so it names the source, never promises products). Mirrors
+ *  `deciderSafetyNet` / `resolveGlobalFallbackProducts`: fallbackOn false →
+ *  nothing; an enabled global_fallback with a usable source wins; else the
+ *  fallback / safety-net collections unless emptyFallback is "hide". */
+export function unmatchedShopperOutcome(
+  doc: Pick<QuizDoc, "rec_page_settings" | "global_fallback">,
+): keyof typeof REPORT_COPY.unmatchedSee {
+  const cfg = resolveRecPageGlobal(doc.rec_page_settings);
+  if (cfg.fallbackOn === false) return "none";
+  const gf = doc.global_fallback;
+  if (gf?.enabled) {
+    if (gf.mode === "best_sellers") return "best_sellers";
+    if (gf.mode === "collection" && gf.collection_id) return "collection";
+    if (gf.mode === "featured" && gf.product_ids.length > 0) return "picks";
+    if (gf.mode === undefined) {
+      if (gf.collection_id) return "collection";
+      if (gf.tag || gf.product_ids.length > 0) return "picks";
+    }
+  }
+  if (cfg.emptyFallback !== "hide" && (cfg.emptyFallbackCol || cfg.safetyNetCol)) {
+    return "collection";
+  }
+  return "none";
 }
 
 // §10 — the soft wrap-advisory threshold (mirrors the AnswerRow counter cap).
@@ -593,6 +621,16 @@ export function buildTier1Report(
     ...(rulesOnly ? [] : [check("V9", "warn", T.V9, v9)]),
     check("R4", "warn", T.R4, r4),
     ...(recIds ? [check("R5", "warn", T.R5, r5)] : []),
+    // R6 — a NOTE, never a warning or block (D1 safety net): in Rules only a
+    // shopper no rule catches is normal, so say what they see. Omitted with
+    // zero rules (R1 already covers that quiz).
+    ...(rulesOnly && rules.length > 0
+      ? [
+          check("R6", "info", T.R6, [
+            { message: REPORT_COPY.unmatchedSee[unmatchedShopperOutcome(doc)], link: { kind: "rules" } },
+          ]),
+        ]
+      : []),
     check("V10", "info", T.V10, v10),
     ...(productIndex && !rulesOnly ? [check("V11", "block", T.V11, explain(v11))] : []),
     check("V12", rulesOnly ? "warn" : "block", T.V12gap, v12),
