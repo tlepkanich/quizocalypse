@@ -26,10 +26,21 @@ export interface CustomerData {
     phone: string | null;
     quizId: string;
     capturedAt: Date;
+    // Results handoff §9 — the consent record belongs in the export too.
+    marketingConsent: boolean | null;
+    consentEvidence: unknown;
+    consentRecordedAt: Date | null;
   }>;
   backInStock: Array<{ email: string; productId: string | null; quizId: string; requestedAt: Date }>;
   rewards: Array<{ email: string | null; code: string; quizId: string; createdAt: Date }>;
   referrals: Array<{ email: string | null; role: "referrer" | "redeemer"; quizId: string; createdAt: Date }>;
+}
+
+// Stored emails are whatever case the shopper typed (captures lower-case on
+// write only since the results handoff); Shopify sends its own casing. Match
+// case-insensitively so an erasure never misses a row (handoff §4).
+function emailMatch(email: string) {
+  return { equals: email, mode: "insensitive" as const };
 }
 
 /** customers/data_request — gather everything held for a shopper email in a shop
@@ -38,14 +49,24 @@ export interface CustomerData {
 export async function collectCustomerData(
   prisma: PrismaClient,
   shopDomain: string,
-  email: string,
+  rawEmail: string,
 ): Promise<CustomerData> {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
   if (!shop) return { captures: [], backInStock: [], rewards: [], referrals: [] };
+  const email = emailMatch(rawEmail);
   const [captures, backInStock, rewards, refTokens, redemptions] = await Promise.all([
     prisma.emailCapture.findMany({
       where: { email, quiz: { shopId: shop.id } },
-      select: { email: true, firstName: true, phone: true, quizId: true, capturedAt: true },
+      select: {
+        email: true,
+        firstName: true,
+        phone: true,
+        quizId: true,
+        capturedAt: true,
+        marketingConsent: true,
+        consentEvidence: true,
+        consentRecordedAt: true,
+      },
     }),
     prisma.backInStockRequest.findMany({
       where: { email, quiz: { shopId: shop.id } },
@@ -76,10 +97,11 @@ export async function collectCustomerData(
 export async function redactCustomer(
   prisma: PrismaClient,
   shopDomain: string,
-  email: string,
+  rawEmail: string,
 ): Promise<{ captures: number; backInStock: number; rewards: number; referrals: number }> {
   const shop = await prisma.shop.findUnique({ where: { shopDomain } });
   if (!shop) return { captures: 0, backInStock: 0, rewards: 0, referrals: 0 };
+  const email = emailMatch(rawEmail);
   const [c, b, r, rt, rd] = await prisma.$transaction([
     prisma.emailCapture.deleteMany({ where: { email, quiz: { shopId: shop.id } } }),
     prisma.backInStockRequest.deleteMany({ where: { email, quiz: { shopId: shop.id } } }),
