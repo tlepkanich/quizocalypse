@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher } from "@remix-run/react";
 import type { Quiz } from "../../lib/quizSchema";
 import { reconcileDraft } from "./draftReconcile";
+import { createSaveTracker, type SaveOutcome, type SaveToken } from "./saveTracker";
 
 type QuizDoc = Quiz;
 
@@ -24,6 +25,15 @@ type QuizDoc = Quiz;
 //     top of the AI's doc (reconcileDraft), then resume autosave.
 //   • endAiEdit() — on AI failure, resume autosave and persist whatever was
 //     typed while paused (the local doc is untouched by a failed AI call).
+//
+// Per-commit save tracking (LOGIC-STEP D8, additive — existing callers are
+// untouched): every commit takes a sequence number and each PUT records the
+// newest one it carries (saveTracker.ts). `commitTracked(doc)` commits and
+// returns a SaveToken for THAT commit; `pendingToken()` returns one for the
+// newest commit; `flush()` sends any debounced save now (respecting the AI
+// pause — it waits for the resumed save instead) and resolves "saved" /
+// "failed" once the PUT carrying the newest commit settles. The field save
+// pill subscribes to a token, so "Saved" never shows before the save did.
 export function useQuizDraft(initial: QuizDoc) {
   const [doc, setDoc] = useState<QuizDoc>(initial);
   const saveFetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
@@ -43,16 +53,21 @@ export function useQuizDraft(initial: QuizDoc) {
   // "Paused while AI edits" chip (a ref alone can't trigger a re-render). The
   // ref stays the guard; this state changes nothing about the pause seam.
   const [isAiPaused, setIsAiPaused] = useState(false);
+  // D8 — sequence bookkeeping shared by every SaveToken this draft hands out.
+  const trackerRef = useRef<ReturnType<typeof createSaveTracker> | null>(null);
+  if (!trackerRef.current) trackerRef.current = createSaveTracker();
+  const tracker = trackerRef.current;
 
   const submitSave = useCallback(
     (next: QuizDoc) => {
       pending.current = null;
+      tracker.sent();
       saveFetcher.submit(JSON.stringify({ doc: next }), {
         method: "PUT",
         encType: "application/json",
       });
     },
-    [saveFetcher],
+    [saveFetcher, tracker],
   );
 
   const triggerSave = useCallback(
@@ -69,11 +84,26 @@ export function useQuizDraft(initial: QuizDoc) {
 
   const commit = useCallback(
     (next: QuizDoc) => {
+      tracker.commit();
       setDoc(next);
       triggerSave(next);
     },
-    [triggerSave],
+    [triggerSave, tracker],
   );
+
+  // D8 — commit and get a token that settles when THIS commit is saved (or
+  // its save fails; a later success still turns it to saved).
+  const commitTracked = useCallback(
+    (next: QuizDoc): SaveToken => {
+      commit(next);
+      return tracker.token();
+    },
+    [commit, tracker],
+  );
+
+  // D8 — a token for the newest commit (for hosts that committed through the
+  // plain `commit`).
+  const pendingToken = useCallback((): SaveToken => tracker.token(), [tracker]);
 
   // Call when DISPATCHING an AI intent. Returns the snapshot the AI should edit
   // (the panel sends it as `baseDoc` so the server applies its ops onto exactly
@@ -101,11 +131,12 @@ export function useQuizDraft(initial: QuizDoc) {
       aiInFlight.current = false;
       setIsAiPaused(false);
       const next = base ? reconcileDraft(base, aiDoc, docRef.current) : aiDoc;
+      tracker.commit();
       docRef.current = next;
       setDoc(next);
       triggerSave(next);
     },
-    [triggerSave],
+    [triggerSave, tracker],
   );
 
   // Call when an AI intent FAILS. Resume autosave and persist whatever the
@@ -141,6 +172,41 @@ export function useQuizDraft(initial: QuizDoc) {
     if (pending.current) submitSave(pending.current);
   }, [submitSave]);
 
+  // D8 — awaitable flush: send the debounced save now and resolve when the
+  // PUT carrying the newest commit settles. While autosave is paused for an
+  // AI edit nothing is sent; it resolves after the resumed save instead.
+  const flush = useCallback((): Promise<SaveOutcome> => {
+    const token = tracker.token();
+    if (!aiInFlight.current) {
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
+      if (pending.current) submitSave(pending.current);
+    }
+    return token.settled();
+  }, [submitSave, tracker]);
+
+  // D8 — feed PUT results into the tracker. A fetcher that went busy → idle
+  // with a NEW data object carries the in-flight result; busy → idle with no
+  // new data (a thrown/network failure) counts as failed. An aborted PUT
+  // never goes idle in between (the next submit keeps it busy), so it never
+  // reports — the later PUT settles its sequence.
+  const lastData = useRef(saveFetcher.data);
+  const wasBusy = useRef(false);
+  useEffect(() => {
+    if (saveFetcher.state !== "idle") {
+      wasBusy.current = true;
+      return;
+    }
+    if (!wasBusy.current) return;
+    wasBusy.current = false;
+    const data = saveFetcher.data;
+    const fresh = data !== lastData.current;
+    lastData.current = data;
+    tracker.result(fresh && !!data?.ok);
+  }, [saveFetcher.state, saveFetcher.data, tracker]);
+
   return {
     doc,
     setDoc,
@@ -151,6 +217,9 @@ export function useQuizDraft(initial: QuizDoc) {
     isAiPaused,
     retrySave,
     flushSave,
+    flush,
+    commitTracked,
+    pendingToken,
     beginAiEdit,
     applyAiResult,
     endAiEdit,
