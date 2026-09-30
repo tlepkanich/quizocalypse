@@ -99,6 +99,9 @@ export interface FunnelData {
     metafieldConditions: string[];
     // ISO 4217 code shared by every product of the shop; null on a manual catalog.
     currency: string | null;
+    // Logic step (D15): this quiz's rows as catalogue "kind:key" strings
+    // (tag keys as Step-1 slugs) — the Add recommendations window's marks.
+    inQuizKeys?: string[];
   };
   suggestion: BucketSuggestion;
   buckets: Array<{
