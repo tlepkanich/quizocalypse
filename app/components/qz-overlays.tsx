@@ -775,6 +775,10 @@ export function QzMenu({
   width,
   align,
   manageFocus = true,
+  open: controlledOpen,
+  onOpenChange,
+  className,
+  testId,
 }: {
   trigger: ReactNode;
   items: QzMenuItem[];
@@ -786,8 +790,24 @@ export function QzMenu({
   width?: number;
   align?: "start" | "end";
   manageFocus?: boolean;
+  /** Optional controlled open state (a host that opens the menu itself,
+      e.g. the check popover's "open the Logic style menu" row). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Extra class on the popover surface. */
+  className?: string;
+  /** data-testid on the role=menu list. */
+  testId?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolled, setUncontrolled] = useState(false);
+  const open = controlledOpen ?? uncontrolled;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      onOpenChange?.(next);
+      if (controlledOpen === undefined) setUncontrolled(next);
+    },
+    [controlledOpen, onOpenChange],
+  );
   const radio = items.some((it) => it.checked !== undefined);
   return (
     <QzPopover
@@ -795,6 +815,7 @@ export function QzMenu({
       maxWidth={width ?? 260}
       width={width}
       align={align}
+      className={className}
       open={open}
       onOpenChange={setOpen}
       trigger={trigger}
@@ -803,7 +824,7 @@ export function QzMenu({
       content={
         <>
           {title ? <div className="qz-menu-title">{title}</div> : null}
-          <div className="qz-menu" role="menu" aria-label={ariaLabel}>
+          <div className="qz-menu" role="menu" aria-label={ariaLabel} data-testid={testId}>
             {items.map((it, i) => (
               <button
                 key={i}
