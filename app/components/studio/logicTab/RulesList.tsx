@@ -265,9 +265,14 @@ export function RulesList({
     target?.focus();
   };
 
-  const deleteRule = (rule: DecisionRule, index: number) => {
+  const deleteRule = (shown: DecisionRule) => {
     if (!commit) return;
     const latest = getLatestDoc();
+    // Restore what the LATEST doc holds, at its latest index (a rule saved
+    // from the window since this render must come back as saved).
+    const index = (latest.decision_rules ?? []).findIndex((r) => r.id === shown.id);
+    if (index < 0) return;
+    const rule = latest.decision_rules![index]!;
     const next = removeDecisionRule(latest, rule.id);
     if (next === latest) return;
     commit(next);
@@ -284,9 +289,12 @@ export function RulesList({
     });
   };
 
-  const moveRule = (ruleId: string, from: number, to: number, control: "up" | "down" | "body") => {
-    if (!commit || to < 0 || to >= rules.length || to === from) return;
+  const moveRule = (ruleId: string, shownFrom: number, to: number, control: "up" | "down" | "body") => {
+    if (!commit) return;
     const latest = getLatestDoc();
+    const latestRules = latest.decision_rules ?? [];
+    const from = latestRules.findIndex((r) => r.id === ruleId);
+    if (from < 0 || from !== shownFrom || to < 0 || to >= latestRules.length || to === from) return;
     const next = moveDecisionRule(latest, ruleId, to);
     if (next === latest) return;
     pendingFocus.current = { ruleId, control };
@@ -453,7 +461,7 @@ export function RulesList({
                   className="qz-lg-xone qz-lg-xdel"
                   title={RULE_COPY.deleteTip}
                   aria-label={RULE_COPY.deleteLabel(n)}
-                  onClick={() => deleteRule(rule, i)}
+                  onClick={() => deleteRule(rule)}
                 >
                   {TRASH}
                 </button>

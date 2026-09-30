@@ -349,6 +349,11 @@ export function Step3Shell({
   // outlined crit look and toggles the check popover anchored under it.
   // Every field is memoized on real state; handlers are stable.
   const blocking = report.verdict.blocking;
+  // The popover lives on the blocked CTA only: once nothing blocks, it is
+  // closed for good (never reopening by itself when a block comes back).
+  useEffect(() => {
+    if (blocking === 0) setCheckOpen(false);
+  }, [blocking]);
   const checkContent = useMemo(
     () => <CheckPopover report={report} onJump={onCheckJump} />,
     [report, onCheckJump],

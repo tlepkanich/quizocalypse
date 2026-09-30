@@ -70,15 +70,14 @@ try {
   await page.waitForSelector('[data-testid="logic-tab-card"]', { timeout: 20000 });
   await settle(1200);
 
-  // 1 ── the widget replaces the old table; STYLE bar + ledger untouched
+  // 1 ── the widget inside the Logic step redesign's card: the header (title
+  // switch) above it and the rules column beside it (D22, D23 — the style
+  // bar, the ledger below and the "How this works" explainer are gone).
   ok("Format B widget mounts (rail + one pane)", (await widget.count()) === 1 && (await pane.count()) === 1);
-  ok("STYLE bar still above it", (await page.locator('[data-testid="logic-style-bar"]').count()) === 1);
-  ok("Rules ledger still below it", (await card.locator(".qz-lw-rzone").count()) === 1);
+  ok("the card header's title switch sits above it",
+    (await card.locator('[data-testid="logic-style-title"]').count()) === 1);
+  ok("the rules column sits beside it (third column)", (await widget.locator(".qz-lg-rcol").count()) === 1);
   ok("no PRODUCTS column, no uppercase header row", (await pane.locator(".qz-lw-ah, .qz-lw-acount").count()) === 0);
-  ok("the explainer holds the three role definitions",
-    /Picks results\./.test(await page.locator(".qz-ls-ledebox").innerText()) &&
-    /Narrows results\./.test(await page.locator(".qz-ls-ledebox").innerText()) &&
-    /Info only\./.test(await page.locator(".qz-ls-ledebox").innerText()));
 
   // 2 ── the rail: numbers, clamped text, ROLE tags
   const tags = await rail.locator(".qz-lw-qtag").allInnerTexts();
