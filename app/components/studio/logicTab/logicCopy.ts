@@ -35,7 +35,7 @@ export const LOGIC_STYLE_MENU = {
  *  `more` is the second paragraph behind "More"; null = no More control. */
 export const STYLE_HINT: Record<LogicStyle, { lead: string; more: string | null }> = {
   attributes: {
-    lead: "Choose the question that decides your Results category.",
+    lead: "Choose the question that picks your Results category.",
     more: "Use the questions to filter them down with tags, variants, or custom groups. Make rules to prioritize specific behaviors.",
   },
   rules: {
@@ -155,7 +155,7 @@ export function filterRulesEmpty(pickingQuestion: boolean, switchedOn: number): 
         lead: "No rules yet.",
         body: "Your ",
         strong: String(switchedOn),
-        tail: ` switched-on question${switchedOn === 1 ? " is" : "s are"} deciding everything.`,
+        tail: ` switched-on question${switchedOn === 1 ? " is" : "s are"} picking every result.`,
       }
     : {
         lead: "No rules yet.",
