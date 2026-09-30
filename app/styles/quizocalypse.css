@@ -11776,14 +11776,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   text-align: left; width: 100%; font-family: inherit;
 }
 .qz-lm-aadd:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
-/* ── ADD-QUESTION (the ONE standard dialog, owner 2026-09-16) — QzModal shell,
-   .qz-lm band interior; these are only its own additions. ── */
-.qz-adq .qz-lm-band { min-width: 0; }
-.qz-adq-tgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 520px) { .qz-adq-tgrid { grid-template-columns: 1fr; } }
-.qz-adq-sum { font-size: 12.5px; color: var(--qz-ink-3); }
-.qz-adq-sum b { color: var(--qz-ink); }
-.qz-adq-note { margin: 2px 0 0; font-size: 12px; color: var(--qz-ink-4); }
 .qz-lm-adel:disabled { opacity: .35; cursor: default; }
 .qz-lm-adel:disabled:hover { color: inherit; }
 .qz-lm-ratingnote { font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
@@ -12888,12 +12880,6 @@ button.qz-lg-rpill { cursor: pointer; }
 .qz-lg-tplab:focus { outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-line); }
 .qz-lg-tpnote { font-size: 11.5px; color: var(--qz-ink-4); }
 
-/* — Add a question: the grip drags (B56) — */
-.qz-adq .qz-lm-agrip { cursor: grab; touch-action: none; user-select: none; }
-.qz-adq .qz-lm-arow.is-dragging { opacity: 0.4; }
-.qz-adq .qz-lm-arow.is-dragging .qz-lm-agrip { cursor: grabbing; }
-.qz-adq .qz-lm-arow.is-drop-before { box-shadow: inset 0 2px 0 var(--qz-accent); }
-.qz-adq .qz-lm-arow.is-drop-after { box-shadow: inset 0 -2px 0 var(--qz-accent); }
 /* ══ Logic step · Table view, Export and Import ══ */
 /* Mock .twrap / .xl / .tbtn / .tdel / .iox (docs/design/logic-tab/rules-row).
    The sheets stack in .qz-lg-tview (above); each table scrolls sideways in
@@ -12990,3 +12976,120 @@ button.qz-lg-rpill { cursor: pointer; }
 .qz-popover-anchor > .qz-lg-qtype { margin: 0; }
 .qz-popover-anchor:has(> .qz-lg-tbtn) { margin: -3px -7px; }
 .qz-popover-anchor > .qz-lg-tbtn { margin: 0; }
+
+/* ══ Logic step · Add a question ══
+   The ONE shared dialog (Logic step + Questions step), built to the mock's
+   #aqm window in docs/design/logic-tab/rules-row/index.html at its 100%
+   sizes: #aqm .aqbox .aqh .aqbody .aqband .aqbh .aqbn .aqbt .aqbhint
+   .aqtgrid .aqt(.on) .aqtn .aqtd .aqfi .aqai .aqrow .aqgrip .aqkey .aqdel
+   .aqadd2 .aqnote .aqfoot .aqsum → .qz-lg-aq<same>. Shell = QzModal
+   (title h2 = .aqh h2, its × = .mx, footer slot = .aqfoot). Mock tokens map
+   as in the Logic step block (--ground → --qz-cream-2, --line2 →
+   --qz-ls-line2, --crit-wash/-line → --qz-ls-crit-wash/-line). */
+
+/* — #aqm: the scrim pads 16px, no blur; the toast strip stays clear (B34) — */
+.qz-modal-scrim:has(> .qz-lg-aqbox) {
+  padding: 16px;
+  padding-bottom: max(16px, calc(var(--qz-toast-reserve, 0px) + env(safe-area-inset-bottom, 0px)));
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+/* — .aqbox: 620 wide (QzModal width prop), max the scrim's height — */
+.qz-modal.qz-lg-aqbox {
+  padding: 0; gap: 0; overflow: hidden;
+  max-height: min(100%, calc(100vh - 32px - var(--qz-toast-reserve, 0px)));
+  border-radius: var(--qz-radius-lg); box-shadow: var(--qz-lg-pop);
+  font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.qz-lg-aqbox button { font-family: inherit; cursor: pointer; }
+body[data-qz] .qz-lg-aqbox button:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+body[data-qz] .qz-lg-aqbox :is(.qz-lg-aqt, .qz-lg-aqadd2, .qz-lg-btn):focus-visible { border-radius: var(--qz-radius); }
+/* — .aqh: "Add a question" 16px/700 with the × — */
+.qz-lg-aqbox .qz-modal-title {
+  font-size: 16px; font-weight: 700; letter-spacing: 0; line-height: 24px;
+  padding: 14px 48px 8px 22px; color: var(--qz-ink);
+}
+.qz-lg-aqbox .qz-modal-x {
+  top: 14px; right: 12px; width: 24px; height: 24px;
+  border: 1px solid transparent; border-radius: var(--qz-radius-sm); color: var(--qz-ink-25);
+}
+.qz-lg-aqbox .qz-modal-x svg { width: 11px; height: 11px; }
+.qz-lg-aqbox .qz-modal-x:hover { background: var(--qz-cream-2); border-color: var(--qz-rule); color: var(--qz-ink-25); }
+/* — .aqbody — */
+.qz-lg-aqbox .qz-modal-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 0 22px 14px; margin: 0; font-size: 14px; color: var(--qz-ink);
+}
+/* — .aqband: numbered sentence-case bands split by hairlines — */
+.qz-lg-aqband { padding: 12px 0 14px; border-top: 1px solid var(--qz-rule-2); min-width: 0; }
+.qz-lg-aqband:first-child { border-top: 0; padding-top: 6px; }
+.qz-lg-aqbh { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.qz-lg-aqbn {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-size: 11px; font-weight: 700;
+}
+.qz-lg-aqbt { font-size: 13px; font-weight: 700; }
+.qz-lg-aqbhint { margin-left: auto; font-size: 12px; color: var(--qz-ink-4); }
+/* — .aqtgrid: the four types across — */
+.qz-lg-aqtgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.qz-lg-aqt {
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius);
+  padding: 9px 10px; font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.qz-lg-aqt:hover { border-color: var(--qz-ls-line2); }
+.qz-lg-aqt.is-on { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
+.qz-lg-aqtn { font-size: 13px; font-weight: 700; color: var(--qz-ink); }
+.qz-lg-aqt.is-on .qz-lg-aqtn { color: var(--qz-accent-ink); }
+.qz-lg-aqtd { font-size: 11.5px; color: var(--qz-ink-4); line-height: 1.3; }
+@media (max-width: 520px) { .qz-lg-aqtgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* — .aqfi / .aqai: the question and answer inputs — */
+.qz-lg-aqfi, .qz-lg-aqai {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  padding: 8px 10px; font-family: inherit; font-size: 14px; line-height: 1.45;
+  color: var(--qz-ink); background: var(--qz-paper);
+}
+.qz-lg-aqfi:focus, .qz-lg-aqai:focus,
+body[data-qz] .qz-lg-aqbox :is(.qz-lg-aqfi, .qz-lg-aqai):focus-visible {
+  outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-line); border-radius: var(--qz-radius);
+}
+/* — .aqrow: grip · letter key · input · × — */
+.qz-lg-aqrow {
+  display: grid; grid-template-columns: 18px 14px minmax(0, 1fr) 26px;
+  gap: 8px; align-items: center; margin-bottom: 6px;
+}
+.qz-lg-aqgrip {
+  border: 0; background: none; padding: 0; color: var(--qz-ink-25);
+  font-size: 12px; letter-spacing: -2px; cursor: grab; touch-action: none; user-select: none;
+}
+.qz-lg-aqrow.is-dragging { opacity: 0.4; }
+.qz-lg-aqbox .qz-lg-aqrow.is-dragging .qz-lg-aqgrip { cursor: grabbing; }
+.qz-lg-aqrow.is-drop-before { box-shadow: inset 0 2px 0 var(--qz-accent); }
+.qz-lg-aqrow.is-drop-after { box-shadow: inset 0 -2px 0 var(--qz-accent); }
+.qz-lg-aqkey { font-size: 11px; color: var(--qz-ink-25); text-align: center; }
+.qz-lg-aqdel {
+  width: 26px; height: 26px; padding: 0; border: 1px solid transparent; background: none;
+  border-radius: var(--qz-radius-sm); color: var(--qz-ink-25); font-size: 14px; line-height: 1;
+}
+.qz-lg-aqdel:hover:not(:disabled) { color: var(--qz-crit); background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); }
+.qz-lg-aqbox .qz-lg-aqdel:disabled { opacity: 0.35; cursor: default; }
+/* — .aqadd2: the small dashed "+ Add answer", indented under the inputs — */
+.qz-lg-aqadd2 {
+  border: 1px dashed var(--qz-ls-line2); background: none; border-radius: var(--qz-radius);
+  padding: 6px 10px; margin: 2px 0 0 40px;
+  font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--qz-ink-4);
+}
+.qz-lg-aqadd2:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-lg-aqnote { margin: 8px 0 0; font-size: 12.5px; color: var(--qz-ink-4); }
+/* — .aqfoot: the ground band, "Adds Q6 with N answers" · Cancel · Add question — */
+.qz-lg-aqbox .qz-modal-footer { padding: 0; }
+.qz-lg-aqfoot {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px 12px 22px; background: var(--qz-cream-2); border-top: 1px solid var(--qz-rule);
+}
+.qz-lg-aqsum { font-size: 13px; color: var(--qz-ink-4); }
+.qz-lg-aqsum b { color: var(--qz-ink); }
+.qz-lg-aqsp { flex: 1; }
+.qz-lg-aqfoot .qz-lg-btn { padding: 8px 14px; font-size: 13.5px; }
+.qz-lg-aqfoot .qz-lg-btn:disabled {
+  border-color: var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-25); cursor: default;
+}

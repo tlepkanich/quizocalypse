@@ -43,6 +43,21 @@ describe("AddQuestionDialog (handoff 'Add a question')", () => {
     expect(document.body.textContent).toContain("Adds Q6 with 2 answers");
   });
 
+  it("renders the mock's shape: four types across, numbered bands, the mock placeholder", () => {
+    mount();
+    const types = [...document.body.querySelectorAll(".qz-lg-aqtgrid > .qz-lg-aqt")].map(
+      (b) => b.querySelector(".qz-lg-aqtn")?.textContent,
+    );
+    expect(types).toEqual(["Single select", "Multi-select", "Image select", "Five-point scale"]);
+    const bands = [...document.body.querySelectorAll(".qz-lg-aqbh")].map((h) => h.textContent);
+    expect(bands.slice(0, 2)).toEqual(["1Type", "2Question"]);
+    expect(bands[2]?.startsWith("3Answers")).toBe(true);
+    expect(document.body.querySelector<HTMLInputElement>('input[aria-label="Question"]')?.placeholder).toBe(
+      "How does your skin feel by the end of the day?",
+    );
+    expect(document.body.querySelector(".qz-lg-aqfoot .qz-lg-aqsum")?.textContent).toBe("Adds Q6 with 0 answers");
+  });
+
   it("caps the rows at 12 and says so (B58); keys continue past Z", () => {
     mount();
     for (let i = 0; i < 20; i++) {
@@ -75,7 +90,7 @@ describe("AddQuestionDialog (handoff 'Add a question')", () => {
     mount();
     setValue(answers()[0]!, "One");
     setValue(answers()[1]!, "Two");
-    const grip = document.body.querySelector<HTMLButtonElement>(".qz-lm-agrip")!;
+    const grip = document.body.querySelector<HTMLButtonElement>(".qz-lg-aqgrip")!;
     act(() => {
       grip.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });

@@ -16,8 +16,11 @@ import { ADD_QUESTION_COPY as COPY, MAX_QUESTION_ANSWERS, letterKey } from "./lo
 // hands it to the host's onSubmit. Every host appends through the SAME pure
 // mutation (appendBankQuestion — the straightThroughRun add-anchor rule), so
 // the dialog never needs a doc prop. Shell = QzModal (shared scrim, focus
-// trap, Esc, the focus-ring-safe body). Interior reuses the .qz-lm-* band
-// system the create-rule modal established.
+// trap, Esc, the focus-ring-safe body). The look is the mock's #aqm window
+// (owner ruling 2026-09-30): 620 wide, numbered sentence-case bands split by
+// hairlines, four types across, a ground footer band — classes .qz-lg-aq*
+// mirror the mock's .aq* one for one. Both hosts (Logic step, Questions
+// step) get the same look; never fork it.
 //
 // Logic step redesign (handoff "Add a question", mock aqHTML): the hint
 // counts FILLED answers (B55), the grip reorders by pointer drag as well as
@@ -67,12 +70,20 @@ export function AddQuestionDialog({
   const [drag, setDrag] = useState<DragState | null>(null);
   // After a reorder or a delete, the control that should hold focus (B57).
   const pendingFocus = useRef<string | null>(null);
+  // After an add, the "+ Add answer" button (or the cap note) scrolls into
+  // view too, so the next add stays one click away (mock ACT.aqrow).
+  const pendingReveal = useRef(false);
 
   useEffect(() => {
     const sel = pendingFocus.current;
     if (!sel) return;
     pendingFocus.current = null;
     listRef.current?.querySelector<HTMLElement>(sel)?.focus();
+    if (pendingReveal.current) {
+      pendingReveal.current = false;
+      const tail = listRef.current?.querySelector<HTMLElement>(".qz-lg-aqadd2, .qz-lg-aqnote");
+      tail?.scrollIntoView?.({ block: "nearest" });
+    }
   });
 
   // Empty rows are scratch space, not errors — only FILLED rows count.
@@ -91,15 +102,16 @@ export function AddQuestionDialog({
     if (heir) {
       pendingFocus.current =
         next.length > 2
-          ? `[data-row="${heir.key}"] .qz-lm-adel`
-          : `[data-row="${heir.key}"] .qz-lm-atext`;
+          ? `[data-row="${heir.key}"] .qz-lg-aqdel`
+          : `[data-row="${heir.key}"] .qz-lg-aqai`;
     }
     setRows(next);
   };
   const addRow = () => {
     if (atCap) return;
     const key = uid("row");
-    pendingFocus.current = `[data-row="${key}"] .qz-lm-atext`;
+    pendingFocus.current = `[data-row="${key}"] .qz-lg-aqai`;
+    pendingReveal.current = true;
     setRows((prev) => [...prev, { key, text: "" }]);
   };
   const moveTo = (key: string, toIndex: number) =>
@@ -116,7 +128,7 @@ export function AddQuestionDialog({
     const i = rows.findIndex((r) => r.key === key);
     const j = i + delta;
     if (i < 0 || j < 0 || j >= rows.length) return;
-    pendingFocus.current = `[data-row="${key}"] .qz-lm-agrip`;
+    pendingFocus.current = `[data-row="${key}"] .qz-lg-aqgrip`;
     moveTo(key, j);
   };
 
@@ -147,7 +159,7 @@ export function AddQuestionDialog({
     // Dropping below yourself: the gap you leave shifts the slot up by one.
     const to = drag.index > from ? drag.index - 1 : drag.index;
     if (from >= 0 && to !== from) {
-      pendingFocus.current = `[data-row="${drag.key}"] .qz-lm-agrip`;
+      pendingFocus.current = `[data-row="${drag.key}"] .qz-lg-aqgrip`;
       moveTo(drag.key, to);
     }
     setDrag(null);
@@ -171,100 +183,92 @@ export function AddQuestionDialog({
       open
       onClose={onClose}
       title={COPY.title}
-      size="md"
+      width={620}
+      className="qz-lg-aqbox"
       draftSafe
       lockScroll
       initialFocusRef={titleRef}
       footer={
-        <div className="qz-row" style={{ width: "100%", gap: 10, alignItems: "center" }}>
-          <span className="qz-adq-sum">
+        <div className="qz-lg-aqfoot">
+          <span className="qz-lg-aqsum">
             Adds <b>Q{nextNumber}</b> with {answerCount} {answerCount === 1 ? "answer" : "answers"}
           </span>
-          <span style={{ marginLeft: "auto" }} />
-          <button type="button" className="qz-btn qz-btn-sm" onClick={onClose}>
+          <span className="qz-lg-aqsp" />
+          <button type="button" className="qz-lg-btn" onClick={onClose}>
             {COPY.cancel}
           </button>
-          <button
-            type="button"
-            className="qz-btn qz-btn-primary qz-btn-sm"
-            disabled={!canAdd}
-            onClick={handleAdd}
-          >
+          <button type="button" className="qz-lg-btn is-pri" disabled={!canAdd} onClick={handleAdd}>
             {COPY.add}
           </button>
         </div>
       }
     >
-      <div className="qz-lm-bands qz-adq">
+      <div className="qz-lg-aqbands">
         {/* ── band 1: Type ── */}
-        <section className="qz-lm-band">
-          <div className="qz-lm-bh">
-            <span className="qz-lm-bn">1</span>
-            <span className="qz-lm-bt">{COPY.bandType}</span>
+        <section className="qz-lg-aqband">
+          <div className="qz-lg-aqbh">
+            <span className="qz-lg-aqbn">1</span>
+            <span className="qz-lg-aqbt">{COPY.bandType}</span>
           </div>
-          <div className="qz-adq-tgrid">
+          <div className="qz-lg-aqtgrid">
             {COPY.types.map((t) => (
               <button
                 key={t.type}
                 type="button"
-                className={`qz-lm-tq${qtype === t.type ? " is-on" : ""}`}
+                className={`qz-lg-aqt${qtype === t.type ? " is-on" : ""}`}
                 aria-pressed={qtype === t.type}
                 onClick={() => setQtype(t.type)}
               >
-                <span className="qz-lm-tqn">{t.name}</span>
-                <span className="qz-lm-tqd">{t.hint}</span>
+                <span className="qz-lg-aqtn">{t.name}</span>
+                <span className="qz-lg-aqtd">{t.hint}</span>
               </button>
             ))}
           </div>
         </section>
 
         {/* ── band 2: Question ── */}
-        <section className="qz-lm-band">
-          <div className="qz-lm-bh">
-            <span className="qz-lm-bn">2</span>
-            <span className="qz-lm-bt">{COPY.bandQuestion}</span>
+        <section className="qz-lg-aqband">
+          <div className="qz-lg-aqbh">
+            <span className="qz-lg-aqbn">2</span>
+            <span className="qz-lg-aqbt">{COPY.bandQuestion}</span>
           </div>
-          <label className="qz-lm-fld">
-            <input
-              ref={titleRef}
-              className="qz-lm-fi"
-              value={title}
-              maxLength={150}
-              placeholder={COPY.placeholder}
-              onChange={(e) => setTitle(e.target.value)}
-              aria-label="Question"
-            />
-          </label>
+          <input
+            ref={titleRef}
+            className="qz-lg-aqfi"
+            value={title}
+            maxLength={150}
+            placeholder={COPY.placeholder}
+            onChange={(e) => setTitle(e.target.value)}
+            aria-label="Question"
+          />
         </section>
 
         {/* ── band 3: Answers ── */}
-        <section className="qz-lm-band">
-          <div className="qz-lm-bh">
-            <span className="qz-lm-bn">3</span>
-            <span className="qz-lm-bt">{COPY.bandAnswers}</span>
+        <section className="qz-lg-aqband">
+          <div className="qz-lg-aqbh">
+            <span className="qz-lg-aqbn">3</span>
+            <span className="qz-lg-aqbt">{COPY.bandAnswers}</span>
             {!isFive ? (
-              <span className="qz-lm-right">
-                <span className="qz-lm-bhint" aria-live="polite" data-testid="adq-hint">
-                  {COPY.hint(filledRows.length)}
-                </span>
+              <span className="qz-lg-aqbhint" aria-live="polite" data-testid="adq-hint">
+                {COPY.hint(filledRows.length)}
               </span>
             ) : null}
           </div>
           {isFive ? (
-            <p className="qz-lm-ratingnote">{COPY.fiveNote}</p>
+            <p className="qz-lg-aqnote">{COPY.fiveNote}</p>
           ) : (
-            <div className="qz-lm-alist" ref={listRef}>
+            <div className="qz-lg-aqlist" ref={listRef}>
               {rows.map((r, i) => (
                 <div
                   key={r.key}
                   data-row={r.key}
-                  className={`qz-lm-arow${drag?.key === r.key ? " is-dragging" : ""}${
+                  className={`qz-lg-aqrow${drag?.key === r.key ? " is-dragging" : ""}${
                     lineAt === i ? " is-drop-before" : ""
                   }${lineAt === rows.length && i === rows.length - 1 ? " is-drop-after" : ""}`}
                 >
                   <button
                     type="button"
-                    className="qz-lm-agrip"
+                    className="qz-lg-aqgrip"
                     title={COPY.grip(i + 1)}
                     aria-label={COPY.grip(i + 1)}
                     onPointerDown={(e) => onGripDown(e, r.key)}
@@ -283,9 +287,9 @@ export function AddQuestionDialog({
                   >
                     ⋮⋮
                   </button>
-                  <span className="qz-lm-akey">{letterKey(i)}</span>
+                  <span className="qz-lg-aqkey">{letterKey(i)}</span>
                   <input
-                    className="qz-lm-atext"
+                    className="qz-lg-aqai"
                     value={r.text}
                     maxLength={60}
                     placeholder={COPY.answerPlaceholder}
@@ -294,7 +298,7 @@ export function AddQuestionDialog({
                   />
                   <button
                     type="button"
-                    className="qz-lm-adel"
+                    className="qz-lg-aqdel"
                     aria-label={COPY.deleteAnswer(i + 1)}
                     disabled={rows.length <= 2}
                     onClick={() => removeRow(r.key)}
@@ -304,13 +308,13 @@ export function AddQuestionDialog({
                 </div>
               ))}
               {atCap ? (
-                <p className="qz-adq-note">{COPY.cap(MAX_QUESTION_ANSWERS)}</p>
+                <p className="qz-lg-aqnote">{COPY.cap(MAX_QUESTION_ANSWERS)}</p>
               ) : (
-                <button type="button" className="qz-lm-aadd" onClick={addRow}>
+                <button type="button" className="qz-lg-aqadd2" onClick={addRow}>
                   {COPY.addAnswer}
                 </button>
               )}
-              {qtype === "image_tile" ? <p className="qz-adq-note">{COPY.imageNote}</p> : null}
+              {qtype === "image_tile" ? <p className="qz-lg-aqnote">{COPY.imageNote}</p> : null}
             </div>
           )}
         </section>

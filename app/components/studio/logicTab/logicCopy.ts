@@ -698,7 +698,7 @@ export const ADD_QUESTION_COPY = {
   bandType: "Type",
   bandQuestion: "Question",
   bandAnswers: "Answers",
-  placeholder: "Type your question",
+  placeholder: "How does your skin feel by the end of the day?",
   answerPlaceholder: "Answer text",
   hint: (filled: number) => (filled < 2 ? `${filled} of 2 needed` : `${filled} answers`),
   fiveNote: "A five-point scale generates the answers itself: 1 to 5, nothing to type.",
