@@ -35,6 +35,10 @@ const RewardRequest = z.object({
 export const loader = async () => new Response(null, { status: 204, headers: CORS });
 
 const REPAIR_WINDOW_MS = 10 * 60_000;
+// A row younger than this may still have its original mint in flight: a
+// repair create racing it would make the original see "already exists",
+// roll back its row, and strand a live code with no row.
+const REPAIR_MIN_AGE_MS = 60_000;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -99,7 +103,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Only inside the crash window: a replay of an older row would otherwise
     // spend an Admin API create on every page load (results handoff §4 d4).
     const live = existing.expiresAt === null || existing.expiresAt.getTime() > Date.now();
-    const inCrashWindow = Date.now() - existing.createdAt.getTime() < REPAIR_WINDOW_MS;
+    const age = Date.now() - existing.createdAt.getTime();
+    const inCrashWindow = age >= REPAIR_MIN_AGE_MS && age < REPAIR_WINDOW_MS;
     if (live && inCrashWindow && shopifyCapable) {
       try {
         const { admin } = await unauthenticated.admin(shopDomain);
@@ -129,9 +134,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // runtime posts /sessions on completion, before the reveal button exists.
   const session = await prisma.quizSession.findUnique({
     where: { quizId_sessionId: { quizId: quiz.id, sessionId: session_id } },
-    select: { completedAt: true },
+    select: { completedAt: true, outcomeId: true, answerIds: true },
   });
-  if (!session?.completedAt) {
+  // /sessions is public, so this raises the bar rather than proving a real
+  // shopper: a completed session must also carry an outcome and answers.
+  if (!session?.completedAt || !session.outcomeId || session.answerIds.length === 0) {
     return json({ reward: null, reason: "session_incomplete" }, 409);
   }
 
@@ -162,7 +169,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Audit M4 — seed the value pick with the crypto-random CODE, not the
   // client-chosen session_id (which was offline-grindable to always land
   // rangeMax). The reserved row stores the value, so retries stay stable.
-  const value = pickRewardValue({ value: reward.value, rangeMax: reward.rangeMax, odds: reward.odds }, code);
+  const picked = pickRewardValue({ value: reward.value, rangeMax: reward.rangeMax, odds: reward.odds }, code);
+  // A mystery range starting at 0 can land on 0 — never mint a 0%-off code.
+  const value = reward.type === "free_shipping" ? picked : Math.max(1, picked);
   const cfg = rewardToDiscountConfig(reward, value, expiresAtISO);
 
   // Reserve the row FIRST (the unique index is the per-session lock) so a

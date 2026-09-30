@@ -1721,13 +1721,13 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                 styles={styles}
                 quizId={quizId}
                 sessionId={sessionIdRef.current}
-                onDone={(contact) => {
+                onDone={(contact, saved) => {
                   if (contact && Object.keys(contact).length > 0) {
                     contactRef.current = { ...contactRef.current, ...contact };
                   }
                   // Results handoff §4 — the decider capture never fired
                   // email_captured; only the legacy paths did.
-                  if (contact?.email) analyticsRef.current?.track("email_captured", {});
+                  if (saved && contact?.email) analyticsRef.current?.track("email_captured", {});
                   setCaptureDone(true);
                 }}
               />

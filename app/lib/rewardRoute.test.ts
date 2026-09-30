@@ -60,7 +60,7 @@ beforeEach(() => {
   db.quizReward.findUnique.mockResolvedValue(null);
   db.quizReward.count.mockResolvedValue(0);
   db.quizReward.create.mockResolvedValue({});
-  db.quizSession.findUnique.mockResolvedValue({ completedAt: new Date() });
+  db.quizSession.findUnique.mockResolvedValue({ completedAt: new Date(), outcomeId: "r1", answerIds: ["a1"] });
   create.mockResolvedValue({ ok: true });
 });
 
@@ -82,8 +82,11 @@ describe("/reward", () => {
     expect(db.quizReward.create).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
 
-    db.quizSession.findUnique.mockResolvedValue({ completedAt: null });
+    db.quizSession.findUnique.mockResolvedValue({ completedAt: null, outcomeId: null, answerIds: [] });
     expect((await post({ quiz_id: "q1", session_id: "started-only" })).status).toBe(409);
+    // A bare POST /sessions (no outcome, no answers) does not count.
+    db.quizSession.findUnique.mockResolvedValue({ completedAt: new Date(), outcomeId: null, answerIds: [] });
+    expect((await post({ quiz_id: "q1", session_id: "forged" })).status).toBe(409);
     expect(create).not.toHaveBeenCalled();
   });
 
@@ -108,10 +111,30 @@ describe("/reward", () => {
       rewardType: "percentage",
       value: 10,
       expiresAt: new Date(Date.now() + 3_600_000),
-      createdAt: new Date(),
+      createdAt: new Date(Date.now() - 2 * 60_000),
     });
     await post({ quiz_id: "q1", session_id: "sess-1" });
     expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("never repairs a row whose original mint may still be in flight", async () => {
+    db.quizReward.findUnique.mockResolvedValue({
+      code: "QZR-NOW",
+      rewardType: "percentage",
+      value: 10,
+      expiresAt: new Date(Date.now() + 3_600_000),
+      createdAt: new Date(),
+    });
+    await post({ quiz_id: "q1", session_id: "sess-1" });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("a mystery range starting at 0 never mints below 1", async () => {
+    db.quiz.findUnique.mockResolvedValue(quizWithReward({ type: "percentage", value: 0, rangeMax: 1 }));
+    for (let i = 0; i < 20; i++) {
+      const body = (await (await post({ quiz_id: "q1", session_id: `s-${i}` })).json()) as { reward: { value: number } };
+      expect(body.reward.value).toBeGreaterThanOrEqual(1);
+    }
   });
 
   it("never mints a zero-value code", async () => {

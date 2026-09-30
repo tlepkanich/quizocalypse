@@ -187,4 +187,13 @@ describe("capture placement compatibility", () => {
     expect(forced.discount_config).not.toHaveProperty("static_code");
     expect(resolveDiscount(forced).code_mode).toBe("dynamic");
   });
+  it("stores the capture button label even at its builder default (live falls back to 'Continue')", () => {
+    expect(patchGuided(doc(), { captureCta: "Show my results" }).rec_page_settings?.global.captureCta).toBe("Show my results");
+  });
+  it("'No email capture' also drops SMS, so no empty gate can publish", () => {
+    const withSms = patchGuided(doc(), { capturePhone: true });
+    const none = patchGuided(withSms, { where: "none" });
+    expect(none.rec_page_settings?.global.capturePhone).toBeUndefined();
+    expect(captureMode(resolveRecPageGlobal(none.rec_page_settings))).toBe("none");
+  });
 });

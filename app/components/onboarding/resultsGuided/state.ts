@@ -51,7 +51,9 @@ export const GUIDED_DEFAULTS = {
 
 // Handoff §4 defect 1(b) — the live quiz has no link defaults of its own for
 // the old form, so these are ALWAYS stored, never sparse-cleared.
-const ALWAYS_STORED = new Set(["termsLabel", "termsUrl", "privacyLabel", "privacyUrl"]);
+// captureCta too: the builder shows "Show my results" but the live quiz falls
+// back to "Continue" when the key is absent.
+const ALWAYS_STORED = new Set(["termsLabel", "termsUrl", "privacyLabel", "privacyUrl", "captureCta"]);
 
 /** Written the first time the shelf gets products (handoff §6). */
 export const EXTRAS_FIRST_PICK = {
