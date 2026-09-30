@@ -281,8 +281,11 @@ try {
   await settle();
   const saved = await draft(qa);
   ok("the import autosaved (one doc)", JSON.stringify(saved).includes(`${aText} (edited)`));
+  // build_session.autosave is the autosave's own ordering stamp (P2-11): it
+  // moves on every save, so it is not part of what an import may touch.
+  const session = (d) => JSON.stringify({ ...(d.build_session ?? {}), autosave: undefined });
   ok("import never writes logic_style / build_session",
-    saved.logic_style === before.logic_style && JSON.stringify(saved.build_session) === JSON.stringify(before.build_session));
+    saved.logic_style === before.logic_style && session(saved) === session(before));
   await page.locator(".qz-toast-action").click();
   await settle();
   const undone = await draft(qa);
