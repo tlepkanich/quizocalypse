@@ -507,6 +507,7 @@ export function LogicTabCard({
       commit={editable ? commit : undefined}
       getLatestDoc={getLatestDoc}
       undo={undo}
+      collectionTitles={colTitleById}
     />
   );
 
@@ -553,6 +554,10 @@ export function LogicTabCard({
             setSelectedId(id);
             setView("edit");
           }}
+          collectionTitles={colTitleById}
+          productIndex={productIndex}
+          readout={readout}
+          hasNarrowFields={hasNarrowFields}
         />
       ) : rulesOnly ? (
         rulesOnlyEdit

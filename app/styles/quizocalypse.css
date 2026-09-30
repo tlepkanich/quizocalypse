@@ -13297,3 +13297,89 @@ button.qz-lg-rpill { cursor: pointer; }
 .qz-adq .qz-lm-arow.is-dragging .qz-lm-agrip { cursor: grabbing; }
 .qz-adq .qz-lm-arow.is-drop-before { box-shadow: inset 0 2px 0 var(--qz-accent); }
 .qz-adq .qz-lm-arow.is-drop-after { box-shadow: inset 0 -2px 0 var(--qz-accent); }
+/* ══ Logic step · Table view, Export and Import ══ */
+/* Mock .twrap / .xl / .tbtn / .tdel / .iox (docs/design/logic-tab/rules-row).
+   The sheets stack in .qz-lg-tview (above); each table scrolls sideways in
+   its own wrapper, which becomes a keyboard stop only when it scrolls. */
+.qz-lg-tsheet { min-width: 0; }
+.qz-lg-twrap { overflow-x: auto; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); }
+.qz-lg-twrap:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+.qz-lg-xl { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.4; }
+.qz-lg-xl th {
+  background: var(--qz-cream-2); text-align: left; font-size: 11.5px; font-weight: 700; color: var(--qz-ink-3);
+  padding: 7px 10px; border-bottom: 1px solid var(--qz-rule); border-right: 1px solid var(--qz-rule-2); white-space: nowrap;
+}
+.qz-lg-xl td {
+  padding: 7px 10px; border-top: 1px solid var(--qz-rule-2); border-right: 1px solid var(--qz-rule-2);
+  vertical-align: top; color: var(--qz-ink);
+}
+.qz-lg-xl th:last-child, .qz-lg-xl td:last-child { border-right: 0; }
+.qz-lg-xl tbody tr:first-child td { border-top: 0; }
+.qz-lg-xl tr.is-grp td { border-top: 1px solid var(--qz-rule); }
+.qz-lg-xl tr.is-go { cursor: pointer; }
+.qz-lg-xl tr.is-go:hover td { background: var(--qz-ls-cell-bg); }
+.qz-lg-xl tr.is-muted td { color: var(--qz-ink-4); background: var(--qz-ls-cell-bg); }
+.qz-lg-xl td.is-k { width: 40px; color: var(--qz-ink-4); font-weight: 600; font-variant-numeric: tabular-nums; }
+.qz-lg-xl td.is-qt { width: 26%; color: var(--qz-ink-3); }
+.qz-lg-xl td.is-num { font-variant-numeric: tabular-nums; }
+.qz-lg-xl td.is-dim { color: var(--qz-ink-4); white-space: nowrap; }
+.qz-lg-xl td.is-res { color: var(--qz-lg-res); font-weight: 600; }
+.qz-lg-xl td.is-verb { color: var(--qz-accent-ink); font-weight: 600; white-space: nowrap; }
+.qz-lg-xl td.is-unset { color: var(--qz-warn); font-weight: 600; }
+.qz-lg-xl td.is-ok { color: var(--qz-ink); font-weight: 600; }
+.qz-lg-xl tr.is-muted td.is-res, .qz-lg-xl tr.is-muted td.is-verb { color: var(--qz-ink-4); }
+/* B15: a dead row dims its sentence only; its tag keeps full contrast. */
+.qz-lg-xl td.is-when .qz-lg-rtag { white-space: nowrap; }
+.qz-lg-tmiss { color: var(--qz-crit); }
+.qz-lg-tgob {
+  border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; vertical-align: baseline;
+}
+.qz-lg-tgob:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; border-radius: 2px; }
+/* the cell controls (mock .tbtn): quiet until hovered or open */
+.qz-lg-tbtn {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: none;
+  border-radius: var(--qz-radius-sm); padding: 2px 6px; margin: -3px -7px; font: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.qz-lg-tbtn:hover, .qz-lg-tbtn[aria-expanded="true"] { border-color: var(--qz-rule); background: var(--qz-paper); }
+.qz-lg-tbtn:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lg-cv { font-size: 9px; color: var(--qz-ink-25); }
+.qz-lg-tbtn.is-does, .qz-lg-tdoes { font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.qz-lg-tbtn.is-decides, .qz-lg-tdoes.is-decides { color: var(--qz-accent-ink); }
+.qz-lg-tbtn.is-filter, .qz-lg-tdoes.is-filter { color: var(--qz-ok); }
+.qz-lg-tbtn.is-info, .qz-lg-tdoes.is-info { color: var(--qz-ink-4); font-weight: 500; }
+.qz-lg-tbtn.is-res, .qz-lg-tres { color: var(--qz-lg-res); font-weight: 600; }
+.qz-lg-tbtn.is-unset, .qz-lg-tres.is-unset, .qz-lg-tval.is-unset { color: var(--qz-warn); font-weight: 600; }
+.qz-lg-tbtn.is-dim, .qz-lg-tdim { color: var(--qz-ink-4); white-space: nowrap; }
+.qz-lg-dim2 { color: var(--qz-ink-25); }
+.qz-lg-tpt b { font-weight: 700; }
+/* the Rules sheet's trash (mock .tdel): faint, crit on hover or focus */
+.qz-lg-xl th.is-tact, .qz-lg-xl td.is-tact { width: 34px; padding: 3px 6px 0 0; text-align: right; }
+.qz-lg-tdel {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; border: 1px solid transparent;
+  border-radius: var(--qz-radius-sm); background: none; color: var(--qz-ink-25); padding: 0; cursor: pointer;
+}
+.qz-lg-xl tr:hover .qz-lg-tdel { color: var(--qz-ink-4); }
+.qz-lg-tdel:hover, .qz-lg-tdel:focus-visible {
+  color: var(--qz-crit); background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); outline: none;
+}
+/* "Choose a result" from a Picks cell (mock .pt / .mi / .vpfoot) */
+.qz-lg-tpick { display: flex; flex-direction: column; min-width: 0; }
+.qz-lg-tpick-h { font-size: 12px; font-weight: 700; padding: 4px 8px 8px; color: var(--qz-ink); }
+.qz-lg-tpick-l { max-height: 280px; overflow-y: auto; }
+.qz-lg-tpick-i {
+  display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none;
+  border-radius: var(--qz-radius); padding: 7px 8px; text-align: left; font-size: 13.5px; color: var(--qz-ink); cursor: pointer;
+}
+.qz-lg-tpick-i:hover { background: var(--qz-cream-2); }
+.qz-lg-tpick-i.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lg-tpick-i:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
+.qz-lg-tpick-ck { width: 12px; flex: none; font-weight: 700; }
+.qz-lg-tpick-n { min-width: 0; overflow-wrap: anywhere; }
+.qz-lg-tpick-c { margin-left: auto; font-size: 11.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-lg-tpick-f {
+  display: flex; justify-content: flex-end; border-top: 1px solid var(--qz-rule-2); margin-top: 2px; padding: 9px 2px 1px 8px;
+}
+.qz-lg-iox button:not(:disabled) { cursor: pointer; }
+.qz-lg-iox button[aria-busy="true"] { cursor: progress; }
