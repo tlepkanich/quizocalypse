@@ -174,3 +174,45 @@ export async function writeDoc(quizId: string, doc: Quiz) {
     data: { draftJson: Quiz.parse(doc) as never },
   });
 }
+
+// Logic step redesign (handoff "Continue and Back") — the stage intents must
+// change ONLY build_session. writeDoc writes back the whole doc the intent
+// read at the start of its request, so an autosave PUT that landed in
+// between (the logic style is a DOC field now, D1) was silently overwritten.
+// writeSession re-reads the draft under a row lock (SELECT … FOR UPDATE,
+// one interactive transaction) and replaces only build_session, merging
+// `patch` over the session it finds THERE.
+export async function writeSession(quizId: string, patch: Partial<BuildSession>) {
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Quiz" WHERE "id" = ${quizId} FOR UPDATE`;
+    const row = await tx.quiz.findUnique({ where: { id: quizId }, select: { draftJson: true } });
+    if (!row) throw new Response("Quiz not found", { status: 404 });
+    const parsed = Quiz.safeParse(row.draftJson);
+    if (!parsed.success) throw new Response("Draft is not readable", { status: 422 });
+    const session: BuildSession = parsed.data.build_session ?? BuildSession.parse({});
+    await tx.quiz.update({
+      where: { id: quizId },
+      data: { draftJson: Quiz.parse({ ...parsed.data, build_session: { ...session, ...patch } }) as never },
+    });
+  });
+}
+
+// The autosave PUT's mirror of writeSession: write the client's doc CONTENT
+// with the build_session found under the same row lock, so a navigation
+// intent that landed first can never be rewound by a PUT that read the
+// session before it (the stage is owned by the intents, never the PUT).
+export async function writeContent(quizId: string, doc: Quiz) {
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Quiz" WHERE "id" = ${quizId} FOR UPDATE`;
+    const row = await tx.quiz.findUnique({ where: { id: quizId }, select: { draftJson: true } });
+    if (!row) throw new Response("Quiz not found", { status: 404 });
+    const current = Quiz.safeParse(row.draftJson);
+    if (!current.success) throw new Response("Draft is not readable", { status: 422 });
+    // Same default the request-start read used (loadFunnelDraft).
+    const session: BuildSession = current.data.build_session ?? BuildSession.parse({});
+    await tx.quiz.update({
+      where: { id: quizId },
+      data: { draftJson: Quiz.parse({ ...doc, build_session: session }) as never },
+    });
+  });
+}

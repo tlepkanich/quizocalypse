@@ -68,6 +68,8 @@ import {
   MIN_GOAL_CHARS,
   loadFunnelDraft,
   writeDoc,
+  writeSession,
+  writeContent,
   type FunnelShop,
 } from "./funnelDraft.server";
 
@@ -123,13 +125,11 @@ async function runStep1FunnelActionImpl(
     }
     // Autosave persists DOC CONTENT only. build_session / stage is owned by the
     // navigation intents — so we keep the SERVER's current session, never the
-    // client doc's. This makes a debounced PUT that races a stage transition
-    // safe in EITHER order: the PUT can never rewind the stage, and the merchant's
-    // last edit is preserved whichever request lands last.
-    await prisma.quiz.update({
-      where: { id: quiz.id },
-      data: { draftJson: Quiz.parse({ ...parsed.data, build_session: session }) as never },
-    });
+    // client doc's. Logic step redesign: that session is re-read under a row
+    // lock in the same transaction as the write (writeContent), so a PUT that
+    // overlaps a stage transition can never rewind the stage, and the stage
+    // intents (writeSession) can never overwrite the content this PUT wrote.
+    await writeContent(quiz.id, parsed.data);
     return json({ ok: true, savedAt: new Date().toISOString() });
   }
 
@@ -1454,17 +1454,16 @@ async function runStep1FunnelActionImpl(
     if (!session.picked_template && !(doc.logic_model === "decider" && session.built)) {
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "logic" } });
+    await writeSession(quiz.id, { stage: "logic" });
     return json({ intent, ok: true });
   }
 
-  // Logic-step handoff §2 — the style chooser's write. build_session is
-  // server-owned (the JSON autosave never touches it), so the chooser picks
-  // its style through an intent like every other session field. Lossless by
-  // construction: nothing else on the doc is touched, so switching styles
-  // never strips an answer's filter values — flipping back restores the
-  // mapping. "points" is deliberately NOT accepted: the Point based card
-  // renders and does nothing (inert) until that path is built.
+  // Logic-step handoff §2 — the retired chooser's write (build_session
+  // .logic_style). Logic step redesign (D1): the style is a DOC field now,
+  // written by setLogicStyle through the autosave; the client no longer sends
+  // this intent. The branch stays for one release so an in-flight client
+  // cannot 400, and it writes the session only (writeSession), never the
+  // stale doc it read. An unknown style is still a 400.
   if (intent === "set-logic-style") {
     const style = String(form.get("style") ?? "");
     if (style !== "rules" && style !== "attributes") {
@@ -1473,10 +1472,7 @@ async function runStep1FunnelActionImpl(
     if (doc.logic_model !== "decider") {
       return json({ intent, ok: false, error: "Not a decider quiz." }, { status: 400 });
     }
-    await writeDoc(quiz.id, {
-      ...doc,
-      build_session: { ...session, logic_style: style },
-    });
+    await writeSession(quiz.id, { logic_style: style });
     return json({ intent, ok: true });
   }
 
@@ -1507,10 +1503,7 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
-    await writeDoc(quiz.id, {
-      ...doc,
-      build_session: { ...session, stage: target as FunnelStep },
-    });
+    await writeSession(quiz.id, { stage: target as FunnelStep });
     return json({ intent, ok: true });
   }
 
@@ -1528,7 +1521,7 @@ async function runStep1FunnelActionImpl(
     if (!session.picked_template && !(doc.logic_model === "decider" && session.built)) {
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "rec_page" } });
+    await writeSession(quiz.id, { stage: "rec_page" });
     return json({ intent, ok: true });
   }
 
