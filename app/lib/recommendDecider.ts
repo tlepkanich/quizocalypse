@@ -529,11 +529,15 @@ export interface DeciderFallback {
  *  hide), then safetyNetCol as the global last resort. Members come from
  *  product_index (publish unions both collections in — no live fetch); only
  *  in-stock products qualify (a fallback of sold-out items helps nobody).
- *  This covers a target that RESOLVED but is empty. The no-target-resolved
- *  case is not handled here: in Filter Results + Rules the V1/V2 publish
- *  gates prevent it, but in Rules only (logic_style "rules", D1) it is the
- *  normal outcome for every shopper no rule catches (and for a first-matching
- *  hide) — the runtime safety net for that case is separate work. */
+ *  This is the collection half of the chain; `deciderSafetyNet`
+ *  (recommendationEngine.ts) puts the quiz-wide global_fallback in front of
+ *  it and honours `fallbackOn: false`. It serves a target that RESOLVED but is
+ *  empty, and (D1 safety net) a target that did not resolve at all: in Rules
+ *  only (logic_style "rules") that is every shopper no rule catches, or a
+ *  first-matching hide. For that case the runtime calls the chain with the
+ *  quiz-wide settings (`resolveRecPageGlobal`) through
+ *  `unresolvedDeciderReveal`. In Filter Results + Rules the V1/V2 publish
+ *  gates keep a published quiz from reaching the unresolved case. */
 export function deciderFallbackProducts(
   config: ResolvedRecPageConfig,
   productIndex: readonly IndexedProduct[],

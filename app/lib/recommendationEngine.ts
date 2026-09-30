@@ -2,9 +2,12 @@ import type { Quiz, ResultData, MatchLadderStrategy } from "./quizSchema";
 import type { z } from "zod";
 import {
   applyRuleAction,
+  deciderFallbackProducts,
+  resolveRecPageGlobal,
   resolveTarget,
   settingsForTarget,
   targetProducts,
+  type DeciderFallback,
   type ResolvedRecPageConfig,
 } from "./recommendDecider";
 import {
@@ -159,7 +162,10 @@ export interface ExplainedRecommendation {
    *  the §5 all-OOS flag targetProducts computes) so no consumer duplicates
    *  resolveTarget/settingsForTarget. Absent on every legacy path. */
   decider?: {
-    targetId: string;
+    /** The resolved target. Null ONLY on the D1 safety-net payload
+     *  (`unresolvedDeciderReveal`): no target resolved, so the page runs on
+     *  the quiz-wide settings. The engine itself always sets a target. */
+    targetId: string | null;
     matchedRuleId: string | null;
     config: ResolvedRecPageConfig;
     hero: ExplainedProduct | null;
@@ -396,7 +402,9 @@ export function recommendForResultExplained(
       // No rule matched + no decider answer mapping → the rec-page fallback
       // layer owns what renders (§6). In Filter Results + Rules the V1/V2
       // publish gates make this impossible; in Rules only (logic_style
-      // "rules", D1) it is every shopper no rule catches.
+      // "rules", D1) it is every shopper no rule catches. No decider payload
+      // here: the runtime's D1 safety net (`unresolvedDeciderReveal`) builds
+      // one on the quiz-wide settings when the fallback chain finds products.
       return { products: [], rungUsed: null, poolSize: 0, oosSwapped: false, tagBag: {} };
     }
     const config = settingsForTarget(quiz.rec_page_settings, resolved.targetId);
@@ -585,6 +593,53 @@ export function resolveGlobalFallbackProducts(
   // No answer scoring — best-seller order per the spec (not configurable here).
   const scored = scorePool(pool, new Map());
   return applyRanking(scored, "best_seller").slice(0, gf.count);
+}
+
+// ── D1 safety net — the decider fallback chain ─────────────────────────────
+// ONE chain for every decider result with no products to show (QZY-5 §2.4):
+// nothing when the merchant switched the fallback off (`fallbackOn: false`);
+// else the quiz-wide `global_fallback` chooser when it resolves products;
+// else `deciderFallbackProducts` (emptyFallbackCol → safetyNetCol, which
+// respects an explicit emptyFallback "hide"). Pure. The runtime calls it for a
+// resolved-but-empty target and, through `unresolvedDeciderReveal`, for a
+// target that did not resolve at all.
+export function deciderSafetyNet(
+  config: ResolvedRecPageConfig,
+  globalFallback: QuizDoc["global_fallback"] | undefined,
+  productIndex: IndexedProduct[],
+): DeciderFallback | null {
+  if (config.fallbackOn === false) return null;
+  const globalRecs = resolveGlobalFallbackProducts(globalFallback, productIndex);
+  return globalRecs.length > 0
+    ? { source: "global_fallback", products: globalRecs }
+    : deciderFallbackProducts(config, productIndex);
+}
+
+// D1 safety net (owner ruling D1-safety-net) — a decider doc whose target did
+// NOT resolve (Rules only: no rule matched, or the first matching rule is a
+// Hide; `resolveTarget` → null). Returns the decider payload the runtime's
+// normal reveal renders: the quiz-wide rec-page settings (there is no target
+// to override them), no products of its own and no target. The shopper then
+// gets the same fallback page an empty result gets, with the same loading
+// beat, capture and completion analytics. Returns null (→ the runtime keeps
+// the bare no-match card) for a non-decider doc, when the merchant turned the
+// fallback off, or when the chain finds nothing.
+export function unresolvedDeciderReveal(
+  quiz: Pick<QuizDoc, "logic_model" | "rec_page_settings" | "global_fallback">,
+  productIndex: IndexedProduct[],
+): NonNullable<ExplainedRecommendation["decider"]> | null {
+  if (quiz.logic_model !== "decider") return null;
+  const config = resolveRecPageGlobal(quiz.rec_page_settings);
+  const net = deciderSafetyNet(config, quiz.global_fallback, productIndex);
+  if (!net || net.products.length === 0) return null;
+  return {
+    targetId: null,
+    matchedRuleId: null,
+    config,
+    hero: null,
+    grid: [],
+    allOutOfStock: false,
+  };
 }
 
 // "You might also like" — up to `max` secondary products shown beneath the
