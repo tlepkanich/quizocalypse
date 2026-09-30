@@ -4416,7 +4416,7 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
 .qz-menu-item.is-on:hover:not(:disabled) { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
 .qz-menu-hint { margin-left: auto; padding-left: 12px; font-size: 11.5px; color: var(--qz-ink-4); }
 .qz-menu-title { font-size: 12px; font-weight: 700; color: var(--qz-ink); padding: 0 4px 8px; }
-.qz-menu-item:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
+body[data-qz] .qz-menu-item:focus-visible, .qz-menu-item:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
 
 .qz-popover-anchor { display: inline-flex; }
 @keyframes qz-popover-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -4456,7 +4456,7 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
   cursor: pointer; pointer-events: auto;
   border-radius: var(--qz-radius-sm);
 }
-.qz-toast-action:focus-visible { outline: 2px solid var(--qz-accent-on-ink); outline-offset: 2px; }
+body[data-qz] .qz-toast-action:focus-visible, .qz-toast-action:focus-visible { outline: 2px solid var(--qz-accent-on-ink); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .qz-toast { animation: none; } }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -12557,3 +12557,68 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-walk .qz-s3-typetagbtn .qz-s3-tt-type { color:var(--qz-ink); }
 
 @media(max-width:640px) { .qz-walk-settings>.qz-segmented button { height:auto; min-height:40px; line-height:1.25; padding:6px 10px; } }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LOGIC-STEP Phase 3 — inline text editor (.qz-ed, logicTab/InlineText.tsx).
+   Mock `.ed`: edited in place with no layout shift — the 1px 4px padding is
+   cancelled by an equal negative margin; ground wash on hover; paper with a
+   2px accent-line ring while editing (replaces the global focus outline,
+   which Chromium matches on every focused editable). An empty field with a
+   placeholder (scale points, B45) shows it via data-ph.
+   ════════════════════════════════════════════════════════════════════════════ */
+.qz-ed {
+  display: block;
+  border-radius: 3px;
+  outline: none;
+  cursor: text;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  overflow-wrap: anywhere;
+}
+.qz-ed--inline { display: inline; }
+.qz-ed:hover { background: var(--qz-cream-2); }
+.qz-ed:focus,
+body[data-qz] .qz-ed:focus-visible {
+  background: var(--qz-paper);
+  box-shadow: 0 0 0 2px var(--qz-accent-line);
+  outline: none;
+}
+.qz-ed[data-ph]:empty { display: inline-block; min-width: 7em; }
+.qz-ed[data-ph]:empty::before { content: attr(data-ph); color: var(--qz-ink-4); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LOGIC-STEP Phase 3 — field save pill (.qz-fsp, logicTab/FieldSavePill.tsx,
+   D8 owner 2026-09-18). A field-level status badge, not a fifth floating
+   surface. Mock #svb geometry; corners use --qz-radius-pill (Quartz pills are
+   6px rounded rects; the mock's 999px is a literal). Sits under the sticky
+   top bar (z below --qz-z-topbar), popovers, modals and toasts.
+   ════════════════════════════════════════════════════════════════════════════ */
+.qz-fsp {
+  position: fixed; left: 0; top: 0;
+  z-index: calc(var(--qz-z-topbar) - 10);
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 20px; padding: 0 8px 0 6px;
+  border-radius: var(--qz-radius-pill);
+  font-family: var(--qz-font-body); font-size: 11.5px; font-weight: 600; line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.qz-fsp.is-saving { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-fsp.is-saved { background: var(--qz-live-wash); color: var(--qz-ok); }
+.qz-fsp.is-failed { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-fsp.is-fade { opacity: 0; }
+.qz-fsp svg { width: 11px; height: 11px; flex: none; }
+.qz-fsp-spin {
+  box-sizing: border-box;
+  width: 10px; height: 10px; flex: none;
+  border: 1.5px solid var(--qz-ls-line2);
+  border-top-color: var(--qz-accent);
+  border-radius: 50%;
+  animation: qz-fsp-rot 0.7s linear infinite;
+}
+@keyframes qz-fsp-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .qz-fsp { transition: none; }
+  .qz-fsp-spin { animation: none; }
+}
