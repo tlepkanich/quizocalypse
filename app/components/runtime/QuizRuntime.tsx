@@ -14,12 +14,13 @@ import {
   recommendPreview,
   selectSecondaryRecs,
   resolveGlobalFallbackProducts,
+  deciderSafetyNet,
+  unresolvedDeciderReveal,
   type BranchContext,
   type IndexedProduct,
   type RecommendedProduct,
 } from "../../lib/recommendationEngine";
 import {
-  deciderFallbackProducts,
   resolveTarget,
   settingsForTarget,
 } from "../../lib/recommendDecider";
@@ -1576,6 +1577,18 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             });
           }
         }
+        // D1 safety net (owner ruling D1-safety-net) — a decider target that
+        // did not resolve (Rules only: no rule matched, or a Hide matched
+        // first) gets the SAME fallback page an empty result gets, through the
+        // normal reveal below: a payload on the quiz-wide settings with no
+        // products, so the chain, loading beat, capture and completion
+        // analytics all run unchanged. Null (fallback off, or the chain finds
+        // nothing) → `explained` stays as it is → the bare no-match card.
+        // Docs that resolve a target never enter this block.
+        if (isDecider && !explained.decider) {
+          const safetyNet = unresolvedDeciderReveal(doc, productIndex);
+          if (safetyNet) explained = { ...explained, decider: safetyNet };
+        }
         if (explained.decider) {
           // ── LOGIC v2 reveal (rec-page-spec-V2 §4–§7) ────────────────────
           const cfg = explained.decider.config;
@@ -1583,15 +1596,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           // The logic-build chooser (global_fallback, QZY-1) is preferred when
           // it resolves products; the legacy emptyFallbackCol → safetyNetCol
           // chain stays as the last resort so pre-QZY docs are unchanged.
-          const globalFallbackRecs =
-            explained.products.length === 0 && cfg.fallbackOn !== false
-              ? resolveGlobalFallbackProducts(doc.global_fallback, productIndex)
-              : [];
+          // The chain itself lives in `deciderSafetyNet` (D1 safety net).
           const fallback =
-            explained.products.length === 0 && cfg.fallbackOn !== false
-              ? globalFallbackRecs.length > 0
-                ? { source: "global_fallback" as const, products: globalFallbackRecs }
-                : deciderFallbackProducts(cfg, productIndex)
+            explained.products.length === 0
+              ? deciderSafetyNet(cfg, doc.global_fallback, productIndex)
               : null;
           // §L — resolved engagement (undefined for every doc without an
           // opt-in `engagement` block, so the loading/result views stay
@@ -1711,9 +1719,11 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             );
           }
         } else if (isDecider) {
-          // A decider doc whose target didn't resolve — impossible once the
-          // V1/V2 publish gates pass; render the graceful no-match state and
-          // never fall into a legacy result path.
+          // A decider doc whose target didn't resolve AND whose safety net
+          // (above) found nothing or is switched off. In Rules only that is a
+          // shopper no rule catches; in Filter Results + Rules the V1/V2
+          // publish gates keep a published quiz from getting here. Render the
+          // graceful no-match state and never fall into a legacy result path.
           content = (
             <div style={styles.card}>
               <p style={{ color: "var(--qz-color-muted)" }}>{tc("no_results_match")}</p>

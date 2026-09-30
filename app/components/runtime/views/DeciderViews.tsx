@@ -577,7 +577,8 @@ export function DeciderResultView({
       result_node_id: resultNodeId,
       product_ids: shownIds,
       secondary_product_ids: [],
-      resolved_target_id: decider.targetId,
+      // D1 safety net — an unresolved shopper has no target: no key at all.
+      ...(decider.targetId !== null ? { resolved_target_id: decider.targetId } : {}),
       matched_rule_id: decider.matchedRuleId,
       ...(showFallback ? { fallback_source: fallback?.source } : {}),
     });
