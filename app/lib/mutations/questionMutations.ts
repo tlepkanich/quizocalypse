@@ -164,7 +164,12 @@ export function appendBankQuestion(
   // Decider docs anchor after the last question on the MAIN path (the
   // handle-less edges from the intro); every per-answer route is kept.
   // Legacy docs keep today's anchor (dual-model rule).
-  const mainAnchor = doc.logic_model === "decider" ? mainPathLastQuestion(doc) : null;
+  // P1-11: only when that question has a default out-edge to splice into.
+  // A question that routes every answer has none, so the new node would get
+  // no out-edge (a dead end); fall back to the straight-through anchor.
+  const mainLast = doc.logic_model === "decider" ? mainPathLastQuestion(doc) : null;
+  const mainAnchor =
+    mainLast && doc.edges.some((e) => e.source === mainLast && !e.source_handle) ? mainLast : null;
   const anchor = mainAnchor ?? (run.length ? run[run.length - 1]! : head);
   const node: QuizNodeDoc = {
     id: uid("q"),

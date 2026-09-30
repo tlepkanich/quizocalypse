@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { logicDoc } from "./logicStep.fixtures";
 import { appendBankQuestion, setAnswerRoute } from "./quizMutations";
 import { orderedQuestions } from "./questionOrder";
-import type { Quiz } from "./quizSchema";
+import { Quiz } from "./quizSchema";
+import { validateQuiz } from "./quizValidation";
 
 // Handoff "Add a question" · "Where the new question lands": on a decider doc
 // the new question lands after the LAST question on the main path (the
@@ -33,6 +34,56 @@ describe("appendBankQuestion — where the new question lands", () => {
       expect(next.edges.some((e) => e.source === node.id && e.target === "res")).toBe(true);
     });
   }
+
+  it("decider · the last main-path question routes every answer: the new question still has an out-edge (P1-11)", () => {
+    const doc = Quiz.parse({
+      quiz_id: "x",
+      logic_model: "decider",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        {
+          id: "q1",
+          type: "question",
+          position: { x: 1, y: 0 },
+          data: {
+            text: "Pick",
+            question_type: "single_select",
+            role: "decides",
+            required: true,
+            answers: [
+              { id: "a1", text: "A", tags: [], edge_handle_id: "ha1", target_id: "c1" },
+              { id: "a2", text: "B", tags: [], edge_handle_id: "ha2", target_id: "c2" },
+            ],
+          },
+        },
+        {
+          id: "q2",
+          type: "question",
+          position: { x: 2, y: 0 },
+          data: { text: "Two", question_type: "single_select", required: true, answers: [{ id: "b1", text: "x", tags: [], edge_handle_id: "hb1" }, { id: "b2", text: "x2", tags: [], edge_handle_id: "hb2" }] },
+        },
+        {
+          id: "q3",
+          type: "question",
+          position: { x: 2, y: 1 },
+          data: { text: "Three", question_type: "single_select", required: true, answers: [{ id: "c1x", text: "y", tags: [], edge_handle_id: "hc1" }, { id: "c2x", text: "y2", tags: [], edge_handle_id: "hc2" }] },
+        },
+        { id: "res", type: "result", position: { x: 3, y: 0 }, data: { headline: "Done", fallback_collection_id: "col1" } },
+      ],
+      edges: [
+        { id: "e0", source: "intro", target: "q1" },
+        { id: "e1", source: "q1", source_handle: "ha1", target: "q2" },
+        { id: "e2", source: "q1", source_handle: "ha2", target: "q3" },
+        { id: "e3", source: "q2", target: "res" },
+        { id: "e4", source: "q3", target: "res" },
+      ],
+    });
+    const next = appendBankQuestion(doc, entry);
+    const node = added(doc, next);
+    expect(next.edges.some((e) => e.source === node.id)).toBe(true);
+    expect(validateQuiz(next).filter((i) => i.kind === "dead_end")).toEqual([]);
+  });
 
   it("legacy · a Q1 route still lands in front of Q1 (unchanged)", () => {
     const doc = setAnswerRoute(logicDoc({ legacy: true }), "q1", "a1", "q3");
