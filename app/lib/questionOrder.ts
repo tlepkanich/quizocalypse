@@ -16,11 +16,41 @@ export interface OrderedQuestion {
   qIndex: number;
 }
 
+// Node ids in numbering order: the main spine, then branch lanes, as
+// orderFlow surfaces them.
+function flowIds(doc: QuizDoc): string[] {
+  const flow = orderFlow(doc);
+  return [
+    ...flow.steps.map((s) => s.nodeId),
+    ...flow.branches.flatMap((lane) => lane.steps.map((s) => s.nodeId)),
+  ];
+}
+
+// Logic step P1-1: a per-answer route never renumbers. orderFlow ranks by
+// shortest hop count, so "Q1 answer A → Q4" pulled Q4 ahead of Q3. On
+// decider docs the numbering walk drops a question's per-answer (handle)
+// edges whenever that question also has a default edge, then appends
+// anything only a route reaches, in full flow order. Legacy docs keep the
+// plain orderFlow order their surfaces were built on.
+function numberingOrder(doc: QuizDoc): string[] {
+  if (doc.logic_model !== "decider") return flowIds(doc);
+  const questionIds = new Set(doc.nodes.filter((n) => n.type === "question").map((n) => n.id));
+  const hasDefault = new Set(
+    doc.edges.filter((e) => questionIds.has(e.source) && !e.source_handle).map((e) => e.source),
+  );
+  const mainEdges = doc.edges.filter(
+    (e) => !(e.source_handle && hasDefault.has(e.source)),
+  );
+  const ids = flowIds({ ...doc, edges: mainEdges });
+  const seen = new Set(ids);
+  for (const id of flowIds(doc)) if (!seen.has(id)) ids.push(id);
+  return ids;
+}
+
 // Questions in shopper-flow order: the main spine first, then branch lanes (in
 // the order orderFlow surfaces them). Each question gets a stable 1-based number.
 // Falls back to doc.nodes order if there's no intro (orderFlow returns []).
 export function orderedQuestions(doc: QuizDoc): OrderedQuestion[] {
-  const flow = orderFlow(doc);
   const byId = new Map(doc.nodes.map((n) => [n.id, n] as const));
   const ids: string[] = [];
   const seen = new Set<string>();
@@ -32,8 +62,7 @@ export function orderedQuestions(doc: QuizDoc): OrderedQuestion[] {
       ids.push(id);
     }
   };
-  for (const s of flow.steps) push(s.nodeId);
-  for (const lane of flow.branches) for (const s of lane.steps) push(s.nodeId);
+  for (const id of numberingOrder(doc)) push(id);
   // Any question never reached from intro (orphan / no-intro doc) — append in
   // doc order so it still shows up and stays editable.
   for (const n of doc.nodes) if (n.type === "question") push(n.id);
@@ -64,7 +93,6 @@ export interface OrderedFlowStep {
 }
 
 export function orderedFlowSteps(doc: QuizDoc): OrderedFlowStep[] {
-  const flow = orderFlow(doc);
   const byId = new Map(doc.nodes.map((n) => [n.id, n] as const));
   const ids: string[] = [];
   const seen = new Set<string>();
@@ -76,8 +104,7 @@ export function orderedFlowSteps(doc: QuizDoc): OrderedFlowStep[] {
       ids.push(id);
     }
   };
-  for (const s of flow.steps) push(s.nodeId);
-  for (const lane of flow.branches) for (const s of lane.steps) push(s.nodeId);
+  for (const id of numberingOrder(doc)) push(id);
   for (const n of doc.nodes) if (n.type === "question") push(n.id);
 
   let q = 0;
