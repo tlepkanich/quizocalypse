@@ -4410,6 +4410,13 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
 .qz-menu-item:disabled { opacity: .5; cursor: default; }
 .qz-menu-item-crit { color: var(--qz-crit); }
 .qz-menu-item-crit:hover:not(:disabled) { background: var(--qz-crit-tint); color: var(--qz-crit); }
+/* LOGIC-STEP Phase 3 — menuitemradio (mock mitem .on), right hint, title line
+   (mock .pt). Additive: plain action menus never render these. */
+.qz-menu-item.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-menu-item.is-on:hover:not(:disabled) { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-menu-hint { margin-left: auto; padding-left: 12px; font-size: 11.5px; color: var(--qz-ink-4); }
+.qz-menu-title { font-size: 12px; font-weight: 700; color: var(--qz-ink); padding: 0 4px 8px; }
+.qz-menu-item:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
 
 .qz-popover-anchor { display: inline-flex; }
 @keyframes qz-popover-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
