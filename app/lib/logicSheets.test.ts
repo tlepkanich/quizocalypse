@@ -378,6 +378,18 @@ describe("import: the Rules sheet", () => {
     expect(res.changes).toBe(1);
     expect(res.doc.decision_rules![0]).toMatchObject({ id: "r1", target_id: "catX" });
   });
+
+  it("without the Rule ID column, a D13 split does not shift the pairing of later rows", () => {
+    const d = doc();
+    const wb = exported(d, ctxFor("attributes"));
+    dropCol(wb, "Rules", "Rule ID");
+    setCell(wb, "Rules", 1, "When they answer", "Q1 = Both OR q2 = long");
+    const res = applyLogicImport(d, wb, ctxFor("attributes"));
+    const ids = res.doc.decision_rules!.map((r) => r.id);
+    expect(ids).toHaveLength(6);
+    expect(ids.slice(2)).toEqual(["r2", "r3", "r4", "r5"]);
+    expect(res.doc.decision_rules!.slice(2)).toEqual(d.decision_rules!.slice(1));
+  });
 });
 
 describe("import: the Answers sheet", () => {

@@ -148,6 +148,8 @@ describe("pathReportHash — Logic step fields (order, verb, targets, style)", (
     };
     expect(pathReportHash(multi)).not.toBe(base);
     expect(pathReportHash({ ...doc, logic_style: "rules" })).not.toBe(base);
+    // The engine style is hashed: saving the default style changes nothing.
+    expect(pathReportHash({ ...doc, logic_style: "attributes" })).toBe(base);
   });
 });
 

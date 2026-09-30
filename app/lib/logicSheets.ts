@@ -1075,6 +1075,9 @@ export function applyQuestionType(
   nodeId: string,
   p: ParsedType,
 ): { doc: QuizDoc; converted: number } {
+  // Decider docs only: the Logic step's Table and Import are the callers,
+  // and a legacy doc must never be rewritten through them.
+  if (doc.logic_model !== "decider") return { doc, converted: 0 };
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node || node.type !== "question") return { doc, converted: 0 };
   let next = doc;
@@ -1735,6 +1738,9 @@ function importRules(s: ReadSheet, base: QuizDoc, ctx: SheetContext, b: BuildBit
   let examples = 0;
   let lastNum = -Infinity;
   let renumbered = false;
+  // The file row's place among the rule rows. Pairing reads this, never
+  // `next.length`: a D13 split pushes several rules for one row.
+  let rowPos = 0;
 
   for (const r of s.body) {
     const rid0 = hasRid ? (cellOf(s, r, RULE_ID_KEY) ?? "") : "";
@@ -1742,6 +1748,7 @@ function importRules(s: ReadSheet, base: QuizDoc, ctx: SheetContext, b: BuildBit
       examples++;
       continue;
     }
+    const pos = rowPos++;
     const num = cellOf(s, r, R_COL.num) ?? "";
     if (num) {
       const v = Number.parseFloat(num);
@@ -1762,7 +1769,7 @@ function importRules(s: ReadSheet, base: QuizDoc, ctx: SheetContext, b: BuildBit
       baseRule = midById.get(rid0)!;
     } else if (!hasRid) {
       // No id column: the rule in this place, if no other row claims it.
-      const p = midRules[next.length];
+      const p = midRules[pos];
       if (p && !used.has(p.id) && !claimed.has(p.id)) baseRule = p;
     }
     const exp = baseRule ? expected.get(baseRule.id) : undefined;

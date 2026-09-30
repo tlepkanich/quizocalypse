@@ -130,6 +130,13 @@ describe("enumeratePaths", () => {
     expect(dead.deadEndReason).toBe("unreached-decider");
   });
 
+  it("Rules only never reports an unreached-decider dead end", () => {
+    const rulesOnly = enumeratePaths({ ...doc(), logic_style: "rules" });
+    const reasons = rulesOnly.deadEnds.map((p) => p.deadEndReason);
+    expect(reasons.length).toBeGreaterThan(0);
+    expect(reasons).not.toContain("unreached-decider");
+  });
+
   it("collects exactly the dead-end paths", () => {
     expect(res.deadEnds.map((p) => p.selectedAnswerIds.join(","))).toEqual(["a1,a5", "a2"]);
   });

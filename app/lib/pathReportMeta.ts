@@ -13,6 +13,7 @@
 import { outcomeTable, type OutcomeRow } from "./pathAnalyzer";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { answerTargets, ruleTargets } from "./recommendDecider";
+import { engineLogicStyle } from "./logicStyle";
 
 /** Order-insensitive FNV-1a over a canonical string, hex-encoded (the exact
  *  whyCopyMeta.membershipHash algorithm, so both files stay in lockstep). */
@@ -63,7 +64,7 @@ export function pathReportHash(doc: QuizDoc): string {
     .sort()
     .join("\n");
   return fnv1a(
-    `${canonical}\n␞\n${ruleShapes}\n␞\n${ruleOrder}\n␞\n${answerTargetKeys}\n␞\n${doc.logic_style ?? ""}`,
+    `${canonical}\n␞\n${ruleShapes}\n␞\n${ruleOrder}\n␞\n${answerTargetKeys}\n␞\n${engineLogicStyle(doc) === "rules" ? "rules" : ""}`,
   );
 }
 

@@ -1,6 +1,7 @@
 import type { Quiz } from "./quizSchema";
 import { resolveNextStep, type BranchContext } from "./recommendationEngine";
 import { resolveTarget, type ResolvedTarget } from "./recommendDecider";
+import { engineLogicStyle } from "./logicStyle";
 
 // ════════════════════════════════════════════════════════════════════════════
 // QZY-R · R1 — the path-enumeration engine (quiz-logic-view v1.0 §1/§4/§5/§6).
@@ -128,6 +129,9 @@ export function enumeratePaths(doc: QuizDoc, opts: EnumerateOptions = {}): Enume
     decider && decider.type === "question" ? decider.data.answers.map((a) => a.id) : [],
   );
   const branchByAnswer = computeBranchFlags(doc);
+  // Rules only has no picking question, so a dead end is never "the
+  // shopper skipped the question that picks the result".
+  const rulesOnly = engineLogicStyle(doc) === "rules";
 
   const paths: EnumeratedPath[] = [];
   let truncated = false;
@@ -148,7 +152,7 @@ export function enumeratePaths(doc: QuizDoc, opts: EnumerateOptions = {}): Enume
       ruleOverridden: effectiveTarget?.matchedRuleId != null,
       deadEnd,
       ...(deadEnd
-        ? { deadEndReason: (reachedDecider ? "no-result" : "unreached-decider") as DeadEndReason }
+        ? { deadEndReason: (reachedDecider || rulesOnly ? "no-result" : "unreached-decider") as DeadEndReason }
         : {}),
     });
   };
