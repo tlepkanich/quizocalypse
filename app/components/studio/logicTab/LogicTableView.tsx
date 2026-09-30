@@ -562,6 +562,7 @@ function AnswerText(c: CellCtx) {
               maxLength={SCALE_LABEL_MAX}
               allowEmpty
               placeholder="Add label"
+              inline
               ariaLabel={SHEET_COPY.answerLabel(c.q.qIndex, i + 1)}
               {...(c.commit
                 ? {
@@ -702,7 +703,7 @@ function RoleCell(c: CellCtx & { onNarrowPick: () => void }) {
     <QzMenu
       title={SHEET_COPY.roleMenuTitle(c.q.qIndex)}
       ariaLabel={SHEET_COPY.roleMenuTitle(c.q.qIndex)}
-      width={300}
+      width={360}
       items={items}
       trigger={
         <button

@@ -12772,7 +12772,6 @@ button.qz-lg-rpill { cursor: pointer; }
 
 /* — Table view (agent F fills it; mock .tview) — */
 .qz-lg-tview { padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 18px; }
-.qz-lg-tnote { margin: 0; font-size: 12px; color: var(--qz-ink-4); }
 
 /* ══ Logic step · the rule window, Add recommendations, Paste rules (agent E) ══
    Built to docs/design/logic-tab/rules-row/index.html at its 100% sizes
