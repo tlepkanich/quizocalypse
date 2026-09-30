@@ -307,6 +307,16 @@ try {
     const recName = await pill.locator(".qz-lg-rpill-n").textContent();
     await pill.click();
     await win.waitFor();
+    // The edit window closed a moment ago: wait for the NEW draft to seed
+    // (reading at once could catch the old window's last frame).
+    await page
+      .waitForFunction(
+        (name) =>
+          [...document.querySelectorAll(".qz-lg-rc.is-on")].some((el) => (el.textContent ?? "").includes(name)),
+        recName ?? "",
+        { timeout: 3000 },
+      )
+      .catch(() => {});
     ok("D5 + Create a rule opens a create draft with that recommendation picked",
       (await win.getAttribute("aria-label")) === "Create a rule" &&
       (await win.locator(".qz-lg-rc.is-on", { hasText: recName ?? "" }).count()) === 1,

@@ -62,6 +62,10 @@ async function cloneQuiz(style) {
   }
   const doc = JSON.parse(json);
   doc.logic_style = style;
+  // Two rules at least, so reorder and the delete count have something to do.
+  const rules = doc.decision_rules ?? [];
+  if (rules.length === 1) rules.push({ ...rules[0], id: `${rules[0].id}-copy` });
+  doc.decision_rules = rules;
   await prisma.quiz.create({ data: { id, shopId: quiz.shopId, name: "e2e table copy", status: "draft", draftJson: doc } });
   for (const c of cats) {
     const { id: oldId, createdAt: _c, updatedAt: _u, ...rest } = c;
@@ -148,9 +152,9 @@ try {
   copies.push(qa);
   await open(qa);
   // B40 setup: select Q2 in the Edit rail first.
-  const rail = page.locator(".qz-lw-rail .qz-lw-qi");
+  const rail = page.locator(".qz-lg-rail .qz-lg-qi");
   if ((await rail.count()) > 1) await rail.nth(1).click();
-  const selectedBefore = await page.locator(".qz-lw-rail .qz-lw-qi.is-on").getAttribute("data-node-id");
+  const selectedBefore = await page.locator(".qz-lg-rail .qz-lg-qi.is-on").getAttribute("data-node-id");
   await toTable();
   ok("header shows Import | Export in Table view", (await page.locator('[data-testid="logic-io"] button').count()) === 2);
   ok("no Paste rules / Create a rule in the Table header",
@@ -161,20 +165,24 @@ try {
 
   const answers = page.locator('table[aria-label="Answers"]');
   // Popovers from the Table (each a screenshot: interactive state).
+  // The Edit pane's OWN controls in the Table's dress (P1-6).
   await answers.locator(".qz-lg-tbtn.is-dim").first().click();
-  await page.waitForSelector('[role="menu"]');
-  ok("type menu opens", (await page.locator('[role="menuitemradio"]').count()) >= 4);
+  await page.waitForSelector('[data-testid="type-popover"]');
+  ok("type popover (the pane's) opens", (await page.locator('[data-testid="type-popover"] [role="radio"]').count()) >= 4);
   await shot("a2-type-menu");
   await page.keyboard.press("Escape");
   await answers.locator(".qz-lg-tbtn.is-does").first().click();
-  await page.waitForSelector('[role="menu"]');
+  await page.waitForSelector('[data-testid="role-menu"]');
+  ok("role menu (the pane's) opens", (await page.locator('[data-testid="role-menu"] [role="menuitemradio"]').count()) === 3);
   await shot("a3-role-menu");
   await page.keyboard.press("Escape");
   const picks = answers.locator(".qz-lg-tbtn.is-res").first();
   if (await picks.count()) {
     await picks.click();
-    await page.waitForSelector(".qz-lg-tpick");
-    ok("Choose a result picker opens", (await page.locator(".qz-lg-tpick-i").count()) > 0);
+    await page.waitForSelector('[data-testid="picks-picker"]');
+    ok("Choose a result picker (the pane's) opens", (await page.locator('[data-testid="picks-picker"] [role="checkbox"]').count()) > 0);
+    const pw = await page.locator(".qz-popover").first().evaluate((el) => Math.round(el.getBoundingClientRect().width));
+    ok("the picker is 240px wide (mock)", pw === 240, String(pw));
     await shot("a4-choose-a-result");
     await page.keyboard.press("Escape");
   }
@@ -182,12 +190,58 @@ try {
   await page.waitForSelector('[role="menu"]');
   await shot("a5-route-menu");
   await page.keyboard.press("Escape");
+  const lastThen = (await answers.locator("tbody tr").last().locator("td").last().innerText()).replace("▾", "").trim();
+  ok("P1-9: an unset route on the last question reads Results (last question)",
+    lastThen === "Results (last question)" || lastThen === "Straight to results", lastThen);
   // B40: back to Edit, the selection is where it was.
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.waitForTimeout(300);
-  const selectedAfter = await page.locator(".qz-lw-rail .qz-lw-qi.is-on").getAttribute("data-node-id");
+  const selectedAfter = await page.locator(".qz-lg-rail .qz-lg-qi.is-on").getAttribute("data-node-id");
   ok("B40: Table popovers never move the Edit selection", selectedBefore === selectedAfter, `${selectedBefore} → ${selectedAfter}`);
   await toTable();
+
+  // P1-7: ↑/↓ on the Rules sheet (hover reveals them), Undo moves it back.
+  const rulesTbl = page.locator('table[aria-label="Rules"]');
+  const ruleIds = async () => rulesTbl.locator("tbody tr[data-rule-id]").evaluateAll((trs) => trs.map((t) => t.getAttribute("data-rule-id")));
+  const idsBefore = await ruleIds();
+  if (idsBefore.length > 1) {
+    await rulesTbl.locator("tbody tr").nth(0).hover();
+    await shot("a5b-rules-row-hover");
+    await rulesTbl.locator('tbody tr').nth(0).locator('[data-move="down"]').click();
+    const tm = await waitToast(/moved to position 2/);
+    ok("P1-7: ↓ moves rule 1 to position 2", /Rule 1 moved to position 2/.test(tm), tm);
+    const idsMoved = await ruleIds();
+    ok("P1-7: the order changed", idsMoved[0] === idsBefore[1] && idsMoved[1] === idsBefore[0], JSON.stringify(idsMoved));
+    ok("P1-7: focus follows the rule", await page.evaluate((id) => document.activeElement?.closest("tr")?.getAttribute("data-rule-id") === id, idsBefore[0]));
+    await page.keyboard.press("Alt+ArrowUp");
+    await page.waitForTimeout(300);
+    ok("P1-7: Alt+ArrowUp moves it back", JSON.stringify(await ruleIds()) === JSON.stringify(idsBefore));
+    await page.locator(".qz-toast-action").click();
+    await page.waitForTimeout(400);
+    ok("P1-7: one Undo takes back the whole run", JSON.stringify(await ruleIds()) === JSON.stringify(idsBefore));
+    // P2-7: a delete toast is not relabelled by a role change (a move of
+    // "Picks the result", whose loss message must wait).
+    await settle();
+    const restoreTo = await draft(qa);
+    await rulesTbl.locator(".qz-lg-tdel").first().click();
+    await waitToast(/Rule 1 deleted/);
+    await answers.locator(".qz-lg-tbtn.is-does").nth(1).click();
+    await page.waitForSelector('[data-testid="role-menu"]');
+    await page.locator('[data-testid="role-menu"] [role="menuitemradio"]').nth(0).click();
+    await page.waitForTimeout(400);
+    const tt = await toastText();
+    const lbl = await page.locator(".qz-toast-action").innerText().catch(() => "");
+    ok("P2-7: the delete toast keeps its own message and plain Undo", /Rule 1 deleted/.test(tt) && lbl === "Undo", `${tt} / ${lbl}`);
+    await shot("a5c-delete-then-role");
+    await page.locator(".qz-toast-action").click();
+    await page.waitForTimeout(400);
+    ok("P2-7: Undo restores only the rule", (await ruleIds()).length === idsBefore.length);
+    await settle();
+    // Put the copy back as it was for the import checks below.
+    await prisma.quiz.update({ where: { id: qa }, data: { draftJson: restoreTo } });
+    await open(qa);
+    await toTable();
+  }
 
   // Export → import unchanged.
   const fA = await exportFile(`${SHOTS}/a-export.xlsx`);
@@ -280,7 +334,24 @@ try {
   const qr = await cloneQuiz("rules");
   copies.push(qr);
   await open(qr);
-  await toTable();
+  // P1-5: ONE count across surfaces — a delete in Edit, then one in the Table.
+  const editRows = page.locator(".qz-lg-rlist2 [data-rule-id]");
+  const nStart = await editRows.count();
+  if (nStart >= 2) {
+    await editRows.first().hover();
+    await editRows.first().locator(".qz-lg-xdel").click();
+    await waitToast(/Rule 1 deleted/);
+    await toTable();
+    await page.locator('table[aria-label="Rules"] .qz-lg-tdel').first().click();
+    const t2 = await waitToast(/rules deleted/);
+    ok("P1-5: Edit delete + Table delete read 2 rules deleted", /^2 rules deleted/.test(t2), t2);
+    await page.locator(".qz-toast-action").click();
+    await page.waitForTimeout(400);
+    ok("P1-5: Undo restores both", (await page.locator('table[aria-label="Rules"] .qz-lg-tdel').count()) === nStart);
+    await settle();
+  } else {
+    await toTable();
+  }
   const labelsR = await page.locator("table.qz-lg-xl").evaluateAll((ts) => ts.map((t) => t.getAttribute("aria-label")));
   ok("Rules only: Rules sheet then Recommendations sheet", JSON.stringify(labelsR) === '["Rules","Recommendations"]', JSON.stringify(labelsR));
   ok("Rules only: every verb reads Show",
