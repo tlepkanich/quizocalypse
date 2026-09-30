@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Quiz, DesignTokens, RecPageGlobal } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BuilderCollection } from "../../builder/stepProps";
+import type { Placement } from "../../../lib/captureMode";
+import { offerCodeDisplay, offerName, offerValue } from "../../../lib/offerCopy";
 import { useQuizDraft } from "../../studio/useQuizDraft";
 import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelChrome";
-import { GuidedPreview, type PreviewScreen } from "./GuidedPreview";
+import { GuidedPreview, type PreviewScreen, type PreviewScroll } from "./GuidedPreview";
 import { DiscountEditor } from "./DiscountEditor";
 import { TermsModal, DescriptionsModal, ExtrasPickerModal } from "./modals";
 import {
@@ -13,83 +15,52 @@ import {
   resolveDiscount,
   patchGuided,
   writeDiscount,
-  offerLabel,
-  offerCode,
+  discountExists,
+  forcePerShopperCode,
+  readSession,
+  writeSession,
+  snapLoadingMs,
   GATE_COPY,
   REVEAL_MAX_MS,
+  LOADING_MIN_MS,
+  LOADING_MAX_MS,
+  LOADING_STEP_MS,
   WIRED,
 } from "./state";
 
-/* Results-guided handoff (master.md, UPDATE AREA 3) — the Results step as a
-   SIX-STEP GUIDED FLOW: one question per screen, a live phone preview beside
-   it, and an Overview that hands off to the builder (Design-step retired;
-   the look is brand-inherited). §5 completion model: done =
-   the merchant has been through the step (moved past it with Next); blocked =
-   on but cannot render. The bar carries progress only (no amber); Overview
-   rows read the ACTUAL settings back. §3: no Back on step 1 (absent, not
-   disabled); Next always reads "Next →"; the last button is "Continue to
-   Design →". Owner rule (no dead ends): settings the runtime does not consume
-   yet carry a quiet "not connected yet" tag — see WIRED in state.ts.
-   QRTZ-G45 (owner): the builder stays closed until the merchant has at least
-   RUN THROUGH every step — a visited-set gates BOTH "Open the builder"
-   buttons (the Overview foot primary and the funnel bar's Continue, via the
-   funnelChrome continueSpec seam). Visited = landed on the step; blockers do
-   not gate ("completed, or at least ran through"). Client-side UX only — the
-   stage machine is untouched. */
+/* Results-guided handoff (docs/design/results-guided/DEV-HANDOFF.md §5–§11)
+   — the Results step as a FIVE-STEP GUIDED FLOW: one question per screen, a
+   phone preview beside it, and an Overview that opens the builder.
+   Completion: ONE `seen` map (persisted in build_session.results_guided)
+   drives the pips AND the funnel bar's gate; a step is done when the forward
+   button leaves its last tab. Step 3 walks its sub-tabs (Email › Loading ›
+   Consent) in both directions. The phone never changes the step. Owner rule
+   (no dead ends): controls whose live reader has not landed carry a quiet
+   "not connected yet" tag — see WIRED in state.ts. */
 
-// QRTZ-S6 (mock s15) — `name` feeds the eyebrow ("Step 1 of 6 · The page
-// copy") and the forward button ("Next: the matches" names its destination).
-const FLOW = [
-  {
-    g: "says",
-    name: "The page copy",
-    title: "What does the page say?",
-    sub: "The first thing a shopper reads after answering. Name the outcome they get, not the quiz they took.",
-  },
-  {
-    g: "shows",
-    name: "The matches",
-    title: "How do the matches look?",
-    sub: "How many products they see, how those are arranged, and what each card carries.",
-  },
-  {
-    g: "disc",
-    name: "The offer",
-    title: "Do you want to make an offer?",
-    sub: "Optional. Leave it off if you would rather protect margin than push conversion.",
-  },
-  {
-    g: "keep",
-    name: "Email capture",
-    title: "Do you want their email?",
-    sub: "And if so, where you ask for it. This is the single biggest lever on the page.",
-  },
-  {
-    g: "edge",
-    name: "Extra picks",
-    title: "Anything after the matches?",
-    sub: "A “you might also like” shelf under the results. An AOV lever worth testing.",
-  },
-  {
-    g: null,
-    name: "Overview",
-    title: "Overview",
-    sub: "Everything you have set. Next you will style it in Design.",
-  },
-] as const;
+type StepId = "says" | "shows" | "keep" | "edge";
+type SecId = "head" | "cards" | "gate" | "reveal" | "consent" | "fallback";
 
-// QRTZ-G45 — referentially stable no-op for the gated bar Continue (the
-// funnelChrome publish contract forbids fresh handlers per render).
+const FLOW: Array<{ g: StepId | null; title: string; secs: SecId[] }> = [
+  { g: "says", title: "What does the page say?", secs: ["head"] },
+  { g: "shows", title: "How do the matches look?", secs: ["cards"] },
+  { g: "keep", title: "Do you want their email?", secs: ["gate", "reveal", "consent"] },
+  { g: "edge", title: "Anything after the matches?", secs: ["fallback"] },
+  { g: null, title: "Overview", secs: [] },
+];
+const OVERVIEW_IX = FLOW.length - 1;
+const TAB_LABEL: Partial<Record<SecId, string>> = { gate: "Email", reveal: "Loading", consent: "Consent" };
+
+// Referentially stable no-op for the gated bar Continue (the funnelChrome
+// publish contract forbids fresh handlers per render).
 const GATE_NOOP = () => {};
 
-const GROUPS: Array<{ id: string; band: "before" | "page"; ic: string; name: string }> = [
-  { id: "keep", band: "before", ic: "✉", name: "Email capture" },
-  { id: "says", band: "page", ic: "“”", name: "What it says" },
-  { id: "shows", band: "page", ic: "▤", name: "The matches" },
-  { id: "disc", band: "page", ic: "%", name: "Discount" },
-  { id: "edge", band: "page", ic: "⤢", name: "Extra picks" },
+const GROUPS: Array<{ id: StepId; ic: string; name: string }> = [
+  { id: "keep", ic: "✉", name: "Email capture & offer" },
+  { id: "says", ic: "“”", name: "What it says" },
+  { id: "shows", ic: "▤", name: "The matches" },
+  { id: "edge", ic: "⤢", name: "Extra picks" },
 ];
-const BANDS = { before: "Before the results", page: "The results page" };
 
 const HS = [
   "Your perfect match",
@@ -112,12 +83,18 @@ const LAYS: Array<[NonNullable<RecPageGlobal["layout"]>, string]> = [
   ["list", "List"],
   ["single_hero", "Single"],
 ];
-const LAY_NAME: Record<string, string> = {
-  hero_grid: "Hero + list",
-  grid: "Grid",
-  list: "List",
-  single_hero: "Single",
-};
+const LAY_NAME: Record<string, string> = Object.fromEntries(LAYS);
+
+const PLACEMENTS: Array<[Placement, string]> = [
+  ["inline", "Email collection on the results page."],
+  ["before", "Email collection before the results page."],
+  ["none", "No email capture."],
+];
+
+// The card's floor: the tallest stop's natural height, measured in the
+// browser at the default type scale (the Loading tab with its three default
+// steps, 1440×900). The card grows past it only when Page Copy opens.
+const CARD_FLOOR_PX = 488;
 
 /** The owner's no-dead-ends flag: quiet, honest, impossible to miss in a review. */
 function Unwired({ k }: { k: string }) {
@@ -136,6 +113,7 @@ function Stepper({
   onChange,
   label,
   fmt,
+  step = 1,
 }: {
   value: number;
   min: number;
@@ -143,6 +121,7 @@ function Stepper({
   onChange: (v: number) => void;
   label: string;
   fmt?: (v: number) => string;
+  step?: number;
 }) {
   return (
     <span className="qz-s3-stepper">
@@ -150,7 +129,7 @@ function Stepper({
         type="button"
         aria-label={`Decrease ${label}`}
         disabled={value <= min}
-        onClick={() => onChange(Math.max(min, value - 1))}
+        onClick={() => onChange(Math.max(min, value - step))}
       >
         −
       </button>
@@ -159,7 +138,7 @@ function Stepper({
         type="button"
         aria-label={`Increase ${label}`}
         disabled={value >= max}
-        onClick={() => onChange(Math.min(max, value + 1))}
+        onClick={() => onChange(Math.min(max, value + step))}
       >
         +
       </button>
@@ -186,17 +165,20 @@ export function ResultsGuided({
   productIndex,
   collections,
   designTokens,
+  shopDomain,
+  storeName,
   onOpenBuilder,
 }: {
   quizId: string;
   initialDoc: Quiz;
   productIndex: IndexedProduct[];
-  /** Kept for the call site — the fallback chooser left this surface
-   *  (owner 2026-08-18); nothing here reads the catalog collections now. */
   collections: BuilderCollection[];
   designTokens?: DesignTokens | null;
-  /** Step 6's "Open the builder →" (the funnel's generate-build intent —
-   *  Design-step retired; the look is brand-inherited). */
+  /** The storefront domain policy links resolve against (handoff §9). */
+  shopDomain?: string | null;
+  /** The store's display name for the fixed consent wording, when known. */
+  storeName?: string | null;
+  /** The Overview's "Open the builder →" (the funnel's generate-build intent). */
   onOpenBuilder: () => void;
 }) {
   void quizId;
@@ -204,56 +186,67 @@ export function ResultsGuided({
   const { doc, commit, isSaving, savedAt, saveError, retrySave } = useQuizDraft(initialDoc);
   const cfg = resolveGuided(doc);
   const disc = resolveDiscount(doc);
-  const offerOn = doc.discount_config?.enabled === true;
+  const session = readSession(doc);
+  const seen = session.seen ?? {};
+  const hasDiscount = discountExists(doc);
+  const discountOn = doc.discount_config?.enabled === true;
+  const activeDiscount = hasDiscount && discountOn;
 
-  // ── §5 completion model ────────────────────────────────────────────────────
   const [stepIx, setStepIx] = useState(0);
-  const [seen, setSeen] = useState<Record<string, boolean>>({});
-  // QRTZ-G45 — the visited-set behind the open-builder gate: a step counts
-  // the moment the merchant LANDS on it (Next, Back, Overview row or preview
-  // jump), which is the owner's "completed, or at least ran through".
-  const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
-  const [openSec, setOpenSec] = useState<string>("head");
+  const [sec, setSec] = useState<SecId>("head");
   const [focusPart, setFocusPart] = useState<string | null>(null);
-  const [holdSel, setHoldSel] = useState(false);
+  // Nonces re-trigger a ring / scroll in the phone without re-ringing on
+  // every render (handoff §11).
+  const [arrival, setArrival] = useState(0);
+  const [touch, setTouch] = useState(0);
+  const [scroll, setScroll] = useState<PreviewScroll>("region");
   const [rot, setRot] = useState({ h: 0, w: 0 });
-  const [wordOpen, setWordOpen] = useState(false);
-  const [xMoreOpen, setXMoreOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
   const [ddOpen, setDdOpen] = useState(false);
-  // Owner 2026-08-18 — Loading is the first sub-tab, so it is the landing tab.
-  const [gateTab, setGateTab] = useState<"gate" | "reveal" | "consent">("reveal");
   const [modal, setModal] = useState<null | "discount" | "terms" | "descs" | "extras">(null);
-  const [deferredUnlock, setDeferredUnlock] = useState(false);
-  const [returnToAsk, setReturnToAsk] = useState(false);
-
-  // blockers (§5): on, but cannot render
-  const blockers: Record<string, string | null> = {
-    keep: cfg.capturePlacement === "discount" && !offerOn ? "Needs a discount to unlock" : null,
-    says: cfg.headline.trim() ? null : "Needs a headline",
-    shows: null,
-    disc: null,
-    edge: cfg.extrasOn && cfg.extrasProductIds.length === 0 ? "Extra picks has no products" : null,
-  };
-  const groupState = (id: string): "new" | "done" | "todo" =>
-    blockers[id] ? "todo" : seen[id] ? "done" : "new";
-  const allReviewed = GROUPS.every((g) => groupState(g.id) === "done") && seen.__ovw === true;
 
   const step = FLOW[stepIx]!;
   const isOverview = step.g === null;
+  const tabIx = step.secs.indexOf(sec);
 
-  // preview follows the step (§6)
-  const screen: PreviewScreen =
-    step.g === "keep" && gateTab === "reveal"
+  const blockers: Record<StepId, string | null> = {
+    keep: cfg.where !== "none" && cfg.unlock && !activeDiscount ? "Needs a discount to unlock" : null,
+    says: cfg.headline.trim() ? null : "Needs a headline",
+    shows: null,
+    edge: null,
+  };
+  const flowDone = FLOW.every((f) => (f.g === null ? seen.__ovw === true : seen[f.g] === true));
+
+  // The preview follows the step (§11).
+  const screen: PreviewScreen = isOverview
+    ? "results"
+    : sec === "reveal" && cfg.loadingOn
       ? "loading"
-      : step.g === "keep" && cfg.capturePlacement === "before"
+      : (sec === "gate" || sec === "consent") && cfg.where === "before"
         ? "gate"
         : "results";
 
-  // §5 arrival celebration — once per arrival on the Overview
+  /** Mark steps/tabs seen on a given doc (never the stale closure `doc`:
+   *  two commits built from one render would overwrite each other). */
+  const withSeen = (base: Quiz, keys: string[]) => {
+    const cur = readSession(base).seen ?? {};
+    const fresh = keys.filter((k) => cur[k] !== true);
+    if (fresh.length === 0) return base;
+    return writeSession(base, { seen: { ...cur, ...Object.fromEntries(fresh.map((k) => [k, true])) } });
+  };
+  /** Every settings write: using a control on a tab turns its dot green, in
+   *  the SAME commit as the change. */
+  const save = (next: Quiz) => commit(step.secs.length > 1 ? withSeen(next, [`tab:${sec}`]) : next);
+
+  // §5 arrival celebration — once per arrival on the Overview.
   const spineRef = useRef<HTMLDivElement>(null);
   const celebrated = useRef(false);
   useEffect(() => {
-    if (!isOverview || celebrated.current) return;
+    if (!isOverview) {
+      celebrated.current = false;
+      return;
+    }
+    if (celebrated.current) return;
     celebrated.current = true;
     const spine = spineRef.current;
     if (!spine || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -275,97 +268,159 @@ export function ResultsGuided({
     return () => window.clearTimeout(t);
   }, [isOverview]);
 
-  const gotoStep = (i: number) => {
-    const next = Math.max(0, Math.min(FLOW.length - 1, i));
-    setStepIx(next);
-    setVisited((v) => (v[next] ? v : { ...v, [next]: true }));
-    setFocusPart(null);
-    setHoldSel(false);
+  /** Arrive on a step. Forward and Overview rows land on the FIRST tab;
+   *  Back lands on the LAST (Back from step 4 opens Consent). */
+  const gotoStep = (i: number, fromEnd = false, base: Quiz = doc) => {
+    const next = Math.max(0, Math.min(OVERVIEW_IX, i));
     const f = FLOW[next]!;
-    if (f.g === "says") setOpenSec("head");
-    else if (f.g === "shows") setOpenSec("cards");
-    else if (f.g === "disc") setOpenSec("offer");
-    else if (f.g === "keep") setOpenSec(gateTab === "reveal" ? "reveal" : gateTab === "consent" ? "consent" : "gate");
-    else if (f.g === "edge") setOpenSec("fallback");
-    else setOpenSec("");
-    if (f.g === null) setSeen((s) => ({ ...s, __ovw: true }));
-  };
-  // QRTZ-G45 — the gate: every step visited before the builder opens. The
-  // guard in next() makes a programmatic click no-op while gated; the button
-  // below wears aria-disabled + a title that says why (never color alone).
-  const allVisited = FLOW.every((_, i) => visited[i] === true);
-  const gateClosed = stepIx === FLOW.length - 1 && !allVisited;
-  const next = () => {
-    if (step.g) setSeen((s) => ({ ...s, [step.g as string]: true }));
-    if (stepIx < FLOW.length - 1) gotoStep(stepIx + 1);
-    else if (allVisited) onOpenBuilder();
+    setStepIx(next);
+    setSec(f.secs.length ? f.secs[fromEnd ? f.secs.length - 1 : 0]! : "head");
+    setFocusPart(null);
+    setCopyOpen(false);
+    setDdOpen(false);
+    setArrival((n) => n + 1);
+    // Step 4 scrolls to the bottom (the shelf renders under the matches);
+    // the Overview to the top; everything else to its own region.
+    setScroll(f.g === "edge" ? "bottom" : f.g === null ? "top" : "region");
+    const withOvw = f.g === null ? withSeen(base, ["__ovw"]) : base;
+    if (withOvw !== doc) commit(withOvw);
   };
 
-  // panel interactions narrow the preview highlight to the touched control
-  const focusOn = (part: string) => {
+  const openTab = (id: SecId) => {
+    setSec(id);
+    setFocusPart(null);
+    setCopyOpen(false);
+    setArrival((n) => n + 1);
+    setScroll("region");
+  };
+
+  const forward = () => {
+    if (isOverview) {
+      onOpenBuilder();
+      return;
+    }
+    // Leaving a tab counts as passing it (its dot turns green).
+    if (tabIx > -1 && tabIx < step.secs.length - 1) {
+      const passed = withSeen(doc, [`tab:${sec}`]);
+      if (passed !== doc) commit(passed);
+      openTab(step.secs[tabIx + 1]!);
+      return;
+    }
+    const done = withSeen(doc, [step.g as string, ...(step.secs.length > 1 ? [`tab:${sec}`] : [])]);
+    gotoStep(stepIx + 1, false, done);
+  };
+  const back = () => {
+    if (tabIx > 0) {
+      openTab(step.secs[tabIx - 1]!);
+      return;
+    }
+    gotoStep(stepIx - 1, true);
+  };
+
+  /** A touched control rings ONLY the element it changes (handoff §11). */
+  const focusOn = (part: string, scrollMode: PreviewScroll = "region") => {
     setFocusPart(part);
-    setHoldSel(false);
+    setTouch((n) => n + 1);
+    setScroll(scrollMode);
   };
 
-  // jump from the preview back into the right step
-  const jumpFromPreview = (sec: string) => {
-    const target =
-      sec === "head" ? 0 : sec === "cards" ? 1 : sec === "offer" ? 2 : sec === "gate" || sec === "consent" || sec === "reveal" ? 3 : 4;
-    if (sec === "gate" || sec === "consent" || sec === "reveal")
-      setGateTab(sec as "gate" | "reveal" | "consent");
-    gotoStep(target);
-    setOpenSec(sec);
-  };
-
-  // The bar (QRTZ-G45): the save chip moved off the bar into the edit-foot
-  // beside the primary (the artifact's .edit-foot — button · Saved side by
-  // side). What the bar carries now is the GATE: while any step is unvisited,
-  // the funnel bar's own "Open builder" Continue (Step1Funnel's rec_page
-  // default, which fires generate-build directly) is published disabled with
-  // the same explanation — otherwise it would bypass the guided gate. Once
-  // every step is visited the override clears and the default (with its
-  // loading ring) takes back over. Publish contract: memoized on the one
-  // boolean; the noop is module-stable.
+  // The funnel bar's "Open builder" stays disabled until every step is done;
+  // once live it stays live (seen is persisted and never unset). Publish
+  // contract: memoized on the one boolean; the noop is module-stable.
   const barOverride = useMemo<FunnelBarOverride>(
     () =>
-      allVisited
+      flowDone
         ? {}
         : {
             continueSpec: {
               label: "Open builder",
               onClick: GATE_NOOP,
               disabled: true,
-              title: "Finish the steps above first",
+              title: "Finish the Results steps first.",
             },
           },
-    [allVisited],
+    [flowDone],
   );
   useFunnelBar(barOverride);
 
-  const patch = (p: Partial<RecPageGlobal>) => commit(patchGuided(doc, p));
+  const patch = (p: Parameters<typeof patchGuided>[1]) => save(patchGuided(doc, p));
 
-  // placement change applies the mode's copy preset while untouched (§4)
-  const copyTouched = useRef(false);
-  const setPlacement = (where: NonNullable<RecPageGlobal["capturePlacement"]>) => {
-    const preset = GATE_COPY[where];
-    patch({
-      capturePlacement: where,
-      ...(preset && !copyTouched.current &&
-          doc.rec_page_settings?.global?.captureHeadline === undefined &&
-          doc.rec_page_settings?.global?.captureSubtext === undefined &&
-          doc.rec_page_settings?.global?.captureCta === undefined
-        ? { captureHeadline: preset.headline, captureSubtext: preset.copy, captureCta: preset.cta }
-        : {}),
-      ...(where !== "before" ? { captureRequired: false } : {}),
-    });
-    setDdOpen(false);
-    if (where !== "discount") setDeferredUnlock(false);
+  // ── the card's floor (handoff §5): Back and Continue hold one height at
+  //    every stop; on a short window the floor yields to the room left and
+  //    the card scrolls inside itself. Measured from the card's own top. ──
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardRoom, setCardRoom] = useState(CARD_FLOOR_PX);
+  useLayoutEffect(() => {
+    const fit = () => {
+      const card = cardRef.current;
+      if (!card) return;
+      // Measured from the card's OWN top edge — summing the head's height
+      // misses its bottom gap (the mock's overflow bug).
+      setCardRoom(Math.max(260, window.innerHeight - card.getBoundingClientRect().top - 24));
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+
+  // ── placement, unlock and the copy presets (handoff §7) ───────────────────
+  const presetFor = (where: Placement, unlock: boolean) =>
+    GATE_COPY[unlock && where !== "none" ? "unlock" : where];
+  const copyPatch = (where: Placement, unlock: boolean): Partial<RecPageGlobal> => {
+    if (session.copy_touched || where === "none") return {};
+    const preset = presetFor(where, unlock);
+    return { captureHeadline: preset.headline, captureSubtext: preset.copy, captureCta: preset.cta };
   };
+  const setPlacement = (where: Placement) => {
+    setDdOpen(false);
+    // "Required" is kept as the merchant set it: it only shows (and only
+    // matters) for the before-results gate.
+    let next = patchGuided(doc, { where, ...copyPatch(where, cfg.unlock) });
+    if (cfg.unlock && where !== "none") next = forcePerShopperCode(next);
+    save(next);
+    focusOn("gform");
+  };
+  const setUnlock = (on: boolean) => {
+    let next = patchGuided(doc, {
+      captureUnlocksOffer: on ? true : undefined,
+      // Normalise the retired "discount" placement on this write.
+      ...(cfg.where === "inline" && doc.rec_page_settings?.global?.capturePlacement === "discount"
+        ? { where: "inline" as const }
+        : {}),
+      ...copyPatch(cfg.where, on),
+    });
+    if (on) next = forcePerShopperCode(next);
+    if (!on) next = writeSession(next, { unlock_deferred: undefined });
+    save(next);
+    focusOn("offer");
+  };
+  const touchCopy = (p: Partial<RecPageGlobal>) =>
+    save(writeSession(patchGuided(doc, p), { copy_touched: true }));
 
   const win = (arr: string[], off: number) =>
     [0, 1, 2].map((i) => arr[(((off + i) % arr.length) + arr.length) % arr.length]!);
 
-  // ── section bodies ─────────────────────────────────────────────────────────
+  // ── step 1 — what it says ────────────────────────────────────────────────
+  const suggestionRow = (arr: string[], key: "h" | "w", apply: (t: string) => void, short?: boolean) => (
+    <div className="qz-rg-sugg">
+      <div className="qz-rg-sl">Suggestions</div>
+      <div className="qz-rg-srow">
+        <button type="button" className="qz-rg-arw" aria-label="Previous suggestions" onClick={() => setRot((r) => ({ ...r, [key]: r[key] - 1 }))}>
+          ‹
+        </button>
+        <div className="qz-rg-swin">
+          {win(arr, rot[key]).map((t) => (
+            <button key={t} type="button" className="qz-rg-pchip" title={t} onClick={() => apply(t)}>
+              {short && t.length > 26 ? `${t.slice(0, 24)}…` : t}
+            </button>
+          ))}
+        </div>
+        <button type="button" className="qz-rg-arw" aria-label="Next suggestions" onClick={() => setRot((r) => ({ ...r, [key]: r[key] + 1 }))}>
+          ›
+        </button>
+      </div>
+    </div>
+  );
   const saysBody = (
     <>
       <div className="qz-rg-fld" onFocusCapture={() => focusOn("hl")}>
@@ -376,57 +431,45 @@ export function ResultsGuided({
           aria-label="Results headline"
           onChange={(e) => patch({ headline: e.target.value })}
         />
-        <div className="qz-rg-sugg">
-          <div className="qz-rg-sl">Try</div>
-          <div className="qz-rg-srow">
-            <button type="button" className="qz-rg-arw" aria-label="Previous suggestions" onClick={() => setRot((r) => ({ ...r, h: r.h - 1 }))}>
-              ‹
-            </button>
-            <div className="qz-rg-swin">
-              {win(HS, rot.h).map((t) => (
-                <button key={t} type="button" className="qz-rg-pchip" title={t} onClick={() => patch({ headline: t })}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="qz-rg-arw" aria-label="Next suggestions" onClick={() => setRot((r) => ({ ...r, h: r.h + 1 }))}>
-              ›
-            </button>
-          </div>
-        </div>
+        {suggestionRow(HS, "h", (t) => {
+          patch({ headline: t });
+          focusOn("hl");
+        })}
       </div>
       <div className="qz-rg-fld" onFocusCapture={() => focusOn("why")}>
-        <div className="qz-rg-fl">Intro line</div>
+        <div className="qz-rg-fl">Why we recommend</div>
         <textarea
           className="qz-input"
           rows={2}
           value={cfg.whyCopy}
-          aria-label="Results intro line"
+          aria-label="Why we recommend"
           onChange={(e) => patch({ whyCopy: e.target.value })}
         />
-        <div className="qz-rg-sugg">
-          <div className="qz-rg-sl">Try</div>
-          <div className="qz-rg-srow">
-            <button type="button" className="qz-rg-arw" aria-label="Previous suggestions" onClick={() => setRot((r) => ({ ...r, w: r.w - 1 }))}>
-              ‹
-            </button>
-            <div className="qz-rg-swin">
-              {win(WS, rot.w).map((t) => (
-                <button key={t} type="button" className="qz-rg-pchip" title={t} onClick={() => patch({ whyCopy: t })}>
-                  {t.length > 26 ? `${t.slice(0, 24)}…` : t}
-                </button>
-              ))}
-            </div>
-            <button type="button" className="qz-rg-arw" aria-label="Next suggestions" onClick={() => setRot((r) => ({ ...r, w: r.w + 1 }))}>
-              ›
-            </button>
-          </div>
-        </div>
+        {suggestionRow(WS, "w", (t) => {
+          patch({ whyCopy: t });
+          focusOn("why");
+        }, true)}
       </div>
     </>
   );
 
+  // ── step 2 — the matches ────────────────────────────────────────────────
   const layout = cfg.layout ?? "hero_grid";
+  const cardToggle = (part: string, label: string, on: boolean, flip: () => void, extra?: ReactNode) => (
+    <div key={part} className={`qz-rg-tog${on ? " is-on" : ""}`}>
+      <span className="qz-rg-t">{label}</span>
+      {extra}
+      <Toggle
+        on={on}
+        label={label}
+        onClick={() => {
+          flip();
+          // Turning something OFF rings nothing: its element is gone.
+          if (!on) focusOn(part);
+        }}
+      />
+    </div>
+  );
   const showsBody = (
     <>
       <div className="qz-rg-fl">How the matches are arranged</div>
@@ -451,132 +494,164 @@ export function ResultsGuided({
           </button>
         ))}
       </div>
-      {layout === "hero_grid" || layout === "grid" ? (
-        <div className="qz-rg-inline">
-          <span className="qz-rg-t">
-            Products per row <Unwired k="perRow" />
-            <em>Phone &amp; desktop fine-tuned later in Design</em>
-          </span>
-          <Stepper value={cfg.perRow} min={1} max={4} label="products per row" onChange={(v) => patch({ perRow: v })} />
-        </div>
-      ) : null}
-      <div className="qz-rg-inline" onClickCapture={() => focusOn("grid")}>
-        <span className="qz-rg-t">How many to show</span>
-        <Stepper
-          value={layout === "single_hero" ? 1 : (cfg.gridMax || 3)}
-          min={1}
-          max={5}
-          label="how many to show"
-          onChange={(v) => patch({ gridMax: v })}
-        />
-      </div>
       <div className="qz-rg-fl" style={{ marginTop: 14 }}>
         On each card
       </div>
       <div className="qz-rg-togs">
-        {(
-          [
-            ["stars", "Review stars", cfg.showStars, () => patch({ showStars: !cfg.showStars })],
-            [
-              "verified",
-              "Verified-buyer badge",
-              cfg.showVerified,
-              () => patch({ showVerified: !cfg.showVerified }),
-            ],
-            ["cart", "One-click add to cart", cfg.showAtc, () => patch({ showAtc: !cfg.showAtc })],
-          ] as Array<[string, string, boolean, () => void]>
-        ).map(([part, label, on, flip]) => (
-          <div key={part} className={`qz-rg-tog${on ? " is-on" : ""}`} onClickCapture={() => focusOn(part)}>
-            <span className="qz-rg-t">
-              {label}
-              {part === "verified" ? <Unwired k="showVerified" /> : null}
-            </span>
-            <Toggle on={on} onClick={flip} label={label} />
-          </div>
-        ))}
-        <div className={`qz-rg-tog${cfg.showDesc ? " is-on" : ""}`} onClickCapture={() => focusOn("desc")}>
-          <span className="qz-rg-t">
-            Product description <Unwired k="descOverrides" />
-          </span>
-          {cfg.showDesc ? (
+        {cardToggle("cart", "One-click add to cart", cfg.showAtc, () => patch({ showAtc: !cfg.showAtc }))}
+        {cardToggle(
+          "desc",
+          "Product description",
+          !!cfg.showDesc,
+          () => patch({ showDesc: !cfg.showDesc }),
+          cfg.showDesc ? (
             <button type="button" className="qz-rg-gear" title="Edit the descriptions" onClick={() => setModal("descs")}>
               ✎
             </button>
-          ) : null}
-          <Toggle on={!!cfg.showDesc} onClick={() => patch({ showDesc: !cfg.showDesc })} label="Product description" />
-        </div>
-        <div className={`qz-rg-tog${cfg.showAddAll ? " is-on" : ""}`} onClickCapture={() => focusOn("addall")}>
-          <span className="qz-rg-t">“Add all to cart” button</span>
-          <Toggle on={!!cfg.showAddAll} onClick={() => patch({ showAddAll: !cfg.showAddAll })} label="Add all to cart" />
-        </div>
+          ) : null,
+        )}
+        {cardToggle("addall", "“Add all to cart” button", !!cfg.showAddAll, () => patch({ showAddAll: !cfg.showAddAll }))}
       </div>
-      {/* Owner 2026-08-18 — the no-match FallbackSection left this step (it
-          is configured elsewhere); the matches step is layout + card
-          content only. FallbackSection.tsx stays on disk. */}
     </>
   );
 
-  const presetOn = (kind: string, value?: number) =>
-    offerOn && disc.kind === kind && (value === undefined || disc.value === value) && !customOn;
-  const customOn = offerOn && !(disc.kind === "percentage" && disc.value === 10 && !doc.discount_config?.code) && !(disc.kind === "free_shipping" && !doc.discount_config?.code);
-  const applyPreset = (patchD: Partial<Quiz["discount_config"]>, on: boolean) => {
-    commit(writeDiscount(doc, { enabled: on, ...(on ? patchD : {}) } as Partial<Quiz["discount_config"]>));
-    setOpenSec("offer");
-    focusOn("offer");
-  };
-  const discBody = (
-    <>
-      <div className="qz-rg-couponlist">
-        <div className={`qz-rg-coupon${presetOn("percentage", 10) ? " is-on" : ""}`}>
+  // ── step 3 · Email — placement, the discount, the unlock, Page Copy ──────
+  const codeSource =
+    disc.code_mode === "static" ? "one shared code" : disc.code_mode === "existing" ? "an existing discount" : "a new code per shopper";
+  const needsDiscount = cfg.where !== "none" && cfg.unlock && !activeDiscount;
+  const discountBlock = (
+    <div className="qz-rg-offerblk" data-part="offer">
+      <div className="qz-rg-fl">
+        Discount <Unwired k="discount" />
+      </div>
+      {hasDiscount ? (
+        <div className={`qz-rg-coupon${discountOn ? " is-on" : ""}${needsDiscount && !discountOn ? " is-need" : ""}`}>
           <span className="qz-rg-ct">
-            <b>10% off your match</b>
-            <span>The most-used quiz offer. A gentle nudge.</span>
-          </span>
-          <Toggle
-            on={presetOn("percentage", 10)}
-            onClick={() => applyPreset({ kind: "percentage", value: 10 }, !presetOn("percentage", 10))}
-            label="10% off your match"
-          />
-        </div>
-        <div className={`qz-rg-coupon${presetOn("free_shipping") ? " is-on" : ""}`}>
-          <span className="qz-rg-ct">
-            <b>Free shipping on your match</b>
-            <span>Good for heavier or bundled products.</span>
-          </span>
-          <Toggle
-            on={presetOn("free_shipping")}
-            onClick={() => applyPreset({ kind: "free_shipping" }, !presetOn("free_shipping"))}
-            label="Free shipping on your match"
-          />
-        </div>
-        {customOn ? (
-          <div className="qz-rg-coupon is-on">
-            <span className="qz-rg-ct">
-              <b>Your discount</b>
-              <span>
-                {offerCode(disc)} · {offerLabel(disc)} <Unwired k="discount_advanced" />
-              </span>
+            <b>{offerName(disc)}</b>
+            <span>
+              <code>{offerCodeDisplay(disc)}</code> · {codeSource}
             </span>
-            <button type="button" className="qz-rg-cedit" onClick={() => setModal("discount")}>
-              Edit
-            </button>
-            <Toggle on onClick={() => commit(writeDiscount(doc, { enabled: false }))} label="Your discount" />
+          </span>
+          <button type="button" className="qz-rg-cedit" onClick={() => setModal("discount")}>
+            Edit
+          </button>
+          <Toggle
+            on={discountOn}
+            label="Discount on"
+            onClick={() => {
+              save(writeDiscount(doc, { enabled: !discountOn }));
+              if (!discountOn) focusOn("offer");
+            }}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          className={`qz-rg-addbtn${needsDiscount ? " is-need" : ""}`}
+          onClick={() => setModal("discount")}
+        >
+          ＋ Create a discount
+        </button>
+      )}
+      {cfg.where !== "none" ? (
+        <>
+          <div className="qz-rg-inline">
+            <span className="qz-rg-t">
+              Require the email to unlock it <Unwired k="unlock" />
+            </span>
+            <Toggle on={cfg.unlock} label="Require the email to unlock it" onClick={() => setUnlock(!cfg.unlock)} />
           </div>
-        ) : null}
-      </div>
-      <button type="button" className="qz-rg-addbtn" onClick={() => setModal("discount")}>
-        ＋ Create a discount
-      </button>
-    </>
+          {needsDiscount ? (
+            session.unlock_deferred ? (
+              <div className="qz-rg-dnote">
+                {hasDiscount
+                  ? "Your discount is off. The unlock card won’t show until you turn it on."
+                  : "No discount yet. The unlock card won’t show until you create one."}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="qz-rg-later"
+                onClick={() => save(writeSession(doc, { unlock_deferred: true }))}
+              >
+                Set up later
+              </button>
+            )
+          ) : null}
+        </>
+      ) : null}
+    </div>
   );
-
-  const placementLabel: Record<string, string> = {
-    discount: "On the results page. Email unlocks a discount.",
-    inline: "On the results page. No discount or un-gated discount.",
-    before: "Before the results.",
-    none: "No email capture.",
-  };
-  const best = offerOn ? "discount" : "before";
+  const pageCopy = (
+    <div className={`qz-rg-disc${copyOpen ? " is-open" : ""}`} data-part="gcopy">
+      <button
+        type="button"
+        className="qz-rg-dischead"
+        aria-expanded={copyOpen}
+        onClick={() => {
+          const opening = !copyOpen;
+          setCopyOpen(opening);
+          // Opening pulls the whole section to the top of the card, so all
+          // four fields are on screen at once.
+          if (opening) {
+            window.requestAnimationFrame(() => {
+              const card = cardRef.current;
+              const head = card?.querySelector<HTMLElement>(".qz-rg-disc");
+              if (card && head) card.scrollTo({ top: head.offsetTop - 12, behavior: "smooth" });
+            });
+          }
+        }}
+      >
+        <span className="qz-rg-dt">
+          <b>Page Copy</b>
+        </span>
+        <span aria-hidden>▾</span>
+      </button>
+      {copyOpen ? (
+        <div className="qz-rg-discbody" onFocusCapture={() => focusOn("gcopy")}>
+          <div className="qz-rg-fld">
+            <div className="qz-rg-fl">Headline</div>
+            <input
+              className="qz-input"
+              value={cfg.captureHeadline || ""}
+              aria-label="Capture headline"
+              onChange={(e) => touchCopy({ captureHeadline: e.target.value })}
+            />
+          </div>
+          <div className="qz-rg-fld">
+            <div className="qz-rg-fl">Supporting line</div>
+            <textarea
+              className="qz-input"
+              rows={2}
+              value={cfg.captureSubtext || ""}
+              aria-label="Capture supporting line"
+              onChange={(e) => touchCopy({ captureSubtext: e.target.value })}
+            />
+          </div>
+          <div className="qz-rg-fld">
+            <div className="qz-rg-fl">Button</div>
+            <input
+              className="qz-input"
+              value={cfg.captureCta}
+              aria-label="Capture button label"
+              onChange={(e) => touchCopy({ captureCta: e.target.value })}
+            />
+          </div>
+          {cfg.where === "before" && !cfg.captureRequired ? (
+            <div className="qz-rg-fld" onFocusCapture={() => focusOn("gskip")}>
+              <div className="qz-rg-fl">Skip link</div>
+              <input
+                className="qz-input"
+                value={cfg.captureSkipLabel}
+                aria-label="Skip link label"
+                onChange={(e) => patch({ captureSkipLabel: e.target.value })}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
   const gateBody = (
     <>
       <div className={`qz-rg-dd${ddOpen ? " is-open" : ""}`}>
@@ -587,181 +662,80 @@ export function ResultsGuided({
           aria-expanded={ddOpen}
           onClick={() => setDdOpen((v) => !v)}
         >
-          <span>{placementLabel[cfg.capturePlacement]}</span>
+          <span>{PLACEMENTS.find(([w]) => w === cfg.where)?.[1]}</span>
           <span aria-hidden>▾</span>
         </button>
         {ddOpen ? (
           <div className="qz-rg-ddmenu" role="listbox">
-            {(["discount", "inline", "before", "none"] as const).map((w) => (
+            {PLACEMENTS.map(([w, label]) => (
               <button
                 key={w}
                 type="button"
                 role="option"
-                aria-selected={cfg.capturePlacement === w}
-                className={`qz-rg-ddopt${cfg.capturePlacement === w ? " is-on" : ""}`}
+                aria-selected={cfg.where === w}
+                className={`qz-rg-ddopt${cfg.where === w ? " is-on" : ""}`}
                 onClick={() => setPlacement(w)}
               >
-                {placementLabel[w]}
-                {w === best ? <em className="qz-rg-besttag">Best</em> : null}
-                {w === "inline" || w === "discount" ? <Unwired k={w === "inline" ? "placement_inline" : "placement_discount"} /> : null}
+                {label}
+                {w === "before" ? <em className="qz-rg-besttag">Best</em> : null}
               </button>
             ))}
           </div>
         ) : null}
       </div>
-      {cfg.capturePlacement === "discount" && !offerOn ? (
-        <div className="qz-rg-setrow">
-          {deferredUnlock ? (
-            <div className="qz-rg-notewarn" style={{ margin: 0 }}>
-              ⚠ No discount yet. The card won’t show until there is one.{" "}
-              <button
-                type="button"
-                className="qz-rg-bt"
-                onClick={() => {
-                  setReturnToAsk(true);
-                  setModal("discount");
-                }}
-              >
-                Set up discount
-              </button>
-            </div>
-          ) : (
-            <>
-              <span>This placement needs a discount to unlock.</span>
-              <span className="qz-rg-btns">
-                <button
-                  type="button"
-                  className="qz-rg-bt is-pri"
-                  onClick={() => {
-                    setReturnToAsk(true);
-                    setModal("discount");
-                  }}
-                >
-                  Set up discount
-                </button>
-                <button type="button" className="qz-rg-bt" onClick={() => setDeferredUnlock(true)}>
-                  Set up later
-                </button>
-              </span>
-            </>
-          )}
-        </div>
-      ) : null}
-      {cfg.capturePlacement !== "none" ? (
+      {discountBlock}
+      {cfg.where !== "none" ? (
         <div className="qz-rg-nested">
-          {cfg.capturePlacement === "before" ? (
-            <div className="qz-rg-inline" onClickCapture={() => focusOn("gform")}>
-              <span className="qz-rg-t">
-                Required to see results <span className="qz-rg-tiptest">Test</span>
-                <Unwired k="captureRequired" />
-              </span>
+          {cfg.where === "before" ? (
+            <div className="qz-rg-inline">
+              <span className="qz-rg-t">Required to see results</span>
               <Toggle
                 on={!!cfg.captureRequired}
-                onClick={() => patch({ captureRequired: !cfg.captureRequired })}
                 label="Required to see results"
+                onClick={() => {
+                  patch({ captureRequired: !cfg.captureRequired });
+                  focusOn(cfg.captureRequired ? "gskip" : "gform");
+                }}
               />
             </div>
           ) : null}
-          <div className={`qz-rg-disc${wordOpen ? " is-open" : ""}`}>
-            <button type="button" className="qz-rg-dischead" onClick={() => setWordOpen((v) => !v)}>
-              <span className="qz-rg-dt">
-                <b>Wording</b>
-                <span>“{cfg.captureHeadline || "Your matches are ready"}”</span>
-              </span>
-              <span aria-hidden>▾</span>
-            </button>
-            {wordOpen ? (
-              <div className="qz-rg-discbody" onFocusCapture={() => focusOn("gcopy")}>
-                <div className="qz-rg-fld">
-                  <div className="qz-rg-fl">Headline</div>
-                  <input
-                    className="qz-input"
-                    value={cfg.captureHeadline || ""}
-                    aria-label="Capture headline"
-                    onChange={(e) => {
-                      copyTouched.current = true;
-                      patch({ captureHeadline: e.target.value });
-                    }}
-                  />
-                </div>
-                <div className="qz-rg-fld">
-                  <div className="qz-rg-fl">Supporting line</div>
-                  <textarea
-                    className="qz-input"
-                    rows={2}
-                    value={cfg.captureSubtext || ""}
-                    aria-label="Capture supporting line"
-                    onChange={(e) => {
-                      copyTouched.current = true;
-                      patch({ captureSubtext: e.target.value });
-                    }}
-                  />
-                  <div className="qz-rg-cap">
-                    Name the exchange: what they get for the address. “Join our newsletter” is the
-                    weakest version of this line.
-                  </div>
-                </div>
-                <div className="qz-rg-fld">
-                  <div className="qz-rg-fl">
-                    Button <Unwired k="captureCtaSkip" />
-                  </div>
-                  <input
-                    className="qz-input"
-                    value={cfg.captureCta}
-                    aria-label="Capture button label"
-                    onChange={(e) => {
-                      copyTouched.current = true;
-                      patch({ captureCta: e.target.value });
-                    }}
-                  />
-                </div>
-                {cfg.capturePlacement === "before" && !cfg.captureRequired ? (
-                  <div className="qz-rg-fld" onFocusCapture={() => focusOn("gskip")}>
-                    <div className="qz-rg-fl">
-                      Skip link <Unwired k="captureCtaSkip" />
-                    </div>
-                    <input
-                      className="qz-input"
-                      value={cfg.captureSkipLabel}
-                      aria-label="Skip link label"
-                      onChange={(e) => patch({ captureSkipLabel: e.target.value })}
-                    />
-                    <div className="qz-rg-cap">
-                      The visible way past the form. Removing it is what makes the gate “hard”.
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
+          {pageCopy}
         </div>
       ) : null}
     </>
   );
 
-  const loadingBody = (
+  // ── step 3 · Loading ──────────────────────────────────────────────────────
+  const stepsListRef = useRef<HTMLDivElement>(null);
+  const focusNewStep = useRef(false);
+  useEffect(() => {
+    if (!focusNewStep.current) return;
+    focusNewStep.current = false;
+    const inputs = stepsListRef.current?.querySelectorAll("input");
+    inputs?.[inputs.length - 1]?.focus();
+  });
+  const loadingMs = cfg.loadingMs ?? 2000;
+  const loadingBody = !cfg.loadingOn ? (
+    <div className="qz-rg-dnote">The loading screen is off. Turn it on in the Questions step.</div>
+  ) : (
     <>
-      <div className="qz-rg-inline">
-        <span className="qz-rg-t">
-          Show a loading screen <Unwired k="loading" />
-        </span>
-        <Toggle on={!!cfg.loadingOn} onClick={() => patch({ loadingOn: !cfg.loadingOn })} label="Show a loading screen" />
-      </div>
       <div className="qz-rg-note">
         <b>Best practice:</b> a short 2–3 second “working on it” screen.
       </div>
       <div className="qz-rg-inline">
         <span className="qz-rg-t">Duration</span>
         <Stepper
-          value={(cfg.loadingMs ?? 2000) / 500}
-          min={2}
-          max={10}
+          value={loadingMs}
+          min={LOADING_MIN_MS}
+          max={LOADING_MAX_MS}
+          step={LOADING_STEP_MS}
           label="loading duration"
-          fmt={(v) => `${(v / 2).toFixed(1)}s`}
-          onChange={(v) => patch({ loadingMs: v * 500 })}
+          fmt={(v) => `${(v / 1000).toFixed(1)}s`}
+          // An absent value reads 1.6 s; the first change snaps onto the grid.
+          onChange={(v) => patch({ loadingMs: snapLoadingMs(v) })}
         />
       </div>
-      {(cfg.loadingMs ?? 2000) > REVEAL_MAX_MS ? (
+      {loadingMs > REVEAL_MAX_MS ? (
         <div className="qz-rg-notewarn">
           ⚠ Past 3 seconds the wait stops reading as effort and starts reading as a broken page.
         </div>
@@ -773,7 +747,7 @@ export function ResultsGuided({
         <Toggle on={!!cfg.loadingNamed} onClick={() => patch({ loadingNamed: !cfg.loadingNamed })} label="Name the steps" />
       </div>
       {cfg.loadingNamed ? (
-        <div className="qz-rg-fld">
+        <div className="qz-rg-fld" ref={stepsListRef}>
           {cfg.loadingSteps.map((s, i) => (
             <div key={i} className="qz-rg-steprow">
               <input
@@ -803,215 +777,227 @@ export function ResultsGuided({
             type="button"
             className="qz-rg-addstep"
             disabled={cfg.loadingSteps.length >= 5}
-            onClick={() => patch({ loadingSteps: [...cfg.loadingSteps, ""] })}
+            onClick={() => {
+              focusNewStep.current = true;
+              patch({ loadingSteps: [...cfg.loadingSteps, ""] });
+            }}
           >
             ＋ Add a step
           </button>
-          <div className="qz-rg-cap">
-            Keep them true. A step claiming work you don’t do is the one thing here that can cost
-            you trust.
-          </div>
         </div>
       ) : null}
     </>
   );
 
-  const consentBody = (
-    <>
-      <div className="qz-rg-inline" onClickCapture={() => focusOn("consent")}>
-        <span className="qz-rg-t">
-          Marketing consent <Unwired k="consent" />
-        </span>
-        <Toggle on={!!cfg.consentOn} onClick={() => patch({ consentOn: !cfg.consentOn })} label="Marketing consent" />
-      </div>
-      {cfg.consentOn ? (
-        <div className="qz-rg-fld" onFocusCapture={() => focusOn("consent")}>
-          <div className="qz-rg-fl">Consent wording</div>
-          <input
-            className="qz-input"
-            value={cfg.consentCopy}
-            aria-label="Consent wording"
-            onChange={(e) => patch({ consentCopy: e.target.value })}
+  // ── step 3 · Consent — four rows, fixed wording (handoff §9) ─────────────
+  const termsIsBox = cfg.captureTermsMode === "checkbox";
+  const consentBody =
+    cfg.where === "none" ? (
+      <div className="qz-rg-dnote">No email is collected, so there’s no form to add these to.</div>
+    ) : (
+      <>
+        <div className="qz-rg-inline qz-rg-ringrow" data-part="mkt">
+          <span className="qz-rg-t">Email marketing consent</span>
+          <Toggle
+            on={!!cfg.consentOn}
+            label="Email marketing consent"
+            onClick={() => {
+              patch({ consentOn: !cfg.consentOn });
+              if (!cfg.consentOn) focusOn("mkt");
+            }}
           />
         </div>
-      ) : null}
-      <div className="qz-rg-inline" onClickCapture={() => focusOn("terms")}>
-        <span className="qz-rg-t">Terms &amp; conditions</span>
-        {cfg.captureTermsOn ? (
-          <button type="button" className="qz-rg-gear" title="Edit the wording and links" onClick={() => setModal("terms")}>
-            ✎
-          </button>
+        {cfg.consentOn ? (
+          <div className="qz-rg-fld qz-rg-mktedit" onFocusCapture={() => focusOn("mkt")}>
+            <input
+              className="qz-input"
+              value={cfg.consentCopy}
+              maxLength={120}
+              placeholder="Email me news and offers."
+              aria-label="Marketing checkbox text"
+              onChange={(e) => patch({ consentCopy: e.target.value })}
+            />
+            {!cfg.consentCopy.trim() ? (
+              <div className="qz-rg-cap">Write the checkbox text — until then shoppers see the default.</div>
+            ) : null}
+          </div>
         ) : null}
-        <Toggle
-          on={!!cfg.captureTermsOn}
-          onClick={() => patch({ captureTermsOn: !cfg.captureTermsOn })}
-          label="Terms and conditions"
-        />
-      </div>
-      <div className="qz-rg-inline" onClickCapture={() => focusOn("consent")}>
-        <span className="qz-rg-t">SMS opt-in</span>
-        <Toggle on={!!cfg.capturePhone} onClick={() => patch({ capturePhone: !cfg.capturePhone })} label="SMS opt-in" />
-      </div>
-      {cfg.capturePhone ? (
-        <div className="qz-rg-notewarn">
-          ⚠ A phone field on top of the email typically raises drop-off. And SMS needs its <b>own</b>{" "}
-          tick, plus rate and opt-out wording.
+        <div className="qz-rg-inline qz-rg-ringrow">
+          <span className="qz-rg-t">Terms and conditions checkbox</span>
+          <Toggle
+            on={termsIsBox}
+            label="Terms and conditions checkbox"
+            onClick={() => {
+              patch({ captureTermsMode: termsIsBox ? "notice" : "checkbox" });
+              focusOn("terms");
+            }}
+          />
         </div>
-      ) : null}
-    </>
-  );
+        <div className="qz-rg-inline qz-rg-ringrow">
+          <span className="qz-rg-t">Email terms of service</span>
+          <button
+            type="button"
+            className="qz-rg-bt"
+            onClick={() => {
+              focusOn("terms");
+              setModal("terms");
+            }}
+          >
+            Edit →
+          </button>
+        </div>
+        <div className="qz-rg-inline qz-rg-ringrow">
+          <span className="qz-rg-t">SMS collection</span>
+          <Toggle
+            on={!!cfg.capturePhone}
+            label="SMS collection"
+            onClick={() => {
+              patch({ capturePhone: cfg.capturePhone ? undefined : true });
+              if (!cfg.capturePhone) focusOn("sms");
+            }}
+          />
+        </div>
+        {cfg.capturePhone ? (
+          <div className="qz-rg-dnote">
+            Integrations are set up later. Until one is connected, the phone field stays off your live quiz.
+          </div>
+        ) : null}
+      </>
+    );
 
+  // ── step 4 — extra picks ──────────────────────────────────────────────────
+  const picks = cfg.extrasOn ? cfg.extrasProductIds.length : 0;
   const edgeBody = (
     <>
       <div className="qz-rg-inline">
-        <span className="qz-rg-t">
-          Show extra picks <Unwired k="extras" />
-          <em>A “you might also like” shelf under the matches</em>
-        </span>
-        <Toggle on={!!cfg.extrasOn} onClick={() => patch({ extrasOn: !cfg.extrasOn })} label="Show extra picks" />
+        <span className="qz-rg-t">Show these products if no results</span>
+        <Toggle
+          on={cfg.fallbackOn !== false}
+          label="Show these products if no results"
+          // The live quiz reads `fallbackOn !== false`: store false, clear true.
+          onClick={() => patch({ fallbackOn: cfg.fallbackOn !== false ? false : undefined })}
+        />
       </div>
-      {cfg.extrasOn ? (
-        <>
-          <div className="qz-rg-inline" onClickCapture={() => focusOn("xprods")}>
-            <span className="qz-rg-t">
-              Products
-              <em>
-                {cfg.extrasProductIds.length
-                  ? `${cfg.extrasProductIds.length} product${cfg.extrasProductIds.length === 1 ? "" : "s"} picked`
-                  : "Nothing picked"}
-              </em>
-            </span>
-            <button type="button" className="qz-rg-bt" onClick={() => setModal("extras")}>
-              Choose →
-            </button>
-          </div>
-          <div className="qz-rg-fld" onFocusCapture={() => focusOn("xhead")}>
-            <div className="qz-rg-fl">Heading</div>
-            <input
-              className="qz-input"
-              value={cfg.extrasHeading}
-              aria-label="Extra picks heading"
-              onChange={(e) => patch({ extrasHeading: e.target.value })}
-            />
-          </div>
-          <div className={`qz-rg-disc${xMoreOpen ? " is-open" : ""}`}>
-            <button type="button" className="qz-rg-dischead" onClick={() => setXMoreOpen((v) => !v)}>
-              <span className="qz-rg-dt">
-                <b>Copy and count</b>
-                <span>
-                  {cfg.extrasCount} shown · “{cfg.extrasCopy}”
-                </span>
-              </span>
-              <span aria-hidden>▾</span>
-            </button>
-            {xMoreOpen ? (
-              <div className="qz-rg-discbody" onFocusCapture={() => focusOn("xhead")}>
-                <div className="qz-rg-fld">
-                  <div className="qz-rg-fl">Copy</div>
-                  <input
-                    className="qz-input"
-                    value={cfg.extrasCopy}
-                    aria-label="Extra picks copy"
-                    onChange={(e) => patch({ extrasCopy: e.target.value })}
-                  />
-                </div>
-                <div className="qz-rg-inline">
-                  <span className="qz-rg-t">How many to show</span>
-                  <Stepper value={cfg.extrasCount} min={1} max={6} label="extra picks count" onChange={(v) => patch({ extrasCount: v })} />
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </>
-      ) : null}
+      <button type="button" className="qz-rg-inline qz-rg-rowbtn" onClick={() => setModal("extras")}>
+        <span className="qz-rg-t">Show these products after all results</span>
+        <span className="qz-rg-rowval">
+          {picks ? `${picks} product${picks === 1 ? "" : "s"}` : "Choose"} ›
+        </span>
+      </button>
+      <div className="qz-rg-fld" onFocusCapture={() => focusOn("xhead", "bottom")}>
+        <div className="qz-rg-fl">Heading</div>
+        <input
+          className="qz-input"
+          value={cfg.extrasHeading}
+          aria-label="Extra picks heading"
+          onChange={(e) => patch({ extrasHeading: e.target.value })}
+        />
+      </div>
+      <div className="qz-rg-fld" onFocusCapture={() => focusOn("xhead", "bottom")}>
+        <div className="qz-rg-fl">Copy</div>
+        <input
+          className="qz-input"
+          value={cfg.extrasCopy}
+          aria-label="Extra picks copy"
+          onChange={(e) => patch({ extrasCopy: e.target.value })}
+        />
+      </div>
+      <div className="qz-rg-inline">
+        <span className="qz-rg-t">How many to show</span>
+        <Stepper
+          value={cfg.extrasCount}
+          min={1}
+          max={6}
+          label="extra picks count"
+          onChange={(v) => {
+            patch({ extrasCount: v });
+            focusOn("xprods", "bottom");
+          }}
+        />
+      </div>
     </>
   );
 
-  // §5 Overview — the read-back rows, banded by moment
-  const summary: Record<string, () => string> = {
+  // ── Overview — the read-back rows ─────────────────────────────────────────
+  const loadingSecs = `${(loadingMs / 1000).toFixed(1)}s`;
+  const summary: Record<StepId, () => string> = {
     says: () => `“${cfg.headline}”`,
     shows: () => {
-      const on = [cfg.showStars && "stars", cfg.showAtc && "cart", cfg.showDesc && "description"]
-        .filter(Boolean)
-        .join(", ");
-      return `${LAY_NAME[layout]} · ${layout === "single_hero" ? 1 : cfg.gridMax || 3} shown${on ? ` · ${on}` : ""}`;
+      const on = [cfg.showAtc && "cart", cfg.showDesc && "description"].filter(Boolean).join(", ");
+      return `${LAY_NAME[layout]}${on ? ` · ${on}` : ""}`;
     },
     keep: () => {
-      if (cfg.capturePlacement === "none") return "No email asked";
-      const w = { before: "Before results", inline: "On the page", discount: "Unlocks the offer" }[
-        cfg.capturePlacement
-      ];
-      return `${w} · ${cfg.capturePhone ? "Email + SMS" : "Email"}${cfg.loadingOn ? ` · ${((cfg.loadingMs ?? 2000) / 1000).toFixed(1)}s` : ""}`;
+      const load = cfg.loadingOn ? ` · ${loadingSecs}` : "";
+      if (cfg.where === "none") return `No email asked${load}`;
+      const w = cfg.where === "before" ? "Before results" : "On the page";
+      const offer = activeDiscount ? ` · ${offerValue(disc)}${cfg.unlock ? " (unlocks)" : ""}` : "";
+      return `${w} · ${cfg.capturePhone ? "Email + SMS" : "Email"}${load}${offer}`;
     },
-    disc: () => (offerOn ? `${offerLabel(disc)} · ${offerCode(disc)}` : "No offer"),
-    edge: () =>
-      cfg.extrasOn
-        ? `Extra picks · ${Math.min(cfg.extrasCount, cfg.extrasProductIds.length || cfg.extrasCount)} shown`
-        : "Off",
+    edge: () => {
+      const parts = [
+        picks ? `After all results · ${Math.min(cfg.extrasCount, picks)} shown` : null,
+        cfg.fallbackOn !== false ? "If no results" : null,
+      ].filter(Boolean);
+      return parts.length ? parts.join(" · ") : "Off";
+    },
+  };
+  const split = cfg.where === "before";
+  const overviewRow = (g: (typeof GROUPS)[number]) => {
+    const gs = blockers[g.id] ? "todo" : seen[g.id] ? "done" : "new";
+    return (
+      <button
+        key={g.id}
+        type="button"
+        className={`qz-rg-drow is-${gs}`}
+        onClick={() => gotoStep(FLOW.findIndex((f) => f.g === g.id))}
+      >
+        <span className="qz-rg-dic" aria-hidden>
+          {g.ic}
+          <i className="qz-rg-dbadge">{gs === "done" ? "✓" : gs === "todo" ? "!" : ""}</i>
+        </span>
+        <span className="qz-rg-dtx">
+          <b>{g.name}</b>
+          <span className="qz-rg-dsum">{gs === "todo" ? blockers[g.id] : summary[g.id]()}</span>
+        </span>
+        <span className="qz-rg-darr" aria-hidden>
+          ›
+        </span>
+      </button>
+    );
   };
   const overviewBody = (
     <div className="qz-rg-ovw">
-      {(["before", "page"] as const).map((band) => (
-        <div key={band}>
-          <div className="qz-rg-bandlbl">{BANDS[band]}</div>
-          {GROUPS.filter((g) => g.band === band).map((g) => {
-            const gs = groupState(g.id);
-            return (
-              <button
-                key={g.id}
-                type="button"
-                className={`qz-rg-drow is-${gs}`}
-                onClick={() => {
-                  setHoldSel(true);
-                  gotoStep(FLOW.findIndex((f) => f.g === g.id));
-                }}
-              >
-                <span className="qz-rg-dic" aria-hidden>
-                  {g.ic}
-                  <i className="qz-rg-dbadge">{gs === "done" ? "✓" : gs === "todo" ? "!" : ""}</i>
-                </span>
-                <span className="qz-rg-dtx">
-                  <b>{g.name}</b>
-                  <span className="qz-rg-dsum">
-                    {gs === "todo" ? blockers[g.id] : gs === "new" ? "Not set up yet" : summary[g.id]?.() ?? ""}
-                  </span>
-                </span>
-                <span className="qz-rg-darr" aria-hidden>
-                  ›
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ))}
+      {split ? (
+        <>
+          <div>
+            <div className="qz-rg-bandlbl">Before the results</div>
+            {overviewRow(GROUPS[0]!)}
+          </div>
+          <div>
+            <div className="qz-rg-bandlbl">The results page</div>
+            {GROUPS.slice(1).map(overviewRow)}
+          </div>
+        </>
+      ) : (
+        GROUPS.map(overviewRow)
+      )}
     </div>
   );
 
-  // keep — the three sub-tabs (mock stabs)
+  // step 3 — the sub-tabs, walked by the forward and back buttons
   const keepTabs = (
     <div className="qz-rg-stabs" role="tablist" aria-label="Email capture sections">
-      {/* Owner 2026-08-18 — tab order and naming: Loading > Email > Consent. */}
-      {(
-        [
-          ["reveal", "Loading"],
-          ["gate", "Email"],
-          ["consent", "Consent"],
-        ] as const
-      ).map(([id, label]) => (
+      {FLOW[2]!.secs.map((id) => (
         <button
           key={id}
           type="button"
           role="tab"
-          aria-selected={gateTab === id}
-          className={`qz-rg-stab${gateTab === id ? " is-on" : ""}`}
-          onClick={() => {
-            setGateTab(id);
-            setOpenSec(id);
-            setFocusPart(null);
-          }}
+          aria-selected={sec === id}
+          className={`qz-rg-stab${sec === id ? " is-on" : ""}${seen[`tab:${id}`] ? " is-done" : ""}`}
+          onClick={() => openTab(id)}
         >
           <i aria-hidden />
-          {label}
+          {TAB_LABEL[id]}
         </button>
       ))}
     </div>
@@ -1021,73 +1007,67 @@ export function ResultsGuided({
   if (isOverview) body = overviewBody;
   else if (step.g === "says") body = saysBody;
   else if (step.g === "shows") body = showsBody;
-  else if (step.g === "disc") body = discBody;
   else if (step.g === "keep")
     body = (
       <>
         {keepTabs}
-        {gateTab === "gate" ? gateBody : gateTab === "reveal" ? loadingBody : consentBody}
+        {sec === "gate" ? gateBody : sec === "reveal" ? loadingBody : consentBody}
       </>
     );
   else body = edgeBody;
+
+  // The phone: a region THIS step owns opens its tab; nothing changes the step.
+  const liveSecs: string[] = isOverview ? [] : step.secs;
 
   return (
     <div className="qz-rg">
       <div className="qz-rg-split">
         <div className="qz-rg-stepcol">
           <div className="qz-rg-stepwrap">
-            {/* §5 progress bar — colour says done, HEIGHT says here; no amber. */}
-            <div className="qz-rg-spine" ref={spineRef} aria-hidden>
+            {/* Height says here, colour says done; no amber. */}
+            <div className="qz-rg-spine" ref={spineRef}>
               {FLOW.map((f, i) => {
                 const done = f.g === null ? !!seen.__ovw : !!seen[f.g];
-                return <i key={i} className={`${done ? "is-done " : ""}${i === stepIx ? "is-now" : ""}`} />;
+                const here = i === stepIx;
+                return (
+                  <i
+                    key={i}
+                    title={here ? "You are here" : done ? "Done" : "Not reached yet"}
+                    style={{ animationDelay: `${i * 90}ms` }}
+                    className={`${done ? "is-done " : ""}${here ? "is-now" : ""}`}
+                  />
+                );
               })}
             </div>
             <div className="qz-rg-stepno">
-              {/* QRTZ-S6 (mock .eyebrow) — the section name rides the count. */}
-              Step {stepIx + 1} of {FLOW.length} · {step.name}
-              {allReviewed ? <span className="qz-rg-allrev">✓ All reviewed</span> : null}
+              Step {stepIx + 1} of {FLOW.length}
             </div>
             <h2 className="qz-rg-title">{step.title}</h2>
-            <p className="qz-rg-stepsub">{step.sub}</p>
           </div>
-          <div className="qz-rg-panel">{body}</div>
-          {/* QRTZ-G45 — the mock's .edit-foot: Back · primary · Saved chip
-              side by side, left-aligned (no spacer, no rule above). */}
-          <div className="qz-rg-stepfoot">
-            {/* §3 — no Back on step 1: absent, not disabled. Owner
-                2026-08-18: the back control is the bare ‹ chevron, matching
-                the top nav's back button. */}
-            {stepIx > 0 ? (
-              <button
-                type="button"
-                className="qz-rg-btn2 is-backico"
-                title="Back"
-                aria-label="Back"
-                onClick={() => gotoStep(stepIx - 1)}
-              >
-                ‹
+          <div
+            className="qz-rg-card"
+            ref={cardRef}
+            style={
+              cardRoom < CARD_FLOOR_PX
+                ? { minHeight: cardRoom, maxHeight: cardRoom, overflowY: "auto" }
+                : { minHeight: CARD_FLOOR_PX }
+            }
+          >
+            <div className="qz-rg-panel">{body}</div>
+            <div className="qz-rg-stepfoot">
+              {/* No Back on the very first stop: absent, not disabled. The back
+                  control is the bare ‹ chevron (owner 2026-08-18). */}
+              {stepIx > 0 || tabIx > 0 ? (
+                <button type="button" className="qz-rg-btn2 is-backico" title="Back" aria-label="Back" onClick={back}>
+                  ‹
+                </button>
+              ) : null}
+              <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={retrySave} />
+              <span className="qz-rg-fsp" />
+              <button type="button" className="qz-rg-btn2 is-pri" onClick={forward}>
+                {isOverview ? "Open the builder →" : "Continue"}
               </button>
-            ) : null}
-            <button
-              type="button"
-              className={`qz-rg-btn2 is-pri${gateClosed ? " is-disabled" : ""}`}
-              aria-disabled={gateClosed || undefined}
-              title={gateClosed ? "Finish the steps above first" : undefined}
-              onClick={next}
-            >
-              {/* Owner 2026-08-18 — the forward button reads "Continue"
-                  (destination naming retired); the last keeps the product's
-                  builder handoff, gated (QRTZ-G45) until every step has been
-                  run through. */}
-              {stepIx === FLOW.length - 1 ? "Open the builder →" : "Continue"}
-            </button>
-            <FunnelSaveChip
-              isSaving={isSaving}
-              savedAt={savedAt}
-              saveError={saveError}
-              onRetry={retrySave}
-            />
+            </div>
           </div>
         </div>
         <GuidedPreview
@@ -1095,35 +1075,52 @@ export function ResultsGuided({
           productIndex={productIndex}
           designTokens={designTokens ?? undefined}
           screen={screen}
-          openSec={isOverview ? null : openSec}
+          sec={isOverview ? null : sec}
           focusPart={focusPart}
-          holdSel={holdSel}
-          onJump={jumpFromPreview}
+          arrival={arrival}
+          touch={touch}
+          scroll={scroll}
+          liveSecs={liveSecs}
+          onOpenSec={(id) => {
+            if (liveSecs.includes(id)) openTab(id as SecId);
+          }}
+          shopDomain={shopDomain ?? undefined}
+          storeName={storeName ?? undefined}
         />
       </div>
 
       {modal === "discount" ? (
         <DiscountEditor
           doc={doc}
-          lockedToDynamic={cfg.capturePlacement === "discount"}
-          onCommit={commit}
-          onSaved={() => {
-            if (returnToAsk) {
-              setReturnToAsk(false);
-              gotoStep(3);
-              setOpenSec("gate");
-            }
+          lockedToDynamic={cfg.unlock && cfg.where !== "none"}
+          onCommit={(next) => save(writeSession(next, { unlock_deferred: undefined }))}
+          onClose={() => setModal(null)}
+        />
+      ) : null}
+      {modal === "terms" ? (
+        <TermsModal
+          doc={doc}
+          shopDomain={shopDomain ?? undefined}
+          storeName={storeName ?? undefined}
+          onCommit={save}
+          onClose={() => setModal(null)}
+        />
+      ) : null}
+      {modal === "descs" ? (
+        <DescriptionsModal doc={doc} productIndex={productIndex} onCommit={save} onClose={() => setModal(null)} />
+      ) : null}
+      {modal === "extras" ? (
+        <ExtrasPickerModal
+          doc={doc}
+          productIndex={productIndex}
+          onCommit={(next) => {
+            save(next);
+            focusOn("xprods", "bottom");
           }}
           onClose={() => setModal(null)}
         />
       ) : null}
-      {modal === "terms" ? <TermsModal doc={doc} onCommit={commit} onClose={() => setModal(null)} /> : null}
-      {modal === "descs" ? (
-        <DescriptionsModal doc={doc} productIndex={productIndex} onCommit={commit} onClose={() => setModal(null)} />
-      ) : null}
-      {modal === "extras" ? (
-        <ExtrasPickerModal doc={doc} productIndex={productIndex} onCommit={commit} onClose={() => setModal(null)} />
-      ) : null}
     </div>
   );
 }
+

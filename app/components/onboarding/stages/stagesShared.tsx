@@ -152,6 +152,8 @@ export interface FunnelData {
   // standalone workspace), for the Logic step's products popover.
   lastSyncAt?: string | null;
   shopifyAdminDomain?: string | null;
+  // Results handoff §9 — the store's display name for the consent preview.
+  storeName?: string | null;
 }
 
 export type ActionResult =

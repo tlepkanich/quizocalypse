@@ -810,10 +810,6 @@ body[data-qz] .qz-btn:focus-visible { outline: none; box-shadow: var(--qz-shadow
    chrome above stays full-bleed). Do NOT fold into .is-wide — the builder /
    workspace surfaces need full bleed. */
 .qz-page.is-funnel { max-width: 1000px; margin: 0 auto; padding: 28px 24px 72px; width: 100%; }
-/* QRTZ-G (combine): the Results step's desktop-preview flip wants the mock's
-   340/700 columns at max 1072 (base.mjs 789–792) — the 1000px funnel cap was
-   clamping the preview to 580. Scoped to that state only. */
-.qz-page.is-funnel:has(.qz-rg-pvwrap[data-device="desktop"]) { max-width: 1104px; }
 .qz-page-header { margin-bottom: 36px; }
 
 /* — Funnel two-panel editor split (config left · live preview right) with a
@@ -9664,22 +9660,17 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
    merchant's actual settings back. qz tokens throughout.
    ═══════════════════════════════════════════════════════════════════════════ */
 .qz-rg { min-width: 0; }
-/* QRTZ-G45 — the mock's .split (base.mjs 781–792): compact by design. The
-   editing column is capped and the pair sits CENTRED, not pinned left. */
+/* Results handoff §11 — phone only. The phone's column is exactly as wide as
+   the phone (390 × .86 + its 6px bezel each side); space-evenly gives the
+   same gap left of the card, between the two, and right of the phone. Top-
+   aligned with the settings card. */
+.qz-rg { --qz-rg-phone-w: 348px; }
 .qz-rg-split {
-  display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 420px);
-  gap: 44px; align-items: start; justify-content: center;
-  max-width: 960px; margin: 0 auto;
-}
-/* Switching to Desktop gives the preview the room instead of shrinking it
-   (the inline band is 960 wide). Capped by .qz-page.is-funnel at ~952. */
-.qz-rg-split:has(.qz-rg-pvwrap[data-device="desktop"]) {
-  grid-template-columns: minmax(0, 340px) minmax(0, 700px);
-  gap: 32px; max-width: 1072px;
+  display: grid; grid-template-columns: minmax(0, 460px) var(--qz-rg-phone-w);
+  column-gap: 24px; align-items: start; justify-content: space-evenly;
 }
 @media (max-width: 1024px) { /* --qz-bp-md */
-  .qz-rg-split,
-  .qz-rg-split:has(.qz-rg-pvwrap[data-device="desktop"]) { grid-template-columns: 1fr; max-width: none; }
+  .qz-rg-split { grid-template-columns: 1fr; justify-content: stretch; }
 }
 
 .qz-rg-stepcol { display: flex; flex-direction: column; min-width: 0; }
@@ -9687,11 +9678,14 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 /* QRTZ-G45 — the mock's 6-pip .progress row (base.mjs 794–796): 3px pips,
    2px radius, gap 4, capped at 260. Colour carries the states now — grey
    ahead, green done, accent HERE (accent wins on a revisited done step). */
-.qz-rg-spine { position: relative; display: flex; gap: 4px; margin-bottom: 14px; max-width: 260px; }
-.qz-rg-spine > i { flex: 1; height: 3px; border-radius: 2px; background: var(--qz-rule); }
+/* Results handoff §5 — 4px pips spanning the column (the card's right edge
+   lines up with the bar's); the current one is 9px. Height says here, colour
+   says done: the current pip stays green once its step is done. No amber. */
+.qz-rg-spine { position: relative; display: flex; align-items: center; gap: 4px; margin-bottom: 14px; min-height: 9px; }
+.qz-rg-spine > i { flex: 1; height: 4px; border-radius: 2px; background: var(--qz-rule); }
 .qz-rg-spine > i.is-done { background: var(--qz-ok); }
-.qz-rg-spine > i.is-now { background: var(--qz-accent); }
-.qz-rg-spine > i.is-done.is-now { background: var(--qz-accent); }
+.qz-rg-spine > i.is-now { height: 9px; background: var(--qz-accent); }
+.qz-rg-spine > i.is-done.is-now { background: var(--qz-ok); }
 .qz-rg-spine.is-party > i { animation: qz-rg-segfill .55s cubic-bezier(.34,1.56,.64,1); }
 @keyframes qz-rg-segfill { 0% { transform: scaleY(1); } 45% { transform: scaleY(2.6); } 100% { transform: scaleY(1); } }
 .qz-rg-confetti { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
@@ -9721,11 +9715,16 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 /* QRTZ-G45 — the mock draws NO card around the editing column (s15): the
    fields sit straight on the page. The card chrome is gone; the class stays
    as the step body's seam. */
-.qz-rg-panel { min-height: 0; }
+.qz-rg-panel { min-height: 0; flex: 1 0 auto; }
 /* QRTZ-G45 — the mock's .edit-foot (base.mjs 807): Back · primary · Saved
    side by side, left-aligned, gap 14, no rule above. The funnelChrome save
    chip sits snug (its top-bar min-width/right-alignment doesn't apply). */
-.qz-rg-stepfoot { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+/* Results handoff §5 — back left, forward right, a hairline rule above. */
+.qz-rg-stepfoot {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--qz-rule);
+}
+.qz-rg-fsp { flex: 1; }
 .qz-rg-stepfoot .qz-save-status { min-width: 0; justify-content: flex-start; }
 /* QRTZ-G45 — the mock's .btn (build.mjs tokens): 14px/600, 9×17, r-md;
    quiet = paper + control edge; primary hover = accent-ink. */
@@ -10065,9 +10064,15 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 .qz-rg-shead { display: flex; flex-direction: column; gap: 7px; }
 .qz-rg-h1 { font-family: var(--qz-font-heading, Georgia, serif); font-size: 27px; line-height: 1.15; font-weight: 600; margin: 0; }
 .qz-rg-why { font-size: 14px; opacity: .65; line-height: 1.55; margin: 0; max-width: 60ch; }
-.qz-rg-scr [data-jump] { cursor: pointer; border-radius: 10px; transition: box-shadow .45s var(--qz-ease); }
+/* Results handoff §11 — only a region the current step owns looks clickable;
+   rings hold one second, then fade over .45s. */
+.qz-rg-scr [data-jump], .qz-rg-scr [data-part] { border-radius: 10px; }
+.qz-rg-scr [data-jump][data-live] { cursor: pointer; }
+.qz-rg-scr [data-jump][data-live]:hover { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--qz-accent) 30%, transparent); }
+.qz-rg-screen.is-inert { pointer-events: none; }
 .qz-rg-zsel { box-shadow: 0 0 0 2px var(--qz-accent); border-radius: 10px; position: relative; z-index: 2; }
-.qz-rg-zsoft { box-shadow: 0 0 0 2px color-mix(in srgb, var(--qz-accent) 45%, transparent); border-radius: 12px; position: relative; }
+.qz-rg-zsoft { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--qz-accent) 30%, transparent); border-radius: 12px; position: relative; }
+.qz-rg-zfade { transition: box-shadow .45s ease; }
 .qz-rg-empty {
   margin: 0; padding: 11px 12px; border-radius: 11px; border: 1.5px dashed var(--qz-accent-wash);
   background: color-mix(in srgb, var(--qz-accent) 5%, var(--qz-color-background, #fff));
@@ -12512,3 +12517,57 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-walk .qz-s3-typetagbtn .qz-s3-tt-type { color:var(--qz-ink); }
 
 @media(max-width:640px) { .qz-walk-settings>.qz-segmented button { height:auto; min-height:40px; line-height:1.25; padding:6px 10px; } }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Results step — handoff 2026-09-17 (docs/design/results-guided/DEV-HANDOFF.md)
+   The settings card, the phone's bezel, and the rows the new steps add.
+   Quartz tokens only.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* §5 — a card around the settings column. Its min-height (set inline from the
+   tallest stop) keeps Back and Continue at one height; it grows only when
+   Page Copy opens, and scrolls inside itself on a short window. */
+.qz-rg-card {
+  display: flex; flex-direction: column;
+  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  padding: 16px 18px 12px; box-shadow: var(--qz-lift-1);
+}
+.qz-rg-stepno { margin-bottom: 6px; }
+/* §11 — a 6px light bezel OUTSIDE the viewport, a hairline outline, one
+   small tight shadow; no float, no gradient over the screen. */
+.qz-rg-pv { height: auto; min-height: 0; max-height: none; padding: 7px; }
+.qz-rg-pv .qz-devframe[data-qz-tier="phone"] {
+  box-shadow: 0 0 0 6px var(--qz-paper), 0 0 0 7px var(--qz-rule), 0 10px 26px -16px color-mix(in srgb, var(--qz-ink) 20%, transparent);
+}
+/* §5 — tab dots turn green once the tab has been used or passed. */
+.qz-rg-stab.is-done i { background: var(--qz-ok); }
+.qz-rg-stab.is-on.is-done i { background: var(--qz-paper); box-shadow: inset 0 0 0 2px var(--qz-ok); }
+/* §7 — the discount block under the placement. */
+.qz-rg-offerblk { margin: 14px 0 4px; }
+.qz-rg-coupon code { font-family: inherit; font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.qz-rg-addbtn.is-need,
+.qz-rg-coupon.is-need { background: var(--qz-accent); border-color: var(--qz-accent); color: var(--qz-paper); }
+.qz-rg-coupon.is-need .qz-rg-ct span { color: var(--qz-paper); }
+.qz-rg-later {
+  display: inline-block; margin: 6px 0 0; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--qz-ink-3); text-decoration: underline;
+}
+.qz-rg-dnote { margin: 8px 0 4px; font-size: 12.5px; line-height: 1.5; color: var(--qz-ink-3); }
+/* §6 — the picker row reads as one control. */
+.qz-rg-rowbtn { width: 100%; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; padding-left: 0; padding-right: 0; }
+.qz-rg-rowval { font-size: 12.5px; font-weight: 600; color: var(--qz-accent-ink); white-space: nowrap; }
+/* §11 — ringed rows get air without moving their text. */
+.qz-rg-ringrow { padding-left: 6px; padding-right: 6px; margin-left: -6px; margin-right: -6px; }
+/* §9 — the terms pop-up. */
+.qz-rg-linkstat { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 12px; }
+.qz-rg-linkstat.is-ok { color: var(--qz-ok); }
+.qz-rg-linkstat.is-err { color: var(--qz-crit); }
+.qz-rg-linkstat a { margin-left: auto; color: var(--qz-accent-ink); font-weight: 600; }
+.qz-rg-saveblock { margin-right: auto; font-size: 12.5px; color: var(--qz-crit); }
+.qz-rg-lockt { margin-left: 8px; font-weight: 500; color: var(--qz-ink-4); }
+/* §9 — the preview's consent group and legal lines. */
+.qz-rg-consentgrp { display: flex; flex-direction: column; gap: 6px; }
+.qz-rg-legal { display: grid; gap: 4px; }
+.qz-rg-legal p { margin: 0; font-size: 11px; line-height: 1.45; opacity: .7; }
+
+.qz-rg-termspv a { color: var(--qz-accent-ink); }
+.qz-rg-termspv p { margin: 0 0 4px; }

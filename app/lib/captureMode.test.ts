@@ -4,9 +4,13 @@ import { resolveRecPageGlobal } from "./recommendDecider";
 import { Quiz, type RecPageGlobal } from "./quizSchema";
 import { setRecPageGlobal } from "./quizMutations";
 import {
+  forcePerShopperCode,
   patchGuided,
   resolveGuided,
+  resolveDiscount,
+  writeDiscount,
 } from "../components/onboarding/resultsGuided/state";
+import { CONSENT_VERSION } from "./consentWording";
 const resolve = (global: RecPageGlobal) =>
   resolveRecPageGlobal({ global, overrides: {} });
 const doc = () =>
@@ -123,5 +127,64 @@ describe("capture placement compatibility", () => {
       patchGuided(initial, { loadingMs: 2000 }).rec_page_settings?.global
         .loadingMs,
     ).toBe(2000);
+  });
+  // ── Results handoff §4 defect 6, §7, §9, §10 ─────────────────────────────
+  it("reads the retired 'discount' placement as inline + unlock and normalises it on write", () => {
+    const initial = doc();
+    initial.rec_page_settings = {
+      global: { capturePlacement: "discount", captureEmail: false },
+      overrides: {},
+    };
+    expect(resolveGuided(initial)).toMatchObject({ where: "inline", unlock: true });
+    const next = patchGuided(initial, { where: "inline", captureUnlocksOffer: true });
+    expect(next.rec_page_settings?.global).toMatchObject({
+      capturePlacement: "inline",
+      captureInlineOn: true,
+      captureUnlocksOffer: true,
+    });
+    // No captureEmail:false any more — the inline form really renders.
+    expect(next.rec_page_settings?.global.captureEmail).toBeUndefined();
+    expect(captureMode(resolveRecPageGlobal(next.rec_page_settings))).toBe("inline");
+  });
+  it("'No email capture' turns the unlock off (nothing to unlock behind)", () => {
+    const initial = patchGuided(doc(), { where: "inline", captureUnlocksOffer: true });
+    const none = patchGuided(initial, { where: "none" });
+    expect(none.rec_page_settings?.global.captureUnlocksOffer).toBeUndefined();
+    expect(none.rec_page_settings?.global.captureEmail).toBe(false);
+  });
+  it("every consent write stamps the wording version, holds terms on, and gives SMS its own box", () => {
+    const next = patchGuided(doc(), { capturePhone: true });
+    expect(next.rec_page_settings?.global).toMatchObject({
+      capturePhone: true,
+      smsConsentMode: "checkbox",
+      captureTermsOn: true,
+      consentVersion: CONSENT_VERSION,
+    });
+    // A non-consent write never stamps.
+    expect(patchGuided(doc(), { headline: "Hi" }).rec_page_settings?.global.consentVersion).toBeUndefined();
+  });
+  it("always stores the four policy-link keys, even at their defaults (defect 1b)", () => {
+    const next = patchGuided(doc(), {
+      termsLabel: "Terms & Conditions",
+      termsUrl: "/policies/terms-of-service",
+      privacyLabel: "Privacy Policy",
+      privacyUrl: "/policies/privacy-policy",
+    });
+    expect(next.rec_page_settings?.global).toMatchObject({
+      termsUrl: "/policies/terms-of-service",
+      privacyUrl: "/policies/privacy-policy",
+    });
+  });
+  it("discount writes merge first, then strip — a reset to per-shopper really clears the shared code", () => {
+    const shared = writeDiscount(doc(), { enabled: true, code_mode: "static", static_code: "SAVE10" });
+    expect(shared.discount_config).toMatchObject({ code_mode: "static", static_code: "SAVE10" });
+    const back = writeDiscount(shared, { code_mode: "dynamic", static_code: "" });
+    expect(back.discount_config).not.toHaveProperty("code_mode");
+    expect(back.discount_config).not.toHaveProperty("static_code");
+    expect(resolveDiscount(back).code_mode).toBe("dynamic");
+    // The unlock's forced switch drops shared and existing codes too.
+    const forced = forcePerShopperCode(shared);
+    expect(forced.discount_config).not.toHaveProperty("static_code");
+    expect(resolveDiscount(forced).code_mode).toBe("dynamic");
   });
 });

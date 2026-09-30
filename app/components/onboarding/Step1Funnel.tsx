@@ -121,6 +121,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       type="button"
       className={`qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}${cont.loading ? " qz-btn-loading" : ""}`}
       disabled={cont.disabled}
+      title={cont.title}
       aria-busy={cont.loading || undefined}
       aria-haspopup={cont.blocked ? "dialog" : undefined}
       onClick={cont.disabled ? undefined : cont.onClick}
@@ -326,14 +327,16 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
         <ClientOnly fallback={<BuilderSkeleton />}>
           {() =>
             data.recPage!.doc.logic_model === "decider" ? (
-              /* Results-guided handoff (UPDATE AREA 3) — the six-step guided
-                 flow supersedes the Step4Results light surface for deciders. */
+              /* Results-guided handoff — the five-step guided flow
+                 supersedes the Step4Results light surface for deciders. */
               <ResultsGuided
                 quizId={data.quizId}
                 initialDoc={data.recPage!.doc}
                 productIndex={data.recPage!.productIndex}
                 collections={data.collections}
                 designTokens={data.designTokens}
+                shopDomain={data.shopifyAdminDomain}
+                storeName={data.storeName}
                 onOpenBuilder={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
               />
             ) : (

@@ -97,6 +97,18 @@ export async function runStep1FunnelAction(
   }
 }
 
+type FunnelSession = NonNullable<Quiz["build_session"]>;
+
+/** The server's session, plus the client's results_guided state (and only
+ *  that — the stage and every other key stay server-owned). */
+export function withClientResultsGuided(
+  server: FunnelSession | undefined,
+  client: FunnelSession | undefined,
+): FunnelSession | undefined {
+  if (!server || !client?.results_guided) return server;
+  return { ...server, results_guided: client.results_guided };
+}
+
 async function runStep1FunnelActionImpl(
   shop: FunnelShop,
   quizId: string | undefined,
@@ -128,7 +140,14 @@ async function runStep1FunnelActionImpl(
     // last edit is preserved whichever request lands last.
     await prisma.quiz.update({
       where: { id: quiz.id },
-      data: { draftJson: Quiz.parse({ ...parsed.data, build_session: session }) as never },
+      // Results handoff §15 — the guided Results step's builder-only state is
+      // the one client-written build_session key (it never touches the stage).
+      data: {
+        draftJson: Quiz.parse({
+          ...parsed.data,
+          build_session: withClientResultsGuided(session, parsed.data.build_session),
+        }) as never,
+      },
     });
     return json({ ok: true, savedAt: new Date().toISOString() });
   }
