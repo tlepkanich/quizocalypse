@@ -159,19 +159,14 @@ function pickUsedMetafields(
   return kept;
 }
 
+// NOT brandGuidelines.name: that names a voice preset ("Authoritative &
+// trustworthy"), never the store.
 function resolveBakedShopName(
   fetched: string | null | undefined,
   previousPublished: unknown,
-  brandGuidelines: unknown,
 ): string | undefined {
   const previous = (previousPublished as { shop_name?: unknown } | null)?.shop_name;
-  const guidelinesName = parseBrandGuidelinesSafe(brandGuidelines)?.name;
-  const candidates = [
-    fetched,
-    typeof previous === "string" ? previous : undefined,
-    // "Brand" is the schema's placeholder default, not a name.
-    guidelinesName && guidelinesName !== "Brand" ? guidelinesName : undefined,
-  ];
+  const candidates = [fetched, typeof previous === "string" ? previous : undefined];
   return candidates.map((c) => c?.trim()).find((c) => Boolean(c));
 }
 
@@ -504,7 +499,7 @@ export async function publishQuiz(
     ) => Promise<Record<string, string[]> | null>;
     // Results handoff §9 — the store's display name for the fixed consent
     // wording, resolved by the (server-only) caller. Absent → the name baked
-    // by the previous publish, then the brand-guidelines name.
+    // by the previous publish; neither → no shop_name (wording says "us").
     shopName?: string | null;
   },
 ): Promise<PublishResult> {
@@ -786,7 +781,7 @@ export async function publishQuiz(
   // Decider docs only — every legacy publish stays byte-identical.
   const bakedShopName =
     doc.logic_model === "decider"
-      ? resolveBakedShopName(opts?.shopName, quiz.publishedJson, shop?.brandGuidelines)
+      ? resolveBakedShopName(opts?.shopName, quiz.publishedJson)
       : undefined;
   const shopParsed = BrandTokens.safeParse(shop?.brandTokens ?? {});
   const shopTokens: DesignTokensT | null = shopParsed.success

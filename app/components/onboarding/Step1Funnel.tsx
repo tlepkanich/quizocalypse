@@ -336,7 +336,6 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
                 collections={data.collections}
                 designTokens={data.designTokens}
                 shopDomain={data.shopifyAdminDomain}
-                storeName={data.storeName}
                 onOpenBuilder={() => fetcher.submit({ intent: "generate-build" }, { method: "post" })}
               />
             ) : (

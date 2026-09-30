@@ -1,4 +1,3 @@
-import { parseBrandGuidelinesSafe } from "./brandGuidelines";
 // BIC-2 C3b — the funnel loader payload assembly (serialized to FunnelData on
 // the client). Split out of step1Funnel.server.ts as a pure move; the body of
 // loadStep1FunnelData is byte-identical to the original.
@@ -25,11 +24,6 @@ import { logFor } from "./log.server";
 
 // The loader payload (serialized to FunnelData on the client). Pure data — the
 // route wraps it in json().
-function resultsStoreName(brandGuidelines: unknown): string | null {
-  const name = parseBrandGuidelinesSafe(brandGuidelines)?.name?.trim();
-  return name && name !== "Brand" ? name : null;
-}
-
 export async function loadStep1FunnelData(
   shop: FunnelShop,
   quizId: string | undefined,
@@ -60,7 +54,6 @@ export async function loadStep1FunnelData(
         lastSyncAt: true,
         source: true,
         shopifyConnectDomain: true,
-        brandGuidelines: true,
       },
     }),
     prisma.category.findMany({
@@ -402,10 +395,6 @@ export async function loadStep1FunnelData(
       shopRow?.source === "standalone"
         ? shopRow?.shopifyConnectDomain ?? null
         : shop.shopDomain,
-    // Results handoff §9 — the store's display name for the fixed consent
-    // wording's preview (the brand guidelines' name; publish resolves the
-    // Shopify name itself). Null → the wording names the sender as "us".
-    storeName: resultsStoreName(shopRow?.brandGuidelines),
     designTokens: doc.design_tokens,
     designLinked: doc.design_linked ?? true,
     recPageDesign: doc.rec_page_design ?? null,
