@@ -69,6 +69,34 @@ describe("captures.tsx write guard", () => {
       consentEvidence: consent, consentRecordedAt: expect.any(Date), marketingConsent: false,
     }) });
   });
+  // Results handoff §9 — the fixed-wording form's consent record.
+  it("stores the fixed-wording consent record (version, placement, links, marketing text)", async () => {
+    const consent = {
+      version: "2026-09-17",
+      placement: "gate",
+      links: { terms: "https://s.myshopify.com/policies/terms-of-service", privacy: "https://s.myshopify.com/policies/privacy-policy" },
+      marketing: { checked: true, text: "Email me news and offers from Acme." },
+      terms: { mode: "notice", checked: false, text: "By continuing, you agree to our Terms." },
+    };
+    const res = await capturesAction(postArgs("captures", { ...CAPTURE, consent, marketing_consent: true }));
+    expect(res.status).toBe(202);
+    expect(p.emailCapture.create).toHaveBeenCalledWith({ data: expect.objectContaining({ consentEvidence: consent }) });
+  });
+  it("accepts marketing-only evidence, and rejects over-long terms text", async () => {
+    const marketingOnly = { version: "2026-09-17", marketing: { checked: false, text: "Email me." } };
+    expect((await capturesAction(postArgs("captures", { ...CAPTURE, consent: marketingOnly }))).status).toBe(202);
+    const long = { terms: { mode: "notice", checked: false, text: "x".repeat(2001) } };
+    expect((await capturesAction(postArgs("captures", { ...CAPTURE, consent: long }))).status).toBe(400);
+  });
+  // Results handoff §4 defect 5 — no destination can take a phone number yet,
+  // so it is dropped, never stored. Emails are stored lower-cased (GDPR match).
+  it("never stores a phone number and lower-cases the email", async () => {
+    const res = await capturesAction(postArgs("captures", { ...CAPTURE, email: "Shopper@Example.COM", phone: "+1 555 0100" }));
+    expect(res.status).toBe(202);
+    expect(p.emailCapture.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ email: "shopper@example.com", phone: null }),
+    });
+  });
   it("rejects oversized SMS evidence before writing a capture", async () => {
     const consent = { sms: { mode: "checkbox", checked: true, text: "x".repeat(501) } };
     const res = await capturesAction(postArgs("captures", { ...CAPTURE, consent }));

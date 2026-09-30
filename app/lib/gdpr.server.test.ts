@@ -55,10 +55,13 @@ function mockPrisma(shop: { id: string } | null) {
 describe("gdpr X6 — data-subject requests", () => {
   it("collectCustomerData gathers captures scoped to the shop via the quiz relation", async () => {
     const p = mockPrisma({ id: "shop1" });
-    const data = await collectCustomerData(p as never, "s.myshopify.com", "a@b.com");
+    const data = await collectCustomerData(p as never, "s.myshopify.com", "A@B.com");
     expect(data.captures.length).toBe(1);
+    // Case-insensitive: Shopify's casing need not match what the shopper typed.
     expect(p.emailCapture.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { email: "a@b.com", quiz: { shopId: "shop1" } } }),
+      expect.objectContaining({
+        where: { email: { equals: "A@B.com", mode: "insensitive" }, quiz: { shopId: "shop1" } },
+      }),
     );
   });
 

@@ -81,9 +81,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         quizId: quiz.id,
         shopId: quiz.shopId,
         sessionId: parsed.data.session_id,
-        email: parsed.data.email,
+        // Lower-cased so GDPR redaction (gdpr.server.ts) always matches.
+        email: parsed.data.email.toLowerCase(),
         firstName: parsed.data.first_name ?? null,
-        phone: parsed.data.phone ?? null,
+        // Results handoff §4 defect 5 / §14 — a phone number is handed to a
+        // ready SMS destination during the request, or dropped. None exists
+        // yet, so it is never stored: without recorded SMS consent a merchant
+        // could not lawfully text it, and it is protected customer data.
+        phone: null,
         marketingConsent: parsed.data.marketing_consent ?? null,
         ...(parsed.data.consent ? {
           consentEvidence: parsed.data.consent,
