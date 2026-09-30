@@ -543,6 +543,8 @@ export function applyNarrowField(
   productIndex: readonly IndexedProduct[],
   field: string,
 ): AppliedNarrowField | null {
+  // Decider docs only (the dual-model split): a legacy doc is never written.
+  if (doc.logic_model !== "decider") return null;
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node || node.type !== "question") return null;
   const answers = node.data.answers;

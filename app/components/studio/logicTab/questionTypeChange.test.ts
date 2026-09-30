@@ -83,6 +83,44 @@ describe("setScalePoints / restoreScalePoint (the ONE removal seam)", () => {
     expect(qdata(back, "q4").answers.map((a) => a.id)).toEqual(["r1", "r2", "r3", "r4", "r5"]);
     expect(back.edges.some((e) => e.id === "e-skip")).toBe(true);
   });
+
+  it("never touches a legacy doc (dual-model split)", () => {
+    const legacy = logicDoc({ legacy: true });
+    expect(setScalePoints(legacy, "q4", 4).doc).toBe(legacy);
+    expect(setScalePoints(legacy, "q4", 6).doc).toBe(legacy);
+    const { removed } = setScalePoints(logicDoc(), "q4", 4);
+    expect(restoreScalePoint(legacy, removed!)).toBe(legacy);
+  });
+});
+
+describe("restoreQuestionType puts back only what the change moved", () => {
+  it("an end label typed after Five-point survives the Undo; min/max go back", () => {
+    const doc = logicDoc();
+    const snap = snapshotType(doc, "q2")!;
+    const { doc: next, anyOfRuleIds } = changeQuestionType(doc, "q2", "rating5");
+    const after = snapshotType(next, "q2");
+    // An end label typed while the toast is up.
+    const typed: Quiz = {
+      ...next,
+      nodes: next.nodes.map((n) =>
+        n.id === "q2" && n.type === "question"
+          ? { ...n, data: { ...n.data, scale_config: { ...n.data.scale_config!, endpoint_label_min: "Low" } } }
+          : n,
+      ),
+    };
+    const back = restoreQuestionType(typed, snap, anyOfRuleIds, after);
+    const d = qdata(back, "q2");
+    expect(d.question_type).toBe(qdata(doc, "q2").question_type);
+    expect(d.scale_config?.min).toBe(qdata(doc, "q2").scale_config?.min);
+    expect(d.scale_config?.max).toBe(qdata(doc, "q2").scale_config?.max);
+    expect(d.scale_config?.endpoint_label_min).toBe("Low");
+  });
+
+  it("never touches a legacy doc", () => {
+    const legacy = logicDoc({ legacy: true });
+    const snap = snapshotType(legacy, "q2")!;
+    expect(restoreQuestionType(legacy, snap, [])).toBe(legacy);
+  });
 });
 
 describe("overMaxRules", () => {

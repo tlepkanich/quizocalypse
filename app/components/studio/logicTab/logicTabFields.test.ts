@@ -365,6 +365,9 @@ describe("QRTZ-H5 — applyNarrowField (the ONE apply seam behind the dialog)", 
 
   it("missing / non-question node → null", () => {
     expect(applyNarrowField(doc("qualifier", []), "nope", gp, "tag:fit")).toBeNull();
+    // A legacy (points / ladder) doc is never written (dual-model split).
+    const legacy = { ...(doc("qualifier", [a("a1", "Slim")]) as object), logic_model: undefined } as never;
+    expect(applyNarrowField(legacy, "n1", gp, "tag:fit")).toBeNull();
   });
 
   it("narrowAppliedToast keeps H2's exact copy on both branches", () => {

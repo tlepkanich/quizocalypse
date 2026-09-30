@@ -165,23 +165,51 @@ export function changeQuestionType(
   return { doc: next, anyOfRuleIds };
 }
 
+type ScaleConfig = NonNullable<QuestionNodeDoc["data"]["scale_config"]>;
+
+/** scale_config with only the keys the type change moved put back: a key the
+ *  change left alone (an end label typed since, say) keeps its latest value.
+ *  Without `after` every key comes back (the whole config is the change). */
+function restoreScaleConfig(
+  latest: QuestionNodeDoc["data"]["scale_config"],
+  before: QuestionNodeDoc["data"]["scale_config"],
+  after: QuestionNodeDoc["data"]["scale_config"] | undefined,
+  hasAfter: boolean,
+): QuestionNodeDoc["data"]["scale_config"] {
+  if (!hasAfter) return before ? structuredClone(before) : undefined;
+  const b = (before ?? {}) as Record<string, unknown>;
+  const a = (after ?? {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...((latest ?? {}) as Record<string, unknown>) };
+  for (const k of new Set([...Object.keys(b), ...Object.keys(a)])) {
+    if (JSON.stringify(b[k]) === JSON.stringify(a[k])) continue;
+    if (b[k] === undefined) delete out[k];
+    else out[k] = structuredClone(b[k]);
+  }
+  return Object.keys(out).length ? (out as ScaleConfig) : undefined;
+}
+
 /** The inverse of changeQuestionType against the LATEST doc: the type fields
  *  come back and the listed rules drop this question from any_of again.
- *  Answers are never touched (a card-to-card change keeps them). */
+ *  Answers are never touched (a card-to-card change keeps them). Pass the
+ *  snapshot taken just AFTER the change as `after`, and only the
+ *  scale_config keys the change moved are restored. Decider docs only. */
 export function restoreQuestionType(
   doc: QuizDoc,
   snap: TypeSnapshot,
   anyOfRuleIds: readonly string[],
+  after?: TypeSnapshot | null,
 ): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
   if (!questionNode(doc, snap.nodeId)) return doc;
   let next = patchNode(doc, snap.nodeId, (data) => {
-    const { min_selections: _min, max_selections: _max, scale_config: _sc, ...rest } = data;
+    const { min_selections: _min, max_selections: _max, scale_config: latestScale, ...rest } = data;
+    const scale_config = restoreScaleConfig(latestScale, snap.scale_config, after?.scale_config, !!after);
     return {
       ...rest,
       question_type: snap.question_type,
       ...(snap.min_selections !== undefined ? { min_selections: snap.min_selections } : {}),
       ...(snap.max_selections !== undefined ? { max_selections: snap.max_selections } : {}),
-      ...(snap.scale_config ? { scale_config: structuredClone(snap.scale_config) } : {}),
+      ...(scale_config ? { scale_config } : {}),
     };
   });
   if (anyOfRuleIds.length) {
@@ -212,14 +240,16 @@ export interface RemovedPoint {
 /** The points stepper (TypeChipSelector `setScaleCount`, moved here): grow
  *  appends an answer named by its number; shrink removes the LAST point and
  *  its handle edges (removeAnswer refuses below 2). scale_config.max stays in
- *  step when present. One point per call. */
+ *  step when present. One point per call. Decider docs only: a legacy doc
+ *  comes back unchanged. */
 export function setScalePoints(
   doc: QuizDoc,
   nodeId: string,
   count: number,
 ): { doc: QuizDoc; removed: RemovedPoint | null } {
-  const node = questionNode(doc, nodeId);
   const same = { doc, removed: null };
+  if (doc.logic_model !== "decider") return same;
+  const node = questionNode(doc, nodeId);
   if (!node) return same;
   const answers = node.data.answers;
   const now = answers.length;
@@ -258,8 +288,9 @@ export function setScalePoints(
 
 /** The inverse of a point removal: the answer comes back with the same id,
  *  handle, targets and values at its old position, with its handle edges,
- *  so rule conditions that pointed at it heal. */
+ *  so rule conditions that pointed at it heal. Decider docs only. */
 export function restoreScalePoint(doc: QuizDoc, removed: RemovedPoint): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
   const node = questionNode(doc, removed.nodeId);
   if (!node || node.data.answers.some((a) => a.id === removed.answer.id)) return doc;
   let next = patchNode(doc, removed.nodeId, (data) => {
