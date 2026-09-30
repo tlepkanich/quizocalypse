@@ -7,6 +7,7 @@ import { useQuizDraft } from "../studio/useQuizDraft";
 import { QuestionsLogicLayout } from "./questionsLogic/QuestionsLogicLayout";
 import { Step3Shell } from "./questionsLogicV3/Step3Shell";
 import { QuestionsWalkthrough } from "./questionsWalkthrough/QuestionsWalkthrough";
+import type { LogicCatalog } from "../studio/logicTab/AddRecommendationsDialog";
 
 // ════════════════════════════════════════════════════════════════════════════
 // QuestionBuilderStage — Step 3 of the create funnel ("Questions & Logic"), the
@@ -37,6 +38,7 @@ export function QuestionBuilderStage({
   designTokens,
   lastSyncAt,
   shopifyAdminDomain,
+  catalog,
 }: {
   quizId: string;
   /** One-line-chrome — which funnel step this mount serves: "questions" (the
@@ -57,6 +59,9 @@ export function QuestionBuilderStage({
   // card's products popover (FunnelData.lastSyncAt / .shopifyAdminDomain).
   lastSyncAt?: string | null;
   shopifyAdminDomain?: string | null;
+  /** Logic step redesign: the funnel loader's catalogue (FunnelData.catalog),
+   *  passed through untouched to the Logic card's Add recommendations window. */
+  catalog?: LogicCatalog;
 }) {
   const {
     doc,
@@ -65,7 +70,9 @@ export function QuestionBuilderStage({
     savedAt,
     saveError,
     retrySave,
-    flushSave,
+    flush,
+    commitTracked,
+    isAiPaused,
     beginAiEdit,
     applyAiResult,
     endAiEdit,
@@ -74,7 +81,14 @@ export function QuestionBuilderStage({
   // (the ?step3=v3 flag is retired); legacy (points/ladder) docs keep the
   // QuestionsLogicLayout surface unchanged.
   const useV3 = doc.logic_model === "decider";
+  // Logic step redesign: Continue first flushes the pending autosave and
+  // waits for it (an edit inside the 700 ms debounce, the logic style
+  // included, must land before the stage changes). The CTA shows its
+  // loading ring meanwhile; a failed save keeps the merchant on the step
+  // (FunnelSaveChip shows "Not saved · Retry").
+  const [flushing, setFlushing] = useState(false);
   const navigating =
+    flushing ||
     pendingIntent === "to-rec-page" ||
     pendingIntent === "to-logic" ||
     pendingIntent === "goto-stage" ||
@@ -88,17 +102,33 @@ export function QuestionBuilderStage({
   // step, so their Continue always heads to the Results step.
   const continueIntent =
     useV3 && mode === "questions" ? "to-logic" : "to-rec-page";
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  const busy = useRef(false);
   const submitContinue = useCallback(() => {
-    fetcherRef.current.submit({ intent: continueIntent }, { method: "post" });
+    if (busy.current) return; // repeat clicks while saving are ignored
+    busy.current = true;
+    setFlushing(true);
+    void flushRef
+      .current()
+      .then((saved) => {
+        if (saved === "saved") {
+          fetcherRef.current.submit({ intent: continueIntent }, { method: "post" });
+        }
+      })
+      .finally(() => {
+        busy.current = false;
+        setFlushing(false);
+      });
   }, [continueIntent]);
-  // Logic-step §2 — the style chooser's persist. build_session is server-owned,
-  // so the pick rides an intent (never the JSON autosave). Stable via the ref.
-  const submitLogicStyle = useCallback((style: "rules" | "attributes") => {
-    fetcherRef.current.submit(
-      { intent: "set-logic-style", style },
-      { method: "post" },
-    );
-  }, []);
+  // Back and the stepper (Step1Funnel awaits this through the bar override).
+  const beforeNavigate = useCallback(
+    async (): Promise<boolean> => (await flushRef.current()) === "saved",
+    [],
+  );
+  // The logic style is a DOC field now (D1): the title switch commits
+  // setLogicStyle through this draft. The set-logic-style intent is no longer
+  // sent (its server branch stays in place for one release).
 
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const [undoNodeId, setUndoNodeId] = useState<string | null>(null);
@@ -208,7 +238,9 @@ export function QuestionBuilderStage({
         quizId={quizId}
         mode={mode === "logic" ? "logic" : "content"}
         onCommit={commit}
-        onFlush={flushSave}
+        commitTracked={commitTracked}
+        onFlush={beforeNavigate}
+        isAiPaused={isAiPaused}
         isSaving={isSaving}
         savedAt={savedAt}
         saveError={saveError}
@@ -218,8 +250,8 @@ export function QuestionBuilderStage({
         productIndex={productIndex}
         navigating={navigating}
         onContinue={submitContinue}
-        onPickLogicStyle={submitLogicStyle}
         designTokens={designTokens}
+        catalog={catalog}
         lastSyncAt={lastSyncAt}
         shopifyAdminDomain={shopifyAdminDomain}
         regen={{

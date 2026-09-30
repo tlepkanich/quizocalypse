@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { Quiz as QuizDoc, DesignTokens } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import { buildTier1Report, type Tier1Link } from "../../../lib/pathReport";
+import { resolveLogicStyle, type LogicStyle } from "../../../lib/logicStyle";
 import {
   deleteNode,
   insertQuestionRelative,
   insertContentRelative,
   moveStep,
+  setLogicStyle,
 } from "../../../lib/quizMutations";
 import { updateNodeData } from "../../studio/studioDoc";
 import { orderedQuestions, orderedFlowSteps, deciderQuestion } from "../../../lib/questionOrder";
 import { QuestionBankDrawer } from "../../studio/QuestionBankDrawer";
 import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelChrome";
-import { pillPresentation } from "./HealthPill";
 import { LeftRail, CAPTURE_ID, REVEAL_ID } from "./LeftRail";
 // Owner decision (2026-08-18) — the funnel Questions step is the ✎ view ONLY.
 // The ▦ Overview tab is retired HERE but ./OverviewLedger.tsx stays parked:
@@ -25,15 +26,17 @@ import { PhoneCanvas } from "./content/PhoneCanvas";
 // the artifact's Rules card + Questions card, nothing else). The fallback
 // config moved to the Results step (resultsGuided); the capture config moved
 // to the Questions step's Email-capture rail row.
-import { LogicTabCard } from "../../studio/logicTab/LogicTabCard";
+import { LogicTabCard, type LogicFocusRequest } from "../../studio/logicTab/LogicTabCard";
+import type { LogicCatalog } from "../../studio/logicTab/AddRecommendationsDialog";
+import { CHECK_COPY } from "../../studio/logicTab/logicCopy";
+import type { SaveToken } from "../../studio/saveTracker";
 import { CaptureModule } from "./logic/CaptureModule";
-import { DiagnoseModal, type DiagnoseTab } from "./logic/DiagnoseModal";
-import {
-  LogicStyleChooser,
-  buildChooserScan,
-  type LogicStyle,
-} from "./logic/LogicStyleChooser";
-import { CatalogStrip } from "./logic/CatalogStrip";
+import { CheckPopover, type CheckRow } from "./logic/CheckPopover";
+// Logic step redesign (D5, D23, D4): the first-entry LogicStyleChooser, the
+// CatalogStrip, the style bar and the DiagnoseModal door are unmounted from
+// this step. Their files stay on disk (LogicStyleChooser/CatalogStrip lose
+// their only importer; DiagnoseModal is the surface diagnostics come back to
+// when D4 is un-parked). Do not delete them without the owner.
 
 /* ════════════════════════════════════════════════════════════════════════════
    quiz-step3 v3 — Step3Shell: the decider editing shell, mounted by
@@ -41,9 +44,10 @@ import { CatalogStrip } from "./logic/CatalogStrip";
    One-line-chrome — the former in-shell Content·Logic toggle is now TWO
    funnel steps: `mode` ("content" = the Questions step, "logic" = the Logic
    step) is stage-driven; the shared funnel bar owns navigation, and this
-   shell publishes its save chip / health pill / tri-state Continue through
-   the funnel-chrome bridge (TopBar3 is retired). ONE memoized Tier-1 report
-   still feeds the pill, the diagnose list, AND the Continue gate.
+   shell publishes its save chip and tri-state Continue through the
+   funnel-chrome bridge. Logic step redesign: ONE memoized, style-aware
+   Tier-1 report feeds the CTA's "Fix N issues to continue" AND the check
+   popover anchored under it (the only door, D4); no health pill.
    ════════════════════════════════════════════════════════════════════════════ */
 
 export type Step3View = "content" | "logic";
@@ -70,7 +74,9 @@ export function Step3Shell({
   quizId,
   mode,
   onCommit,
+  commitTracked,
   onFlush,
+  isAiPaused = false,
   isSaving,
   savedAt,
   saveError,
@@ -80,19 +86,24 @@ export function Step3Shell({
   productIndex,
   navigating,
   onContinue,
-  onPickLogicStyle,
   designTokens,
   regen,
   lastSyncAt,
   shopifyAdminDomain,
+  catalog,
 }: {
   doc: QuizDoc;
   quizId: string;
   /** Which funnel step this mount serves — stage-driven, replaces setView. */
   mode: Step3View;
   onCommit: (doc: QuizDoc) => void;
-  /** useQuizDraft.flushSave — the Tier-2 review flushes BEFORE hashing. */
-  onFlush: () => void;
+  /** useQuizDraft.commitTracked — SaveTokens for the field save pill (D8). */
+  commitTracked?: (doc: QuizDoc) => SaveToken;
+  /** Flush the autosave and wait; resolves false when the save failed.
+   *  Published as the bar's beforeNavigate (Back / stepper). STABLE. */
+  onFlush: () => Promise<boolean>;
+  /** useQuizDraft.isAiPaused — the save chip's "Paused while AI edits". */
+  isAiPaused?: boolean;
   isSaving: boolean;
   savedAt: string | null;
   saveError: string | null;
@@ -106,14 +117,14 @@ export function Step3Shell({
   /** The step's forward intent (the fetcher lives in the stage): to-logic on
    *  the Questions step, to-rec-page on the Logic step. STABLE by contract. */
   onContinue: () => void;
-  /** Logic-step §2 — persists the chooser's pick (set-logic-style intent).
-   *  STABLE by contract, same as onContinue. */
-  onPickLogicStyle: (style: LogicStyle) => void;
   designTokens: DesignTokens | null | undefined;
   regen: RegenApi;
   /** QRTZ-B2 — threaded to the Logic card's products popover. */
   lastSyncAt?: string | null;
   shopifyAdminDomain?: string | null;
+  /** The funnel loader's catalogue, for the Logic card's Add
+   *  recommendations window (passed through untouched). */
+  catalog?: LogicCatalog;
 }) {
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
   // questions-full-page §2 — the FULL flow (content steps included): the nav
@@ -121,56 +132,49 @@ export function Step3Shell({
   // logic surfaces stay question-only.
   const flowSteps = useMemo(() => orderedFlowSteps(doc), [doc]);
   const decider = useMemo(() => deciderQuestion(doc), [doc]);
-  // The live health verdict — pure + cheap by design, memoized per doc change
-  // (powers the pill now, the popover and the Continue gate in P4).
+  // The ONE style-aware Tier-1 report (D3): the CTA count and the check
+  // popover read this instance, so they cannot disagree. It checks the
+  // ENGINE style (engineLogicStyle, inside the report); R5 iterates this
+  // quiz's recommendations; R0 (the unsaved-style note) is opted in because
+  // this host has the title switch.
+  const recommendationIds = useMemo(
+    () => categories.filter((c) => c.quizId != null).map((c) => c.id),
+    [categories],
+  );
   const report = useMemo(
-    () => buildTier1Report(doc, categories, productIndex),
-    [doc, categories, productIndex],
+    () => buildTier1Report(doc, categories, productIndex, { recommendationIds, styleNote: true }),
+    [doc, categories, productIndex, recommendationIds],
   );
 
   const captureOn = doc.rec_page_settings?.global?.captureEmail !== false;
 
-  // ── Logic-step §2 — the style chooser, once per quiz ──────────────────────
-  // The persisted pick (server-owned build_session) wins; a just-clicked card
-  // shows the workspace immediately while the intent lands (localStyle); and
-  // a quiz that ALREADY has logic work infers its style rather than asking a
-  // question it has effectively answered (rules or filter roles predate the
-  // chooser — interrupting them would be noise, and the style bar's Switch
-  // stays available). A genuinely fresh Logic step resolves to null → chooser.
-  const [localStyle, setLocalStyle] = useState<LogicStyle | null>(null);
-  const sessionStyle = doc.build_session?.logic_style ?? null;
-  const logicStyle = useMemo<LogicStyle | null>(() => {
-    // The in-session click WINS over the persisted value: the client doc's
-    // build_session never refreshes mid-session (server-owned; the autosave
-    // echoes the server's copy), so after the style bar's Switch the stale
-    // sessionStyle would otherwise override the click until a full reload —
-    // the owner-reported "Switch does nothing" bug. Every localStyle set
-    // also fires the set-logic-style intent, so the server catches up.
-    if (localStyle) return localStyle;
-    if (sessionStyle) return sessionStyle;
-    const hasFilter = questions.some((q) => q.node.data.role === "filter");
-    if (hasFilter) return "attributes";
-    if ((doc.decision_rules ?? []).length > 0) return "rules";
-    return null;
-  }, [sessionStyle, localStyle, questions, doc.decision_rules]);
+  // ── Logic step redesign (D1, D5) — the style lives on the DOC ─────────────
+  // The screen style resolves in one pure helper (saved field → legacy
+  // build_session key → inference → Filter Results + Rules) and NOTHING is
+  // written on load. The title switch commits setLogicStyle through the
+  // draft (autosave), so a Back → Continue round trip keeps it by
+  // construction. Choosing the style already shown still writes it: on an
+  // inferred draft that one click makes it real (setLogicStyle no-ops only
+  // when the stored field already matches).
+  const logicStyle = resolveLogicStyle(doc);
+  const docRef = useRef(doc);
+  docRef.current = doc;
   const pickLogicStyle = useCallback(
     (style: LogicStyle) => {
-      setLocalStyle(style);
-      onPickLogicStyle(style);
+      const latest = docRef.current;
+      const next = setLogicStyle(latest, style);
+      if (next !== latest) onCommit(next);
     },
-    [onPickLogicStyle],
+    [onCommit],
   );
-  // Live .lbar's computed line + the chooser's scan (§10 read-out; the
-  // strong counts arrive once buildAttributeReadout is wired — until then
-  // the scan degrades to the product count, which the chooser handles).
-  const narrowCount = useMemo(
-    () => questions.filter((q) => q.node.data.role === "filter").length,
-    [questions],
-  );
-  const chooserScan = useMemo(
-    () => buildChooserScan(productIndex),
-    [productIndex],
-  );
+  // Check popover (anchored to the bar CTA) + the focus request it sends.
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [focusRequest, setFocusRequest] = useState<LogicFocusRequest | null>(null);
+  const nonce = useRef(0);
+  const request = useCallback((r: DistributiveOmit<LogicFocusRequest, "nonce">) => {
+    nonce.current += 1;
+    setFocusRequest({ ...r, nonce: nonce.current } as LogicFocusRequest);
+  }, []);
 
   // One-line-chrome — the view IS the funnel step now (Questions vs Logic).
   const view = mode;
@@ -179,14 +183,6 @@ export function Step3Shell({
   const [navw, setNavw] = useState(340);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
-  // QZY-2 (spec §10) — the diagnose/preview modal. QRTZ-G3: its Logic-view
-  // subhead entry is gone (the artifact draws none); the Fix-N-issues health
-  // pill and a blocked Continue are its remaining doors, both landing on the
-  // Diagnostics tab (Test-a-path stays reachable inside the modal).
-  const [diagnose, setDiagnose] = useState<{ open: boolean; tab: DiagnoseTab }>({
-    open: false,
-    tab: "diagnostics",
-  });
   // Jump-links against the one-card view: scroll the question's table row
   // (data-node-id) into view, or the card itself (rules live at its top).
   const scrollLogicTo = useCallback((nodeId?: string) => {
@@ -199,12 +195,14 @@ export function Step3Shell({
   }, []);
 
   // A rule jump stashed by the Questions step lands here once the Logic step
-  // mounts — rules sit at the top of the card, so the card top IS the target.
+  // mounts: the card selects and scrolls to that rule (no window: the merchant
+  // arrived from elsewhere and gets to see the row first).
   useEffect(() => {
     if (mode !== "logic" || !pendingRuleJumpStash) return;
+    const ruleId = pendingRuleJumpStash;
     pendingRuleJumpStash = null;
-    scrollLogicTo();
-  }, [mode, scrollLogicTo]);
+    request({ kind: "rule", id: ruleId, open: false });
+  }, [mode, request]);
 
   // Valid canvas positions; a stale selection (deleted question) falls back
   // derived-style — no effect needed. QRTZ-G3: CAPTURE_ID is always valid —
@@ -286,64 +284,119 @@ export function Step3Shell({
   // the phone canvas shows it. Rule findings live only in the Logic step —
   // from Questions, stash the target and advance (onContinue = to-logic; the
   // Logic mount picks the stash up).
+  // Logic step redesign (B38): a jump sends a focus request to the card,
+  // which switches to Edit first and then selects / opens the target.
   const handleHealthNavigate = useCallback(
-    (link: Tier1Link) => {
-      setDiagnose((d) => ({ ...d, open: false }));
-      if (link.kind === "question" && link.nodeId) {
-        setSelectedId(link.nodeId);
-        if (view === "logic") scrollLogicTo(link.nodeId);
-        return;
-      }
-      if (link.kind === "rule" && link.ruleId) {
-        if (view === "logic") {
-          scrollLogicTo(); // rules sit at the top of the card
-        } else {
+    (link: Tier1Link, opts: { open?: boolean } = {}) => {
+      setCheckOpen(false);
+      if (view !== "logic") {
+        if (link.kind === "question" && link.nodeId) {
+          setSelectedId(link.nodeId);
+          scrollLogicTo(link.nodeId);
+        } else if (link.kind === "rule" && link.ruleId) {
           pendingRuleJumpStash = link.ruleId;
           onContinue();
         }
+        return;
+      }
+      switch (link.kind) {
+        case "question":
+          if (link.nodeId) request({ kind: "question", id: link.nodeId });
+          return;
+        case "rule":
+          if (link.ruleId) request({ kind: "rule", id: link.ruleId, open: opts.open !== false });
+          return;
+        case "rules":
+          request(rulesLinkIsEmpty(docRef.current) ? { kind: "create" } : { kind: "rules" });
+          return;
+        case "recommendation":
+          if (link.categoryId) {
+            request({
+              kind: "recommendation",
+              id: link.categoryId,
+              ...(link.nodeId ? { questionId: link.nodeId } : {}),
+            });
+          }
+          return;
+        case "style":
+          request({ kind: "style" });
+          return;
       }
     },
-    [view, onContinue, scrollLogicTo],
+    [view, onContinue, scrollLogicTo, request],
+  );
+  const onCheckJump = useCallback(
+    (row: CheckRow) => {
+      if (row.link) {
+        // V8 (shadowed): the fix is a reorder, so scroll to the rule and do
+        // not open the window (handoff "Row actions").
+        handleHealthNavigate(row.link, { open: row.checkId !== "V8" });
+        return;
+      }
+      // V1 with no picking question (mock "fixpick"): the first question,
+      // its role control asked for (the pane focuses it).
+      const first = questions[0]?.node.id;
+      setCheckOpen(false);
+      if (first) request({ kind: "question", id: first, control: "role" });
+    },
+    [handleHealthNavigate, questions, request],
   );
 
-  // The bar (one-line-chrome §1.3) — save chip (error-only) · the tri-state
-  // Continue, published through the funnel-chrome bridge. Owner 2026-08-18:
-  // the ambient "Logic valid" health pill is GONE from the nav — the pill
-  // renders only in its Fix-N-issues state (a functional door into the
-  // diagnose modal, not status decoration). Questions: always advanceable
-  // (to-logic). Logic + healthy: to-rec-page. Logic + blocking: "Fix N
-  // issues to continue" stays CLICKABLE and opens the diagnose modal — the
-  // gate is the SAME report instance the pill and modal render, so the
-  // surfaces cannot disagree.
-  const pill = pillPresentation(report.verdict);
+  // The bar (one-line-chrome §1.3) — the save chip (errors and AI pauses
+  // only, D8) and the tri-state Continue, published through the
+  // funnel-chrome bridge. Logic step redesign (D3/D4): no health pill; while
+  // something blocks, the CTA reads "Fix N issues to continue" in the
+  // outlined crit look and toggles the check popover anchored under it.
+  // Every field is memoized on real state; handlers are stable.
   const blocking = report.verdict.blocking;
-  const verdictLabel = report.verdict.label;
+  const checkContent = useMemo(
+    () => <CheckPopover report={report} onJump={onCheckJump} />,
+    [report, onCheckJump],
+  );
   const barOverride = useMemo<FunnelBarOverride>(() => {
-    const fixLabel = `Fix ${blocking} issue${blocking === 1 ? "" : "s"}`;
-    const openDiagnose = () => setDiagnose({ open: true, tab: "diagnostics" });
     return {
       saveChip: (
-        <FunnelSaveChip isSaving={isSaving} savedAt={savedAt} saveError={saveError} onRetry={onRetry} />
+        <FunnelSaveChip
+          isSaving={isSaving}
+          savedAt={savedAt}
+          saveError={saveError}
+          onRetry={onRetry}
+          isAiPaused={isAiPaused}
+        />
       ),
-      healthPill:
-        blocking > 0 ? (
-          <button
-            type="button"
-            className={`qz-s3-healthpill is-${pill.state}`}
-            aria-haspopup="dialog"
-            title={verdictLabel}
-            onClick={openDiagnose}
-          >
-            <span className="qz-s3-healthdot" aria-hidden />
-            {fixLabel}
-          </button>
-        ) : undefined,
+      beforeNavigate: onFlush,
       continueSpec:
         mode === "logic" && blocking > 0
-          ? { label: `${fixLabel} to continue`, blocked: true, disabled: navigating, onClick: openDiagnose }
-          : { label: "Continue →", disabled: navigating, onClick: onContinue },
+          ? {
+              label: CHECK_COPY.ctaBlocked(blocking),
+              blocked: true,
+              blockedLook: "outline",
+              disabled: navigating,
+              onClick: () => setCheckOpen((o) => !o),
+              popover: {
+                content: checkContent,
+                open: checkOpen,
+                onOpenChange: setCheckOpen,
+                width: 360,
+                ariaLabel: CHECK_COPY.label,
+              },
+            }
+          : { label: "Continue →", disabled: navigating, loading: navigating, onClick: onContinue },
     };
-  }, [mode, blocking, verdictLabel, pill.state, isSaving, savedAt, saveError, onRetry, navigating, onContinue]);
+  }, [
+    mode,
+    blocking,
+    isSaving,
+    savedAt,
+    saveError,
+    onRetry,
+    isAiPaused,
+    onFlush,
+    navigating,
+    onContinue,
+    checkContent,
+    checkOpen,
+  ]);
   useFunnelBar(barOverride);
 
   return (
@@ -419,104 +472,11 @@ export function Step3Shell({
             </div>
           </div>
         </div>
-      ) : logicStyle === null ? (
-        <div className="qz-s3-logicview">
-          {/* Logic-step §2 / Live screen A — first entry lands on the style
-              chooser, once per quiz. Point based is inert; both live picks
-              land on the same workspace below (the same logic_model). */}
-          <LogicStyleChooser scan={chooserScan} onPick={pickLogicStyle} />
-        </div>
       ) : (
         <div className="qz-s3-logicview">
-          {/* Live screen B/K — the workspace's own heading + the one
-              collapsible explainer (onboarding: useful once, noise on the
-              tenth visit). */}
-          <h1 className="qz-ls-h1">What should each answer do?</h1>
-          <details className="qz-ls-ledebox" open>
-            <summary>How this works</summary>
-            <p className="qz-ls-lede">
-              {logicStyle === "rules" ? (
-                <>
-                  <b>Every outcome is a rule you write</b> — it says which products
-                  to recommend, based on how someone answered.
-                  <span className="qz-ls-ll is-ex">
-                    If they answer <b>an answer</b> and <b>another</b>, show{" "}
-                    <b>a result</b>.
-                  </span>
-                </>
-              ) : (
-                <>
-                  {/* QWIDGET §3.2 — ONE explainer holds the three role
-                      definitions (it replaces per-question descriptions). */}
-                  <b>Picks results.</b> Each answer maps to one of the
-                  recommendations you built in step 1. Exactly one question does this.
-                  <span className="qz-ls-ll">
-                    <b>Narrows results.</b> Each answer maps to a value already on your
-                    products, such as a tag, metafield, variant option or product type,
-                    to filter what is left.
-                  </span>
-                  <span className="qz-ls-ll">
-                    <b>Info only.</b> Info collected as zero party data only. Does not
-                    impact quiz results shown.
-                  </span>
-                  <span className="qz-ls-ll">
-                    <b>Rules</b> at the bottom cover anything those three cannot say.
-                  </span>
-                </>
-              )}
-            </p>
-          </details>
-          {/* Module 02 — the Catalog strip, always at the top of the
-              workspace, directly above the style bar. */}
-          <CatalogStrip
-            productIndex={productIndex}
-            attributeCount={chooserScan.strongCount}
-            rulesOnly={logicStyle === "rules"}
-          />
-          {/* Live .lbar — Style · name · the computed line · Switch (right).
-              "✓ Check my logic" stays: the revived Logic Checker door (owner
-              ask; the nav stays untouched). Same DiagnoseModal as the pill. */}
-          <div className="qz-lsb" data-testid="logic-style-bar">
-            <span className="qz-lsb-label">Style</span>
-            <span className="qz-lsb-style">
-              {logicStyle === "attributes" ? "Attributes + Rules" : "Rules only"}
-            </span>
-            <span className="qz-lsb-note">
-              ·{" "}
-              {logicStyle === "rules"
-                ? "no question narrows — rules decide everything"
-                : `${narrowCount} question${narrowCount === 1 ? "" : "s"} narrow${
-                    narrowCount === 1 ? "s" : ""
-                  } the catalog`}
-            </span>
-            <span className="qz-lsb-right">
-              <button
-                type="button"
-                className="qz-lsb-check"
-                aria-haspopup="dialog"
-                onClick={() => setDiagnose({ open: true, tab: "diagnostics" })}
-              >
-                ✓ Check my logic
-              </button>
-              <button
-                type="button"
-                className="qz-lsb-switch"
-                onClick={() =>
-                  pickLogicStyle(logicStyle === "attributes" ? "rules" : "attributes")
-                }
-              >
-                Switch to{" "}
-                {logicStyle === "attributes" ? "rules only" : "attributes + rules"}
-              </button>
-            </span>
-          </div>
-          {/* QRTZ-G3 — the artifact's Logic screen is EXACTLY two cards,
-              Rules then Questions (shared.mjs screenLogic), nothing else.
-              The subhead entries, the "How this quiz resolves" strip, the
-              fallback and capture modules are gone from this surface: the
-              fallback config lives on the Results step (resultsGuided), the
-              capture config on the Questions step's Email-capture rail row.
-              Diagnose stays reachable through the bar's health pill. */}
+          {/* Logic step redesign (D23): no page heading, "How this works",
+              catalog strip, style bar or "Check my logic": the card's own
+              header carries the title switch and the description. */}
           <LogicTabCard
             doc={doc}
             questions={questions}
@@ -527,25 +487,17 @@ export function Step3Shell({
             quizId={quizId}
             lastSyncAt={lastSyncAt}
             shopifyAdminDomain={shopifyAdminDomain}
-            logicStyle={logicStyle}
             ruleFlow="onboarding"
+            style={logicStyle}
+            onStyleChange={pickLogicStyle}
+            showHeader
+            headingLevel="h1"
+            focusRequest={focusRequest}
+            {...(catalog ? { catalog } : {})}
+            {...(commitTracked ? { commitTracked } : {})}
           />
         </div>
       )}
-
-      <DiagnoseModal
-        open={diagnose.open}
-        initialTab={diagnose.tab}
-        onClose={() => setDiagnose((d) => ({ ...d, open: false }))}
-        doc={doc}
-        quizId={quizId}
-        report={report}
-        categories={categories}
-        productIndex={productIndex}
-        onCommit={onCommit}
-        onFlush={onFlush}
-        onNavigate={handleHealthNavigate}
-      />
 
       {libraryOpen ? (
         <QuestionBankDrawer doc={doc} onCommit={onCommit} onClose={() => setLibraryOpen(false)} />
@@ -554,3 +506,10 @@ export function Step3Shell({
   );
 }
 
+/** Omit distributed over a union (keeps each LogicFocusRequest variant). */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+
+/** "rules" findings: with no rules at all the fix is a blank rule window. */
+function rulesLinkIsEmpty(doc: QuizDoc): boolean {
+  return (doc.decision_rules ?? []).length === 0;
+}

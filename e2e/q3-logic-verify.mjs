@@ -170,84 +170,48 @@ try {
     (await draftDoc())?.build_session?.stage === "logic");
   ok("Questions panel unmounted on the Logic stage",
     (await page.locator('[data-testid="questions-walkthrough"]').count()) === 0);
-  // Logic-step §2 — a FRESH quiz (no rules, no filter roles, logic_style
-  // unset) lands on the style chooser first. Click through the recommended
-  // card so the workspace assertions below run; the pick writes
-  // build_session.logic_style via the set-logic-style intent (the fixture
-  // restore in `finally` reverts it byte-for-byte).
-  const clickThroughChooser = async () => {
-    if ((await page.locator('[data-testid="logic-style-chooser"]').count()) === 0) return;
-    // Click the Attributes + Rules ROW explicitly (module 01 rebuild: the
-    // whole row is the button, and recommendEngine() decides which row is
-    // recommended from the catalog scan — on a catalog without strong
-    // attributes Rules only leads, and the sections below assert the
-    // attributes workspace, so never click ".is-rec" here).
-    // Owner 2026-09-16 — the FIRST click only selects (label flips to
-    // Continue); the SECOND commits. Assert the two-step, then continue.
-    await page.locator('.qz-lsc-eng[data-pick="attributes"] .qz-lsc-go').click();
-    await page.waitForTimeout(250);
-    if ((await page.locator('[data-testid="logic-style-bar"]').count()) !== 0)
-      throw new Error("chooser committed on the FIRST click");
-    if (!/Continue/.test(await page.locator('.qz-lsc-eng[data-pick="attributes"] .qz-lsc-go').innerText()))
-      throw new Error("selected row's label did not flip to Continue");
-    await page.locator('.qz-lsc-eng[data-pick="attributes"] .qz-lsc-go').click();
-    await page.waitForSelector('[data-testid="logic-style-bar"]', { timeout: 8000 });
-    await page.waitForTimeout(400);
-  };
-  await clickThroughChooser();
-  ok("style chooser answered — the style bar renders",
-    (await page.locator('[data-testid="logic-style-bar"]').count()) === 1);
-  const lvGeo = await page.locator(".qz-s3-logicview").evaluate((el) => {
+  // Logic step redesign (D5, D23) — no first-entry chooser and no top
+  // section: the step opens straight on the workspace card, whose header
+  // carries the title switch. A fresh quiz (no rules, no filter role, no
+  // saved style) resolves to Filter Results + Rules and NOTHING is written
+  // on load.
+  const setStyleRequests = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && (r.postData() ?? "").includes("set-logic-style")) setStyleRequests.push(r.url());
+  });
+  ok("no style chooser (D5)",
+    (await page.locator('[data-testid="logic-style-chooser"]').count()) === 0);
+  ok("the title switch names Filter Results + Rules",
+    ((await page.locator('[data-testid="logic-style-title"]').textContent()) ?? "").includes("Filter Results + Rules"));
+  ok("no h1 / How this works / catalog strip / style bar (D23)",
+    (await page.locator('.qz-ls-h1, .qz-ls-ledebox, [data-testid="logic-catalog-strip"], [data-testid="logic-style-bar"]').count()) === 0);
+  ok("loading the step wrote no style", (await draftDoc())?.logic_style === undefined);
+  const lvGeo = await page.locator('[data-testid="logic-tab-card"]').evaluate((el) => {
     const r = el.getBoundingClientRect();
     return { w: r.width, left: r.left, right: window.innerWidth - r.right };
   });
-  // Owner 2026-08-18 — the answers section widened: 1248 wrap (page cap
-  // 1296), so the table's Answer column gets the extra room.
-  ok("Logic column is the widened centered 1248px wrap",
-    lvGeo.w > 1078 && lvGeo.w <= 1250 && Math.abs(lvGeo.left - lvGeo.right) < 4,
+  // D20 — the 1256px box minus its two 16px gutters: a 1224px card, centred.
+  ok("Logic card is the centred 1224px card (D20)",
+    Math.abs(lvGeo.w - 1224) <= 2 && Math.abs(lvGeo.left - lvGeo.right) < 4,
     `w${lvGeo.w} L${lvGeo.left} R${lvGeo.right}`);
 
-  // 19 ── LW: the funnel Logic stage is the Live artifact's WORKSPACE (mock-
-  // live screenWorkspace): the style bar, the .qz-lw-grid (questions rail +
-  // ONE detail panel), the .qz-lw-rzone rules ledger BELOW the grid in the
-  // Attributes + Rules style — and NOTHING else: no subhead entries, no
-  // explainer strip, no fallback/capture modules (the fallback config moved
-  // to the guided Results step; the capture config to the Questions step's
-  // ✉ rail row — asserted at #12 above).
+  // 19 ── the Filter Results + Rules workspace (D22): rail | pane | rules
+  // column, and NOTHING else: no subhead entries, no explainer strip, no
+  // fallback/capture modules (the fallback config moved to the guided
+  // Results step; the capture config to the Questions step's ✉ rail row).
   const ltab = page.locator('[data-testid="logic-tab-card"]');
-  ok("the Logic card stack renders", (await ltab.count()) === 1);
-  ok("style bar present above the workspace",
-    (await page.locator('[data-testid="logic-style-bar"]').count()) === 1);
-  // Module 02 — the Catalog strip renders at the top of the workspace,
-  // directly ABOVE the style bar, with the product count chip.
-  ok("catalog strip above the style bar with a numeric product count",
-    await page.evaluate(() => {
-      const strip = document.querySelector('[data-testid="logic-catalog-strip"]');
-      const bar = document.querySelector('[data-testid="logic-style-bar"]');
-      const n = strip?.querySelector(".qz-lcs-s.is-cat")?.textContent?.trim() ?? "";
-      return Boolean(strip && bar && /^\d+$/.test(n) &&
-        strip.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING);
-    }));
-  ok("strip attributes variant: products + attributes items, one status flag, no rules-only sentence",
-    (await page.locator(".qz-lcs-item").count()) === 2 &&
-    (await page.locator(".qz-lcs-flag").count()) === 1 &&
-    (await page.locator(".qz-lcs-muted").count()) === 0);
-  // Modules 12/14 are rules-only surfaces — the attributes flow renders
-  // NOTHING of them (no setup scaffold, no coverage sidebar/row).
-  ok("attributes mode renders nothing of modules 12/14",
-    (await page.locator(
-      '.qz-lrs, .qz-lcov, .qz-lcov-row, [data-testid="rules-setup-scaffold"], [data-testid="logic-coverage-sidebar"]',
-    ).count()) === 0);
-  ok("ledger rzone with the Rules heading",
-    (await ltab.locator(".qz-lw-rzone h4", { hasText: "Rules" }).count()) === 1);
-  ok("Add rule present in the rzone head (LW label)",
-    (await ltab.locator(".qz-ltab-create", { hasText: "Add rule" }).count()) === 1);
-  ok("attributes style: the lgrid leads, the ledger follows (resolution order)",
+  ok("the Logic card renders", (await ltab.count()) === 1);
+  ok("the Rules-only screen's pieces are absent in this style",
+    (await page.locator('.qz-lg-rband, [data-testid="logic-recs-strip"], .qz-lrs, .qz-lcov, .qz-lcov-row').count()) === 0);
+  ok("rules column with the Rules heading",
+    (await ltab.locator(".qz-lg-rcol h4", { hasText: "Rules" }).count()) === 1);
+  ok("+ Add present in the rules column head (D18)",
+    (await ltab.locator(".qz-lg-rcol-h .qz-lg-btn", { hasText: "+ Add" }).count()) === 1);
+  ok("three columns: the rules column sits right of the pane (D22)",
     await ltab.evaluate((el) => {
-      const grid = el.querySelector(".qz-lw-grid");
-      const rz = el.querySelector(".qz-lw-rzone");
-      return Boolean(grid && rz &&
-        grid.compareDocumentPosition(rz) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const pane = el.querySelector(".qz-lw-pane");
+      const rc = el.querySelector(".qz-lg-rcol");
+      return Boolean(pane && rc && rc.getBoundingClientRect().left >= pane.getBoundingClientRect().right - 1);
     }));
   ok("lgrid renders one rail row per question (3)",
     (await ltab.locator(".qz-lw-qi").count()) === 3);
@@ -297,43 +261,30 @@ try {
   await page.locator(".qz-topbar-back").click();
   await page.waitForSelector(".qz-s3-logicview", { timeout: 15000 });
   await page.waitForTimeout(300);
-  // The persisted logic_style should skip the chooser on re-entry; the
-  // guard stays for a slow intent write (never a wrong-order failure).
-  await clickThroughChooser();
 
-  // 19c ── the style bar's SWITCH, on a RE-ENTRY render (owner repro: the
-  // persisted logic_style is in the loader doc here, which used to shadow
-  // the click until a full reload — "Switch does nothing"). The flip must
-  // be IMMEDIATE: bar text, ledger-leads order, and the retired role
-  // column all change without a navigation; and the set-logic-style intent
-  // persists the flip server-side.
-  const barText = async () =>
-    (await page.locator('[data-testid="logic-style-bar"]').textContent()) ?? "";
-  ok("re-entry bar shows the persisted Attributes + Rules style",
-    (await barText()).includes("Attributes + Rules"));
-  await page.locator(".qz-lsb-switch").click();
+  // 19c ── the title switch, on a RE-ENTRY render: the style is a DOC field
+  // written through the autosave (D1), so the flip is immediate, survives
+  // Back → Continue, and never sends the set-logic-style intent.
+  const titleText = async () =>
+    (await page.locator('[data-testid="logic-style-title"]').textContent()) ?? "";
+  ok("re-entry shows Filter Results + Rules", (await titleText()).includes("Filter Results + Rules"));
+  await page.locator('[data-testid="logic-style-title"]').click();
+  await page.locator('[data-testid="logic-style-menu"] [role="menuitemradio"]', { hasText: "Rules only" }).click();
   await page.waitForTimeout(400);
-  ok("Switch flips the bar to Rules only IMMEDIATELY (no reload)",
-    (await barText()).includes("Rules only"));
-  ok("rules-only leads with the ledger (rzone before the grid)",
-    await page.evaluate(() => {
-      const rz = document.querySelector(".qz-lw-rzone");
-      const grid = document.querySelector(".qz-lw-grid");
-      return Boolean(rz && grid &&
-        rz.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING);
-    }));
-  ok("rules-only retires the role column (no Role row in the panel)",
-    (await page.locator(".qz-lw-drole").count()) === 0);
-  ok('switch persisted server-side (build_session.logic_style "rules")',
-    await waitDraft((d) => d?.build_session?.logic_style === "rules"));
-  // Flip BACK so the fixture flow (and the restore snapshot's expectations)
-  // continue on the attributes style the section above asserted.
-  await page.locator(".qz-lsb-switch").click();
+  ok("the switch flips to Rules only IMMEDIATELY (no reload)", (await titleText()).includes("Rules only"));
+  ok("Rules only: the rules band and the recommendations strip, no question widget",
+    (await page.locator(".qz-lg-rband").count()) === 1 &&
+    (await page.locator('[data-testid="logic-recs-strip"]').count()) === 1 &&
+    (await page.locator(".qz-lw-grid").count()) === 0);
+  ok('switch persisted on the doc (logic_style "rules")',
+    await waitDraft((d) => d?.logic_style === "rules"));
+  await page.locator('[data-testid="logic-style-title"]').click();
+  await page.locator('[data-testid="logic-style-menu"] [role="menuitemradio"]', { hasText: "Filter Results + Rules" }).click();
   await page.waitForTimeout(400);
-  ok("Switch flips back to Attributes + Rules immediately",
-    (await barText()).includes("Attributes + Rules"));
-  ok('switch-back persisted (build_session.logic_style "attributes")',
-    await waitDraft((d) => d?.build_session?.logic_style === "attributes"));
+  ok("switch back to Filter Results + Rules immediately", (await titleText()).includes("Filter Results + Rules"));
+  ok('switch-back persisted (logic_style "attributes")',
+    await waitDraft((d) => d?.logic_style === "attributes"));
+  ok("no set-logic-style intent was sent", setStyleRequests.length === 0);
 
   // 20 ── the bar's ‹ back = the goto-stage intent (backwards-only) → the
   // Questions stage again, so the walk proves both directions of the seam.

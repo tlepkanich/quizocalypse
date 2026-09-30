@@ -4,6 +4,8 @@ import type { Quiz } from "../../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
+import type { LogicStyle } from "../../../lib/logicStyle";
+import type { RulesUndo } from "./RulesList";
 import { createDecisionRule, updateDecisionRule } from "../../../lib/quizMutations";
 import { QzPopover, useFocusTrap } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
@@ -249,6 +251,18 @@ export function CreateRuleModal({
   /** Latest-doc seam: commit builds on the CURRENT doc, not the render-time
    *  snapshot captured before the ensure-targets await (review L2-5). */
   getLatestDoc?: () => QuizDoc;
+  // ── Logic step redesign seams (the backbone passes these; agent E
+  //    implements them — unused until then) ──────────────────────────────
+  /** The SCREEN style (resolveLogicStyle): Rules only offers Show alone
+   *  (D2 settled half); Filter Results + Rules keeps Show / Pin / Hide. */
+  style?: LogicStyle;
+  /** Prefill for "Create a rule" opened from an uncovered recommendation
+   *  (strip pill, "+N more" row, check-popover row). Apply ONLY in the open
+   *  effect that resets the draft, never mid-edit. */
+  initialTargetIds?: readonly string[];
+  /** The card's ONE Undo run (useLogicUndo), so "Delete rule" in the window
+   *  joins the same toast as a row delete (D7). */
+  undo?: RulesUndo;
 }) {
   const toast = useQzToast();
   const boxRef = useRef<HTMLDivElement>(null);

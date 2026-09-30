@@ -125,6 +125,7 @@ export function LogicQuestionWidget({
   onSelect,
   onAddQuestion,
   onExplain,
+  aside,
 }: {
   doc: QuizDoc;
   questions: OrderedQuestion[];
@@ -144,7 +145,12 @@ export function LogicQuestionWidget({
   selectedId: string | null;
   onSelect: (nodeId: string) => void;
   onAddQuestion?: () => void;
-  onExplain: () => void;
+  /** The rail's ✦ door; absent = no button (the Logic step redesign dropped
+   *  the explainer sheet, D23). */
+  onExplain?: () => void;
+  /** Logic step redesign (D22): a THIRD grid column after the pane (the
+   *  rules column in Filter Results + Rules). LogicTabCard supplies it. */
+  aside?: ReactNode;
 }) {
   const selected = questions.find((q) => q.node.id === selectedId) ?? questions[0] ?? null;
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -187,20 +193,22 @@ export function LogicQuestionWidget({
   }, []);
 
   return (
-    <div className="qz-lw-grid qz-lw-grid--b">
+    <div className={`qz-lw-grid qz-lw-grid--b${aside ? " qz-lw-grid--3" : ""}`}>
       <div className="qz-lw-rail">
         <div className="qz-lw-railhead">
           <span className="qz-lw-railh">Questions</span>
           <span className="qz-lw-railn">{questions.length}</span>
-          <button
-            type="button"
-            className="qz-lw-howmini"
-            aria-label="How questions work"
-            title="How questions work"
-            onClick={onExplain}
-          >
-            ✦
-          </button>
+          {onExplain ? (
+            <button
+              type="button"
+              className="qz-lw-howmini"
+              aria-label="How questions work"
+              title="How questions work"
+              onClick={onExplain}
+            >
+              ✦
+            </button>
+          ) : null}
         </div>
         {questions.map((q) => {
           const role = displayRole(q.node.data.role, rulesOnly);
@@ -259,6 +267,7 @@ export function LogicQuestionWidget({
           <p className="qz-ltab-empty">No questions yet.</p>
         )}
       </div>
+      {aside ?? null}
     </div>
   );
 }

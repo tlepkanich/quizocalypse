@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useRevalidator } from "@remix-run/react";
 import { ChevronLeft } from "lucide-react";
 import { QzPage, QzCard, QzBanner, QzTooltip } from "../qz";
-import { QzModal } from "../qz-overlays";
+import { QzModal, QzPopover } from "../qz-overlays";
 import { FunnelBarContext, type FunnelBarOverride, type FunnelContinueSpec } from "./funnelChrome";
 import { QuestionBuilderStage } from "./QuestionBuilderStage";
 import { RecommendationStage } from "./RecommendationStage";
@@ -88,8 +88,14 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
   // Backwards-only is enforced server-side; while a generation job runs the
   // done nodes and back are inert (jumping would strand the detached job).
   const canJump = !isGenerating && !navBusy;
-  const gotoStage = (stage: string) =>
+  // Logic step redesign — the step flushes its pending autosave before a
+  // stage jump (beforeNavigate), so an edit inside the 700 ms debounce is
+  // saved before the stage changes; a failed save keeps the merchant here.
+  const beforeNavigate = barOverride?.beforeNavigate;
+  const gotoStage = async (stage: string) => {
+    if (beforeNavigate && !(await beforeNavigate())) return;
     fetcher.submit({ intent: "goto-stage", stage }, { method: "post" });
+  };
 
   // §1.3 — back goes ONE step back; from step 1 it leaves the builder (the
   // one confirm). The label always names the destination.
@@ -116,10 +122,39 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
       : { label: "Continue", onClick: () => {}, disabled: true };
   const cont = barOverride?.continueSpec ?? defaultContinue;
 
-  const continueBtn = (
+  const pop = cont.popover;
+  const continueClass = `qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}${
+    cont.blocked && cont.blockedLook === "outline" ? " is-blocked-outline" : ""
+  }${cont.loading ? " qz-btn-loading" : ""}`;
+  // Logic step redesign — with a popover (the check popover) the CTA is a
+  // controlled QzPopover trigger: the popover owns aria-haspopup /
+  // aria-expanded and the click (toggle), so the button carries neither.
+  const continueBtn = pop ? (
+    <QzPopover
+      open={pop.open}
+      onOpenChange={pop.onOpenChange}
+      align="end"
+      width={pop.width ?? 360}
+      maxWidth={pop.width ?? 360}
+      manageFocus
+      ariaLabel={pop.ariaLabel}
+      className="qz-lg-pop qz-lg-checkpop"
+      content={pop.content}
+      trigger={
+        <button
+          type="button"
+          className={continueClass}
+          disabled={cont.disabled}
+          aria-busy={cont.loading || undefined}
+        >
+          {cont.label}
+        </button>
+      }
+    />
+  ) : (
     <button
       type="button"
-      className={`qz-topbar-continue${cont.disabled ? " is-off" : ""}${cont.blocked ? " is-blocked" : ""}${cont.loading ? " qz-btn-loading" : ""}`}
+      className={continueClass}
       disabled={cont.disabled}
       aria-busy={cont.loading || undefined}
       aria-haspopup={cont.blocked ? "dialog" : undefined}
@@ -135,7 +170,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
           · the step flow owning the free width · save chip + back + Continue.
           Replaces the two-row funnel chrome AND Step-3's floating TopBar3. */}
       <TopBar
-        nav={<FunnelStepNav stage={data.stage} onStepClick={canJump ? gotoStage : undefined} />}
+        nav={<FunnelStepNav stage={data.stage} onStepClick={canJump ? (id) => void gotoStage(id) : undefined} />}
         onHomeClick={(e) => {
           e.preventDefault();
           setLeaveOpen(true);
@@ -154,7 +189,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
               disabled={isGenerating || navBusy}
               title={backLabel}
               aria-label={backLabel}
-              onClick={() => (backStep ? gotoStage(backStep.key) : setLeaveOpen(true))}
+              onClick={() => (backStep ? void gotoStage(backStep.key) : setLeaveOpen(true))}
             >
               <ChevronLeft size={18} strokeWidth={2} aria-hidden />
             </button>
@@ -310,6 +345,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
               designTokens={data.designTokens}
               lastSyncAt={data.lastSyncAt ?? null}
               shopifyAdminDomain={data.shopifyAdminDomain ?? null}
+              catalog={data.catalog}
             />
           )}
         </ClientOnly>

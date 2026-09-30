@@ -5682,10 +5682,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
    MATCHES cell + its popover editor · the capture terminal module. ── */
 /* AUDIT-23 — overview-cards page geometry: the mock's .wrap is a CENTERED
    1080px column (1036px of content after its 22px gutters). */
-/* Owner 2026-08-18 — "make the entire answers section wider": the Logic view
-   widens from 1076 to the Questions card's 1248 rhythm; the table's Answer
-   column (the flexible cell) absorbs the extra width. */
-.qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; max-width: 1248px; width: 100%; margin: 0 auto; }
+/* .qz-s3-logicview geometry moved to the "Logic step redesign" block (D20). */
 /* QRTZ-G3 — the sub-header + "How this quiz resolves" explainer strip are
    retired: the artifact's Logic screen is the two cards and nothing else. */
 
@@ -5764,45 +5761,6 @@ body[data-qz] .qz-s3-editable:focus-visible {
   .qz-lsc-spin { animation: none; }
   .qz-lsc-eng { transition: none; }
 }
-
-/* ── Live screens B/K chrome — the workspace h1 + the collapsible
-   explainer (ledebox/stagelede) + the exact .lbar style bar. ── */
-.qz-ls-h1 { margin: 8px 0 0; font-size: var(--qz-t-h2); font-weight: 700; letter-spacing: -0.02em; line-height: 1.3; }
-.qz-ls-ledebox { margin-top: 2px; }
-.qz-ls-ledebox > summary {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
-  font-size: 11px; font-weight: 700; color: var(--qz-ink-4);
-  text-transform: uppercase; letter-spacing: .05em; padding: 3px 0;
-}
-.qz-ls-ledebox > summary::-webkit-details-marker { display: none; }
-.qz-ls-ledebox > summary::after { content: "▾"; font-size: 10px; }
-.qz-ls-ledebox > summary:hover { color: var(--qz-accent-ink); }
-.qz-ls-lede {
-  margin: 6px 0 0; max-width: 74ch; font-size: 13.5px; line-height: 1.62; color: var(--qz-ink-4);
-}
-.qz-ls-lede b { color: var(--qz-ink-3); font-weight: 700; }
-.qz-ls-ll { display: block; }
-.qz-ls-ll.is-ex {
-  margin: 7px 0; padding: 7px 11px; border-left: 2px solid var(--qz-accent-line);
-  background: var(--qz-accent-wash); border-radius: 0 var(--qz-radius-sm) var(--qz-radius-sm) 0;
-  color: var(--qz-ink-3); width: fit-content; max-width: 100%;
-}
-.qz-ls-ll.is-ex b { color: var(--qz-accent-ink); }
-.qz-lsb {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 12px 15px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
-  background: var(--qz-paper); font-size: 13px; color: var(--qz-ink-3);
-}
-.qz-lsb-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--qz-ink-4); font-weight: 600; }
-.qz-lsb-style { font-weight: 600; font-size: 15px; color: var(--qz-ink); }
-.qz-lsb-note { font-size: 13px; color: var(--qz-ink-4); }
-.qz-lsb-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.qz-lsb-switch, .qz-lsb-check {
-  appearance: none; font: inherit; cursor: pointer; font-size: 12.5px; font-weight: 600;
-  padding: 5px 11px; border-radius: var(--qz-radius); border: 1px solid var(--qz-rule-strong);
-  background: var(--qz-paper); color: var(--qz-ink-3);
-}
-.qz-lsb-switch:hover, .qz-lsb-check:hover { color: var(--qz-accent-ink); border-color: var(--qz-accent); }
 
 /* Two columns: map + 356px sticky rules column (spec §2, fits at 1024). */
 /* logic-page-v4 — single-column stacked (Rules → map → Fallback), not a
@@ -7437,18 +7395,16 @@ body[data-qz] .qz-cust-row:focus-visible {
    CSS). Four quartz literals have no repo token and ride scoped custom
    props (--qz-h3-*), declared on the stack root AND on the portalled
    products popover. */
-.qz-ltab-stack, .qz-pp {
+.qz-lg-card, .qz-pp {
   --qz-h3-group-rule: 1.5px solid #CFCADD; /* quartz --group-rule */
   --qz-h3-qcell-bg: #FBFAFD;               /* quartz --qcell-bg */
   --qz-h3-tag-bg: #F2F1F6;                 /* quartz --tag-a/b-bg */
   --qz-h3-tag-ink: #453F58;                /* quartz --tag-a/b-ink */
   --qz-h3-tag-line: #E1DEEA;               /* quartz --tag-a/b-line */
 }
-/* (LW — the .qz-ltab section card, its .qz-ltab-hd header and the old
-   hairline rule list are retired: the ledger is the .qz-lw-rzone card and
-   the questions live in the .qz-lw-grid workspace. .qz-ltab-empty and
-   .qz-ltab-rnum stay — the rzone empty state and the Explainers' numbered
-   rows still render them.) */
+/* (.qz-ltab-empty and .qz-ltab-rnum stay: the question widget's empty state
+   and the Explainers' numbered rows still render them. The ledger they
+   served is retired by the Logic step redesign's rules list.) */
 .qz-ltab-empty { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-3); padding: 10px 18px; margin: 0; }
 .qz-ltab-rnum {
   flex: none; width: 22px; height: 22px; display: grid; place-items: center;
@@ -7456,71 +7412,8 @@ body[data-qz] .qz-cust-row:focus-visible {
   background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
   font-variant-numeric: tabular-nums;
 }
-/* Drag rides the row (mock .rcard draws NO grip); the λ pill is the handle. */
-.qz-lw-rcard[draggable="true"] .qz-lw-rn { cursor: grab; }
-.qz-ltab-rwhen { color: var(--qz-ink-4); }
-.qz-ltab-arrow { color: var(--qz-ink-4); padding: 0 3px; }
-.qz-ltab-ans {
-  font-weight: 600; color: var(--qz-ink); background: var(--qz-cream-2);
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
-  padding: 1px 6px;
-}
-.qz-ltab-op {
-  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--qz-ink-4); padding: 0 2px;
-}
-.qz-ltab-verb { font-weight: 600; }
-.qz-ltab-verb.is-show, .qz-ltab-verb.is-highlight { color: var(--qz-ok); }
-.qz-ltab-verb.is-exclude, .qz-ltab-verb.is-hide { color: var(--qz-crit); }
-/* Logic-step §4 — Pin (action "prioritize") joins the verb set. */
-.qz-ltab-verb.is-pin { color: var(--qz-accent-ink); }
-.qz-ltab-rkind { font-size: 10.5px; color: var(--qz-ink-4); }
-/* P4 — delete (mock .icon-btn, hover-revealed) + the visually-hidden
-   keyboard reorder pair (a11y — hidden visually, never from the tree);
-   §3.3 fresh-rule highlight (1800 ms). */
-.qz-ltab-ractions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-.qz-ltab-ricon {
-  width: 26px; height: 26px; flex: none; display: grid; place-items: center;
-  font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
-  border: 0; background: transparent; color: var(--qz-ink-4);
-  border-radius: var(--qz-radius-sm); opacity: 0;
-}
-.qz-lw-rcard:hover .qz-ltab-ricon, .qz-ltab-ricon:focus-visible { opacity: 1; }
-.qz-ltab-ricon:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
-.qz-ltab-rmove {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
-  border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
-}
-.qz-ltab-rmove:focus-visible {
-  position: static; width: auto; height: auto; margin: 0; padding: 3px 6px;
-  overflow: visible; clip: auto; white-space: normal;
-  font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
-  background: var(--qz-cream-2); color: var(--qz-ink);
-  border-radius: var(--qz-radius-sm);
-}
-.qz-lw-rcard.is-fresh { background: var(--qz-accent-wash); transition: background 0.4s ease; }
-/* Logic-step mock 09 — the [Qn answer] condition chips and the never-fires
-   surfaces (shared by the LW rzone rows). */
 .qz-ltab-rnum { width: auto; min-width: 22px; padding: 0 5px; }
-.qz-ltab-cchip {
-  display: inline-flex; align-items: baseline; gap: 5px;
-  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
-  border-radius: var(--qz-radius-sm); padding: 1px 6px;
-}
-.qz-ltab-cchip .qz-ltab-ans { background: none; border: none; padding: 0; }
-.qz-ltab-cchip .qz-ltab-op { padding: 0; }
-.qz-ltab-qn { font-size: 10px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
-.qz-ltab-rflag { display: block; margin: 2px 0 0; font-size: 12px; color: var(--qz-ink-4); line-height: 1.5; }
-.qz-ltab-rflagchip {
-  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
-  text-transform: uppercase; padding: 1px 6px; border-radius: var(--qz-radius-sm);
-  background: var(--qz-warn-wash); color: var(--qz-warn); border: 1px solid var(--qz-warn-edge);
-}
-.qz-ltab-rulebanner {
-  margin: 0 0 4px; padding: 8px 12px; font-size: 12.5px; color: var(--qz-warn);
-  background: var(--qz-warn-tint); border: 1px solid var(--qz-warn-edge);
-  border-radius: var(--qz-radius);
-}
+
 /* Funnel RuleRow's read-only multi-target badge (review L1-1). */
 .qz-s3-rr-multi { font-size: 12px; color: var(--qz-ink-4); font-style: italic; }
 
@@ -7657,15 +7550,7 @@ body[data-qz] .qz-cust-row:focus-visible {
 /* ── P6/H3 — the per-card explain buttons + explainer sheets (§7).
    Mock .explain-btn (base.mjs 1392–1399): accent-washed, 12.5/600,
    the ✦ icon at 11px. ── */
-.qz-ltab-how {
-  font: inherit; display: inline-flex; align-items: center; gap: 7px;
-  font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
-  border: 1px solid var(--qz-accent-line); background: var(--qz-accent-wash);
-  color: var(--qz-accent-ink);
-  padding: 6px 12px; border-radius: var(--qz-radius);
-}
-.qz-ltab-how:hover { background: var(--qz-paper); border-color: var(--qz-accent); }
-.qz-ltab-how-ico { font-size: 11px; }
+
 .qz-xpl {
   display: flex; flex-direction: column;
   width: min(900px, 94vw); max-height: 92vh;
@@ -8259,46 +8144,6 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
   .qz-lw-acellw, .qz-lw-aroute { grid-column: 2; }
 }
 
-/* — the rules ledger (.rzone/.rhead/.rcard) — */
-.qz-lw-rzone {
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
-  background: var(--qz-paper); overflow: hidden;
-}
-.qz-lw-rhead {
-  display: flex; align-items: center; gap: 10px; padding: 12px 15px;
-  border-bottom: 1px solid var(--qz-rule); background: var(--qz-cream-2);
-  flex-wrap: wrap;
-}
-.qz-lw-rhead h4 { margin: 0; font-size: 14.5px; font-weight: 600; }
-.qz-lw-rsub { font-size: 12.5px; color: var(--qz-ink-4); }
-.qz-lw-rright { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.qz-lw-rzone .qz-ltab-rulebanner { margin: 12px 15px 0; }
-.qz-lw-rlist {
-  list-style: none; margin: 0; padding: 12px 15px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.qz-lw-rcard {
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
-  padding: 12px 14px; background: var(--qz-paper);
-  display: flex; gap: 12px; align-items: center;
-}
-.qz-lw-rn {
-  flex: none; font-size: 11px; font-weight: 700; color: var(--qz-warn);
-  background: var(--qz-ls-warn-wash); border: 1px solid var(--qz-ls-warn-line);
-  padding: 3px 7px; border-radius: var(--qz-radius-sm);
-  font-variant-numeric: tabular-nums;
-}
-.qz-lw-rline { flex: 1; min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); line-height: 1.7; }
-.qz-lw-rsent { display: block; }
-.qz-lw-rline b { color: var(--qz-ink); font-weight: 600; }
-/* Target chips (.tchip) inside the sentence. */
-.qz-lw-tchip {
-  display: inline-flex; padding: 3px 10px; border-radius: var(--qz-radius-sm);
-  font-size: 12.5px; font-weight: 500; vertical-align: baseline;
-  background: var(--qz-live-wash); color: var(--qz-ok);
-  border: 1px solid var(--qz-ls-ok-line);
-}
-
 /* — the value picker (Live I: .pop-b search · source chips · groups ·
    ✓ option rows · the union footer). Lives inside .qz-popover, which owns
    the card chrome; the footer bleeds the popover's 14/16 padding. — */
@@ -8555,7 +8400,6 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 .qz-ltable-cancel {
   font: inherit; font-size: 11px; border: none; background: none; cursor: pointer; color: var(--qz-ink-3); padding: 2px;
 }
-
 
 /* (--qz-warn-wash now lives in the main :root — the audit-fix patch block
    that used to sit here was folded up during the Quartz swap.) */
@@ -10235,8 +10079,7 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 /* (.qz-ltab-hdmeta retired with the two-card headers — LW.) */
 /* Rule drag-reorder (row is the handle — the mock draws no grip; the
    visually-hidden ↑/↓ pair stays the keyboard path). */
-.qz-lw-rcard.is-dragging { opacity: 0.4; }
-.qz-lw-rcard.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent); }
+
 /* (QRTZ-H3: the compact popover product-list rules — countline/pmain/pname/
    pmeta/stock — are retired; the popover is the mock's .pp grid now, styled
    in the QRTZ-H3 section.) */
@@ -11160,7 +11003,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* ═══ QRTZ-G3 — Logic two-card view + relocated capture/fallback ═══ */
 /* The artifact's Logic screen (shared.mjs screenLogic) is two cards, Rules
    then Questions, stacked. The wrapper carries the historical testid. */
-.qz-ltab-stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* Paths kept behind a quiet secondary affordance (the artifact has no tabs). */
 .qz-ltab-pathsrow { display: flex; }
@@ -11634,8 +11476,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-antabs a.is-active { color: var(--qz-accent-ink); border-bottom-color: var(--qz-accent); }
 .qz-antab-n { font-size: 11px; font-weight: 700; margin-left: 6px; padding: 1px 7px; border-radius: var(--qz-radius-pill); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
 
-
-
 /* Step ledger — the steepest drop gets a quiet flag, not a red table. */
 .qz-anworst td { background: var(--qz-warn-tint); }
 .qz-anworst-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-warn); margin-left: 8px; }
@@ -11805,9 +11645,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   transition: max-width .3s cubic-bezier(.22, .61, .36, 1);
 }
 .qz-page.is-funnel:has(.qz-qf-panel .qz-devframe[data-qz-tier="desktop"]) { max-width: 1448px; }
-/* Owner 2026-08-18 — the Logic step's answers table gets the same room: the
-   page cap lifts so .qz-s3-logicview's 1248 wrap (its own cap) can bind. */
-.qz-page.is-funnel:has(.qz-s3-logicview) { max-width: 1296px; }
 /* The style chooser is a decision surface, not a table: it takes step 01's
    width. Equal specificity with the rule above, so this MUST stay after it. */
 .qz-page.is-funnel:has(.qz-lsc) { max-width: 1000px; padding: 28px 24px 72px; }
@@ -12463,13 +12300,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
    two-column row (single column under 900px, matching the .qz-lw-grid
    breakpoint); the questions grid keeps the full width below.
    ═════════════════════════════════════════════════════════════════════ */
-.qz-lcov-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) 296px;
-  gap: 16px; align-items: start;
-}
-@media (max-width: 900px) {
-  .qz-lcov-row { grid-template-columns: 1fr; }
-}
 .qz-lcov {
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
   background: var(--qz-paper); overflow: hidden;
@@ -12622,3 +12452,324 @@ body[data-qz] .qz-ed:focus-visible {
   .qz-fsp { transition: none; }
   .qz-fsp-spin { animation: none; }
 }
+
+/* ══ Logic step redesign ═════════════════════════════════════════════════════
+   The Logic workspace card built to docs/design/logic-tab/rules-row/index.html
+   at the mock's 100% sizes (D20). Mock class → .qz-lg-<mock name>; every
+   colour is a --qz-* token (the mock's :root hexes map one for one:
+   --ground → --qz-cream-2, --cell → --qz-ls-cell-bg, --line2 → --qz-ls-line2,
+   --warn-line → --qz-ls-warn-line, --crit-wash → --qz-ls-crit-wash). The few
+   values Quartz has no token for are declared below as --qz-lg-*.
+   Shared by the funnel's Logic step and the builder's Logic view (the
+   builder mounts the card without the header, D6). ══ */
+:root {
+  --qz-lg-lift: 0 1px 2px rgba(32, 28, 46, 0.08), 0 0 0 1px rgba(32, 28, 46, 0.04); /* mock --lift */
+  --qz-lg-pop: 0 12px 32px rgba(32, 28, 46, 0.16), 0 0 0 1px rgba(32, 28, 46, 0.06); /* mock --pop */
+  --qz-lg-warn-dot: #C98A1B;  /* mock --warn-dot: "needs a rule" dot */
+  --qz-lg-res: #1D4F91;       /* mock --res: recommendation chips in sentences */
+  --qz-lg-res-wash: #EAF2FE;  /* mock --res-wash */
+  --qz-lg-res-line: #C9DCFB;  /* mock --res-line */
+  /* D20 size tokens (100%); a later scale factor multiplies these. */
+  --qz-logic-work-max: 1256px;
+  --qz-logic-stage-min: 1200px;
+  --qz-logic-rail-w: 262px;
+  --qz-logic-rules-w: 304px;
+}
+
+/* — the stage: the funnel page's side padding drops on this step so the
+     view's 16px is the only gutter; under 1200px the view scrolls sideways — */
+.qz-page.is-funnel:has(.qz-s3-logicview) { max-width: none; padding: 0; overflow-x: auto; }
+.qz-s3-logicview {
+  display: block; box-sizing: border-box; width: 100%;
+  max-width: var(--qz-logic-work-max); min-width: var(--qz-logic-stage-min);
+  margin: 0 auto; padding: 22px 16px 40px;
+}
+
+/* — the card (mock .card) — */
+.qz-lg-card {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  background: var(--qz-paper); overflow: hidden;
+  font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.qz-lg-card [hidden] { display: none !important; }
+.qz-lg-card :is(button, [tabindex]):focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lg-card .qz-lw-grid { border: 0; border-radius: 0; }
+.qz-lg-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; margin: 0;
+}
+
+/* — buttons (mock .btn / .link) — */
+.qz-lg-btn {
+  border: 1px solid var(--qz-rule-strong); background: var(--qz-paper);
+  border-radius: var(--qz-radius); padding: 5px 11px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink-3); white-space: nowrap; cursor: pointer;
+}
+.qz-lg-btn:hover { border-color: var(--qz-ink-3); color: var(--qz-ink); }
+.qz-lg-btn.is-pri { border-color: var(--qz-accent); background: var(--qz-accent); color: var(--qz-on-accent); }
+.qz-lg-btn.is-pri:hover { border-color: var(--qz-accent-2); background: var(--qz-accent-2); color: var(--qz-on-accent); }
+.qz-lg-link {
+  border: 0; background: none; padding: 3px 6px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-accent-ink); cursor: pointer;
+}
+.qz-lg-link:hover { background: var(--qz-accent-wash); }
+
+/* — the status header (mock .status / .stitle / .sdesc / .more / .sact) — */
+.qz-lg-status {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px;
+  border-bottom: 1px solid var(--qz-rule); padding: 8px 12px 8px 20px;
+}
+.qz-lg-stitle-h { margin: 0; font: inherit; display: inline-flex; }
+.qz-lg-stitle {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  border: 0; background: none; padding: 2px 8px; margin-left: -8px;
+  border-radius: var(--qz-radius); font-family: inherit;
+  font-size: 20px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25;
+  color: var(--qz-ink); white-space: nowrap; cursor: pointer;
+}
+.qz-lg-stitle:hover { background: var(--qz-cream-2); }
+.qz-lg-stitle.is-static { cursor: default; }
+.qz-lg-stitle.is-static:hover { background: none; }
+.qz-lg-stitle .qz-lg-cv { font-size: 11px; color: var(--qz-ink-4); }
+.qz-lg-sdesc { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 2px; }
+.qz-lg-status-p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--qz-ink-4); }
+.qz-lg-more {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;
+  border: 0; background: none; padding: 1px 5px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-accent-ink); cursor: pointer;
+}
+.qz-lg-more:hover { background: var(--qz-accent-wash); }
+.qz-lg-more span { font-size: 9px; }
+.qz-lg-more.is-open span { transform: rotate(180deg); }
+.qz-lg-sact { display: flex; align-items: center; gap: 10px; align-self: center; margin-left: auto; }
+.qz-lg-sact .qz-lg-link { font-size: 13px; padding: 2px 6px; }
+.qz-lg-sact .qz-lg-btn.is-pri { padding: 6px 13px; font-size: 13px; }
+
+/* Edit | Table (mock .vseg2) */
+.qz-lg-vseg2 { display: inline-flex; background: var(--qz-rule-2); border-radius: var(--qz-radius); padding: 2px; }
+.qz-lg-vseg2 button {
+  border: 0; background: none; padding: 4px 11px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink-4); cursor: pointer;
+}
+.qz-lg-vseg2 button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-lg-lift); }
+
+/* Import | Export (mock .iox) */
+.qz-lg-iox { display: inline-flex; border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius); overflow: hidden; }
+.qz-lg-iox button {
+  border: 0; background: var(--qz-paper); padding: 5px 11px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink-3); cursor: pointer;
+}
+.qz-lg-iox button + button { border-left: 1px solid var(--qz-rule); }
+.qz-lg-iox button:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-lg-iox button:disabled { background: var(--qz-paper); color: var(--qz-ink-25); cursor: default; }
+
+/* — popovers on this screen (mock #pop / .pt / .mi) — */
+.qz-popover.qz-lg-pop { padding: 10px; font-size: 13px; box-shadow: var(--qz-lg-pop); border-radius: var(--qz-radius-lg); }
+.qz-lg-pop .qz-menu { margin: 0; min-width: 0; }
+.qz-lg-pop .qz-menu-title, .qz-lg-pt {
+  font-size: 12px; font-weight: 700; color: var(--qz-ink);
+  padding: 4px 8px 8px; overflow-wrap: anywhere; outline: none;
+}
+.qz-lg-pop .qz-menu-item {
+  height: auto; gap: 10px; padding: 7px 8px; border-radius: var(--qz-radius);
+  font-size: 13.5px; line-height: 1.45;
+}
+.qz-lg-pop .qz-menu-hint { padding-left: 0; font-size: 11.5px; color: var(--qz-ink-4); text-align: right; }
+.qz-lg-mi {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: 0; background: none; border-radius: var(--qz-radius); padding: 7px 8px;
+  text-align: left; font-family: inherit; font-size: 13.5px; line-height: 1.45;
+  color: var(--qz-ink); cursor: pointer;
+}
+.qz-lg-mi:hover { background: var(--qz-cream-2); }
+.qz-lg-mi.is-static { cursor: default; }
+.qz-lg-mi.is-static:hover { background: none; }
+.qz-lg-mi-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-lg-mi-h { margin-left: auto; font-size: 11.5px; color: var(--qz-ink-4); text-align: right; white-space: nowrap; }
+.qz-lg-vptools { padding: 0 8px 4px; }
+.qz-lg-vpsearch {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--qz-rule-strong);
+  border-radius: var(--qz-radius); padding: 6px 9px;
+  font-family: inherit; font-size: 13px; color: var(--qz-ink); background: var(--qz-paper);
+}
+.qz-lg-vplist { max-height: 300px; overflow-y: auto; padding: 2px 0 4px; }
+.qz-lg-vpnone { padding: 14px 8px; text-align: center; font-size: 12.5px; color: var(--qz-ink-4); }
+
+/* — the check popover (mock checkPop / .find / .sv) and the blocked CTA — */
+.qz-lg-findlist { list-style: none; margin: 0; padding: 0; }
+.qz-lg-find {
+  display: flex; gap: 9px; align-items: flex-start; width: 100%;
+  border: 0; background: none; text-align: left; padding: 8px;
+  border-radius: var(--qz-radius); font-family: inherit; font-size: 13px; line-height: 1.45;
+  color: var(--qz-ink-3);
+}
+button.qz-lg-find { cursor: pointer; }
+button.qz-lg-find:hover { background: var(--qz-cream-2); }
+.qz-lg-sv { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
+.qz-lg-sv.is-crit { background: var(--qz-crit); }
+.qz-lg-sv.is-warn { background: var(--qz-lg-warn-dot); }
+.qz-lg-sv.is-note { background: var(--qz-ink-25); }
+.qz-lg-checkfoot { border-top: 1px solid var(--qz-rule-2); margin-top: 8px; padding-top: 8px; }
+.qz-topbar-continue.is-blocked-outline,
+.qz-topbar-continue.is-blocked-outline:hover,
+.qz-topbar-continue.is-blocked-outline:active:not(:disabled) {
+  background: var(--qz-paper); color: var(--qz-crit); box-shadow: inset 0 0 0 1px var(--qz-crit);
+}
+
+/* — Filter Results + Rules: 3 columns 262 / 1fr / 304 (D22) — */
+.qz-lw-grid.qz-lw-grid--3 { grid-template-columns: var(--qz-logic-rail-w) minmax(0, 1fr) var(--qz-logic-rules-w); }
+@media (max-width: 900px) {
+  .qz-lw-grid.qz-lw-grid--3 { grid-template-columns: var(--qz-logic-rail-w) minmax(0, 1fr) var(--qz-logic-rules-w); }
+  .qz-lw-grid--3 > .qz-lw-rail { border-right: 1px solid var(--qz-rule); border-bottom: 0; }
+}
+.qz-lw-grid--3 > .qz-lw-rail { padding: 12px; min-height: 480px; display: flex; flex-direction: column; }
+
+/* the rules column (mock .rcol / .rcol-in / .rlist / .rrow) — it fills its
+   grid cell absolutely, so extra rules scroll inside it and never grow the
+   card; the fade says there is more below (B62) */
+.qz-lg-rcol { position: relative; border-left: 1px solid var(--qz-rule); background: var(--qz-ls-cell-bg); min-width: 0; }
+.qz-lg-rcol-in { position: absolute; inset: 0; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.qz-lg-rcol-h { display: flex; align-items: center; gap: 8px; }
+.qz-lg-rcol-h h4 { margin: 0; flex: 1; font-size: 14.5px; font-weight: 700; color: var(--qz-ink); }
+.qz-lg-rcol p { margin: 0; font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-lg-rcount { margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
+.qz-lg-rlistw { position: relative; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.qz-lg-rlistw.is-more::after {
+  content: ""; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 40px;
+  border-radius: 0 0 var(--qz-radius) var(--qz-radius);
+  background: linear-gradient(color-mix(in srgb, var(--qz-paper) 0%, transparent), var(--qz-paper));
+  pointer-events: none;
+}
+.qz-lg-rlist {
+  flex: 0 1 auto; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none;
+  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+}
+.qz-lg-rempty { padding: 10px 12px; font-size: 12.5px; color: var(--qz-ink-3); outline: none; }
+.qz-lg-rempty b { color: var(--qz-ink); }
+.qz-lg-rcol-f { margin-top: auto; display: flex; gap: 4px; }
+.qz-lg-rrow {
+  display: flex; gap: 8px; align-items: flex-start; padding: 9px 8px 9px 10px;
+  border-bottom: 1px solid var(--qz-rule-2); font-size: 13px; line-height: 1.7; cursor: pointer;
+}
+.qz-lg-rrow:last-child { border-bottom: 0; }
+.qz-lg-rrow:hover { background: var(--qz-ls-cell-bg); }
+.qz-lg-rnum {
+  flex: 0 0 20px; height: 20px; display: grid; place-items: center; margin-top: 1px;
+  font-size: 11px; font-weight: 600; color: var(--qz-ink-4);
+  background: var(--qz-cream-2); border-radius: var(--qz-radius-sm);
+}
+.qz-lg-rsay { flex: 1; min-width: 0; color: var(--qz-ink-4); }
+
+/* the row body is ONE real button (B48) */
+.qz-lg-rbody {
+  display: flex; flex: 1; min-width: 0; border: 0; background: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.qz-lg-rr .qz-lg-rbody { align-items: center; gap: 10px; }
+.qz-lg-rrow .qz-lg-rbody { align-items: flex-start; gap: 8px; }
+
+/* sentence chips (mock .cchip / .cj / .qlab) — a chip never breaks (B47) */
+.qz-lg-cchip {
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
+  padding: 1px 5px; font-weight: 600; color: var(--qz-ink); white-space: nowrap;
+}
+.qz-lg-cchip.is-v { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+.qz-lg-cchip.is-res { background: var(--qz-lg-res-wash); border-color: var(--qz-lg-res-line); color: var(--qz-lg-res); }
+.qz-lg-cchip.is-missing { background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); color: var(--qz-crit); }
+.qz-lg-cj { font-weight: 800; color: var(--qz-ink); }
+.qz-lg-qlab { font-style: normal; font-weight: 600; color: var(--qz-ink-4); margin-right: 3px; }
+.qz-lg-rtag {
+  display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-crit); background: var(--qz-ls-crit-wash); border-radius: var(--qz-radius-sm); padding: 1px 6px;
+}
+.qz-lg-rr.is-dead .qz-lg-rsent, .qz-lg-rrow.is-dead .qz-lg-rsent { opacity: 0.6; }
+
+/* row controls: ↑/↓ + trash, revealed on hover AND keyboard focus (D11) */
+.qz-lg-xone {
+  width: 16px; height: 16px; border: 0; background: none; padding: 0;
+  font-family: inherit; font-size: 12px; line-height: 1; color: var(--qz-ink-25);
+  border-radius: 3px; opacity: 0; cursor: pointer;
+}
+.qz-lg-rr:hover .qz-lg-xone, .qz-lg-rrow:hover .qz-lg-xone,
+.qz-lg-rr:focus-within .qz-lg-xone, .qz-lg-rrow:focus-within .qz-lg-xone,
+.qz-lg-xone:focus-visible { opacity: 0.85; }
+.qz-lg-xone:hover { color: var(--qz-crit); opacity: 1; }
+.qz-lg-mv { display: inline-flex; gap: 2px; flex: none; }
+.qz-lg-mv .qz-lg-xone { font-size: 11px; }
+.qz-lg-mv .qz-lg-xone:hover { color: var(--qz-accent-ink); }
+.qz-lg-mv .qz-lg-xone:disabled { visibility: hidden; cursor: default; }
+.qz-lg-xdel { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: none; }
+
+/* — Rules only (mock .rband / .rlist2 / .rr / .rempty2) — */
+.qz-lg-rband { padding: 16px 20px; border-bottom: 1px solid var(--qz-rule); }
+.qz-lg-rlist2 {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); overflow: hidden;
+  list-style: none; margin: 0; padding: 0;
+}
+.qz-lg-rr {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 6px;
+  border-bottom: 1px solid var(--qz-rule-2); background: var(--qz-paper); cursor: pointer;
+}
+.qz-lg-rr:hover { background: var(--qz-ls-cell-bg); }
+.qz-lg-rr:last-child { border-bottom: 0; }
+.qz-lg-grip { width: 12px; flex: none; font-size: 12px; color: var(--qz-ink-25); opacity: 0; cursor: grab; text-align: center; }
+.qz-lg-rr:hover .qz-lg-grip, .qz-lg-rr:focus-within .qz-lg-grip { opacity: 1; }
+.qz-lg-rn {
+  flex: none; min-width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: var(--qz-radius-sm); background: var(--qz-cream-2);
+  font-size: 11.5px; font-weight: 700; color: var(--qz-ink-4); font-variant-numeric: tabular-nums;
+}
+.qz-lg-rs { flex: 1; min-width: 0; font-size: 13px; line-height: 1.75; color: var(--qz-ink-4); }
+.qz-lg-rr.is-dragging { opacity: 0.4; }
+/* B18 — the line sits on the edge the rule will land on */
+.qz-lg-rr.is-over { box-shadow: inset 0 2px 0 var(--qz-accent); }
+.qz-lg-rr.is-under { box-shadow: inset 0 -2px 0 var(--qz-accent); }
+/* lit from a recommendation pill (B49) — wins over hover */
+.qz-lg-rr.is-lit, .qz-lg-rr.is-lit:hover { background: var(--qz-accent-wash); }
+/* a fresh rule / a check-popover jump: a brief OUTLINE, never the lit fill */
+.qz-lg-rr.is-flash, .qz-lg-rrow.is-flash { outline: 2px solid var(--qz-accent-line); outline-offset: -2px; }
+.qz-lg-rempty2 {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 16px;
+  border: 1px dashed var(--qz-ls-line2); border-radius: var(--qz-radius-lg);
+  text-align: center; font-size: 13.5px; color: var(--qz-ink-4);
+}
+.qz-lg-rempty2 b { color: var(--qz-ink); }
+.qz-lg-rempty2 .qz-lg-btn.is-pri { padding: 7px 14px; font-size: 13px; }
+
+/* — Your recommendations (mock .viz / .recrow / .rpill / .sd) — */
+.qz-lg-viz { padding: 12px 20px 16px; background: var(--qz-ls-cell-bg); }
+.qz-lg-viz-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+.qz-lg-viz-h h3 {
+  margin: 0; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase;
+  font-weight: 700; color: var(--qz-ink-4);
+}
+.qz-lg-viz-sub { font-size: 12px; color: var(--qz-ink-4); }
+.qz-lg-viz-sub b { color: var(--qz-ink); font-variant-numeric: tabular-nums; }
+.qz-lg-sd { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--qz-lg-warn-dot); }
+.qz-lg-sd.is-on { background: var(--qz-ink); }
+.qz-lg-recrow { display: flex; flex-wrap: nowrap; gap: 6px; overflow: hidden; }
+.qz-lg-recrow > * { flex: none; }
+.qz-lg-recrow > .qz-popover-anchor:has(> [hidden]) { display: none; }
+.qz-lg-rpill {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 280px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius);
+  padding: 6px 12px 6px 11px; font-family: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink); cursor: default;
+}
+button.qz-lg-rpill { cursor: pointer; }
+.qz-lg-rpill .qz-lg-sd { width: 8px; height: 8px; }
+.qz-lg-rpill-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-lg-rpill.is-none { border-style: dashed; border-color: var(--qz-ls-warn-line); }
+.qz-lg-rpill.is-none:hover { border-color: var(--qz-accent); }
+.qz-lg-rpill-add { font-weight: 600; color: var(--qz-accent-ink); white-space: nowrap; }
+.qz-lg-rpill.is-add { border-style: dashed; border-color: var(--qz-ls-line2); background: none; color: var(--qz-ink-4); cursor: pointer; }
+.qz-lg-rpill.is-add:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+
+/* — Table view (agent F fills it; mock .tview) — */
+.qz-lg-tview { padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 18px; }
+.qz-lg-tnote { margin: 0; font-size: 12px; color: var(--qz-ink-4); }

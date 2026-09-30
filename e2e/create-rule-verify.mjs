@@ -71,7 +71,12 @@ try {
     return { x: r.x, y: r.y, w: r.width, h: r.height };
   });
   const openModal = async () => {
-    await page.locator('[data-testid="logic-tab-card"] .qz-ltab-create').first().click();
+    // Logic step redesign: "+ Add" in the Filter rules column, or the
+    // header's "Create a rule" in Rules only (the ledger's "+ Add rule" is gone).
+    await page
+      .locator('[data-testid="logic-tab-card"] :is(.qz-lg-rcol-h .qz-lg-btn, .qz-lg-sact .qz-lg-btn.is-pri)')
+      .first()
+      .click();
     await page.waitForSelector(".qz-lm-builder", { timeout: 8000 });
     await page.waitForTimeout(250);
   };
