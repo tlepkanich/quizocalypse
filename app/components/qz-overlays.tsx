@@ -195,8 +195,11 @@ export function QzModal({
   // Trap only once the portal content exists: a modal mounted with open=true
   // runs this effect before `ready` flips, when boxRef is still null — gating
   // on `ready` re-arms it after the portal mounts so initial focus lands.
-  useFocusTrap(boxRef, open && ready, initialFocusRef, returnFocus);
+  // Inert FIRST: effect cleanups run in declaration order, so the page is
+  // interactive again before the trap hands focus back to the opener (an
+  // inert opener silently refuses focus).
   useInertBackground(scrimRef, open && ready && inertBackground);
+  useFocusTrap(boxRef, open && ready, initialFocusRef, returnFocus);
   useScrollLock(open && ready && lockScroll);
 
   useEffect(() => {
@@ -380,6 +383,8 @@ export type PopoverPlacementInput = {
   offset: number;
   /** The side decided at open — kept for the life of the popover (B27). */
   decidedSide?: "top" | "bottom";
+  /** The surface's own stylesheet cap (.qz-popover max-height: 60vh). */
+  heightCap?: number;
 };
 
 export type PopoverPlacement = {
@@ -409,7 +414,7 @@ export function computePopoverPlacement(i: PopoverPlacementInput): PopoverPlacem
     if (i.placement === "bottom") side = i.popHeight > below && above > below ? "top" : "bottom";
     else side = i.popHeight > above && below > above ? "bottom" : "top";
   }
-  const room = Math.max(POP_MIN_ROOM, side === "top" ? above : below);
+  const room = Math.min(Math.max(POP_MIN_ROOM, side === "top" ? above : below), i.heightCap ?? Infinity);
   let maxHeight: number | null = null;
   let listMaxHeight: number | null = null;
   if (i.popHeight > room) {
@@ -427,7 +432,7 @@ export function computePopoverPlacement(i: PopoverPlacementInput): PopoverPlacem
 
 /** Whether `rect` is scrolled out of the viewport or out of any clipping
     ancestor of `el` (mock placePop's "the anchor left view"). */
-function anchorHidden(el: HTMLElement): boolean {
+export function isElementOutOfView(el: HTMLElement): boolean {
   if (!el.isConnected || el.getClientRects().length === 0) return true;
   const r = el.getBoundingClientRect();
   if (r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) return true;
@@ -565,14 +570,16 @@ export function QzPopover({
     const el = popRef.current;
     const anchor = measureRef?.current ?? anchorRef.current;
     if (!el || !anchor) return;
-    if (closeOnAnchorHidden && anchorHidden(anchor)) {
+    if (closeOnAnchorHidden && isElementOutOfView(anchor)) {
       setOpen(false);
       return;
     }
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     el.style.width = width ? `${Math.min(width, vw - 16)}px` : "";
-    el.style.maxHeight = "";
+    // Measure the NATURAL height (past the stylesheet's 60vh cap), so the
+    // list can give up exactly the overflow.
+    el.style.maxHeight = "none";
     const list = el.querySelector<HTMLElement>("[data-qz-pop-list]");
     if (list) list.style.maxHeight = "";
     const r = anchor.getBoundingClientRect();
@@ -587,6 +594,7 @@ export function QzPopover({
       align,
       offset,
       decidedSide: sideRef.current,
+      heightCap: vh * 0.6,
     });
     sideRef.current = p.side;
     el.dataset.side = p.side;
@@ -598,7 +606,7 @@ export function QzPopover({
       el.style.top = "";
       el.style.bottom = `${Math.round(vh - p.edge)}px`;
     }
-    if (p.maxHeight !== null) el.style.maxHeight = `${p.maxHeight}px`;
+    el.style.maxHeight = p.maxHeight !== null ? `${p.maxHeight}px` : "";
     if (list && p.listMaxHeight !== null) list.style.maxHeight = `${p.listMaxHeight}px`;
   }, [measureRef, closeOnAnchorHidden, setOpen, width, placement, align, offset]);
 

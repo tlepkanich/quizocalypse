@@ -210,9 +210,17 @@ export function QzToastProvider({ children }: { children: ReactNode }) {
   const runAction = useCallback(() => {
     const current = toastRef.current;
     if (!current?.action) return;
+    // The action runs first (it may read state its onHide would reset, or
+    // show a follow-up toast such as "Undone"). While it runs the toast no
+    // longer counts as an action toast, so that follow-up replaces it
+    // instead of being dropped by the B7 rule; if it does, the hide below is
+    // a no-op because the id moved on.
     const { onAction } = current.action;
-    hide(current.id, "action");
+    const resolving: QzToastState = { ...current };
+    delete resolving.action;
+    toastRef.current = resolving;
     onAction();
+    hide(current.id, "action");
   }, [hide]);
 
   // Focus the action when asked, or when focus already fell to <body>.

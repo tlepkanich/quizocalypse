@@ -141,6 +141,14 @@ describe("QzToastProvider", () => {
     expect(pill()).toBeNull();
   });
 
+  it("a follow-up toast shown by the action replaces it (not dropped by B7)", () => {
+    act(() =>
+      void fire("Rule deleted", { action: { label: "Undo", onAction: () => void fire("Undone") } }),
+    );
+    act(() => (pill()!.querySelector("button") as HTMLButtonElement).click());
+    expect(pill()!.textContent).toBe("Undone");
+  });
+
   it("Ctrl+Z triggers the action only while it is showing", () => {
     const onAction = vi.fn();
     act(() => void fire("Rule deleted", { action: { label: "Undo", onAction } }));

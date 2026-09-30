@@ -173,6 +173,18 @@ describe("computePopoverPlacement (mock placePop, B27)", () => {
     expect(p.listMaxHeight).toBe(366);
   });
 
+  it("never exceeds the stylesheet cap; the list absorbs the difference", () => {
+    const p = computePopoverPlacement({
+      ...base,
+      anchor: { top: 100, bottom: 120, left: 50, right: 90 },
+      popHeight: 900,
+      listHeight: 800,
+      heightCap: 480,
+    });
+    expect(p.maxHeight).toBe(480);
+    expect(p.listMaxHeight).toBe(380);
+  });
+
   it("keeps the side decided at open", () => {
     const p = computePopoverPlacement({
       ...base,
