@@ -170,7 +170,7 @@ const VERB_PILL: Record<string, { cls: string; label: string }> = {
   inc: { cls: "v-inc", label: "Pin" },
   exc: { cls: "v-exc", label: "Hide" },
   nar: { cls: "v-nar", label: "Narrows" },
-  ask: { cls: "v-ask", label: "Asked only" },
+  ask: { cls: "v-ask", label: "Info only" },
   set: { cls: "v-set", label: "Starting set" },
 };
 

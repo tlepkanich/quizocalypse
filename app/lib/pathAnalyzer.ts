@@ -1,5 +1,6 @@
 import type { z } from "zod";
-import type { Quiz } from "./quizSchema";
+import type { DecisionRule, Quiz } from "./quizSchema";
+import { ruleConditionsMatch } from "./recommendDecider";
 
 type QuizDoc = z.infer<typeof Quiz>;
 
@@ -199,9 +200,24 @@ export function halfBuiltRules(doc: QuizDoc): RuleFinding[] {
  *  longer kills the rule, so both tests above would be false warnings. A
  *  false "never fires" on a working rule is worse than a missed warning. */
 export function deadRules(doc: QuizDoc): RuleFinding[] {
+  return deadRuleReasons(doc).map((d) => ({
+    ruleId: d.ruleId,
+    message:
+      d.reason === "unreachable"
+        ? "A condition depends on a question no shopper can reach — this rule can never fire."
+        : "Two of this rule's conditions live on paths that never co-occur — no shopper can match both.",
+  }));
+}
+
+/** deadRules' structured form (Logic step: the rule status renders its own
+ *  copy): "unreachable" = an `is` question no shopper reaches; "exclusive" =
+ *  two `is` questions on paths that never co-occur. Same skips as deadRules. */
+export function deadRuleReasons(
+  doc: QuizDoc,
+): Array<{ ruleId: string; reason: "unreachable" | "exclusive" }> {
   const intro = introId(doc);
   const reachable = intro ? reachableNodeIds(doc, intro) : new Set<string>();
-  const findings: RuleFinding[] = [];
+  const findings: Array<{ ruleId: string; reason: "unreachable" | "exclusive" }> = [];
 
   for (const rule of doc.decision_rules ?? []) {
     if (rule.match === "any") continue;
@@ -212,11 +228,7 @@ export function deadRules(doc: QuizDoc): RuleFinding[] {
     ];
     const unreachable = isQuestions.find((qid) => !reachable.has(qid));
     if (unreachable) {
-      findings.push({
-        ruleId: rule.id,
-        message:
-          "A condition depends on a question no shopper can reach — this rule can never fire.",
-      });
+      findings.push({ ruleId: rule.id, reason: "unreachable" });
       continue;
     }
     // Pairwise co-reachability: for every pair of `is` questions, one must be
@@ -231,71 +243,227 @@ export function deadRules(doc: QuizDoc): RuleFinding[] {
         if (!aReachesB && !bReachesA) dead = true;
       }
     }
-    if (dead) {
-      findings.push({
-        ruleId: rule.id,
-        message:
-          "Two of this rule's conditions live on paths that never co-occur — no shopper can match both.",
-      });
-    }
+    if (dead) findings.push({ ruleId: rule.id, reason: "exclusive" });
   }
   return findings;
 }
 
-/** A rule whose match is effectively "every condition must hold": not
- *  match:"any", and no any_of relaxation actually in play (any_of on a group
- *  with a single `is` chip is a no-op). Only such rules give the V8 subset
- *  test its "lower matched ⇒ every lower condition holds" premise. */
-function effectivelyConjunctive(rule: {
-  conditions: { question_id: string; op: string }[];
-  match?: "all" | "any";
-  any_of?: string[];
-}): boolean {
-  if (rule.match === "any") return false;
-  const anyOf = new Set(rule.any_of ?? []);
-  if (anyOf.size === 0) return true;
-  const isCount = new Map<string, number>();
-  for (const c of rule.conditions) {
-    if (c.op !== "is") continue;
-    isCount.set(c.question_id, (isCount.get(c.question_id) ?? 0) + 1);
-  }
-  return ![...isCount.entries()].some(([qid, n]) => n > 1 && anyOf.has(qid));
-}
-
-/** V8 (WARN) — a HIGHER rule fully shadows a LOWER one when the higher's
- *  condition set is a subset of the lower's: any path matching the lower also
- *  matches the higher, and the higher fires first (first-match-wins).
- *
- *  The subset premise needs the LOWER rule to be effectively conjunctive
- *  (handoff §11 — an any-rule matches MORE as it gains conditions, so the
- *  ALL test must never run against one). When every condition of the higher
- *  rule holds, the higher fires under any match/any_of, so the higher side
- *  needs no gate. Deliberately conservative: definite shadowing only. */
+/** V8 (WARN) — "never runs": rule i can never fire because every shopper
+ *  who can match it matches an EARLIER rule first (first-match-wins,
+ *  whatever the earlier rule's action). One finding per shadowed rule,
+ *  naming the single earlier rule that catches everyone when one suffices,
+ *  else the union (the shopper-set walk, `shadowingRules`). Sound, never
+ *  optimistic: a false "never fires" on a working rule is worse than a
+ *  missed one. match:"any" rules are never flagged here (handoff §11). */
 export function shadowedRules(doc: QuizDoc): RuleFinding[] {
   const rules = doc.decision_rules ?? [];
-  const key = (c: { question_id: string; answer_id: string; op: string }) =>
-    `${c.question_id} ${c.answer_id} ${c.op}`;
   const findings: RuleFinding[] = [];
-  for (let hi = 0; hi < rules.length; hi++) {
-    const higher = rules[hi]!;
-    if (higher.conditions.length === 0) continue; // half-built never fires
-    const higherSet = new Set(higher.conditions.map(key));
-    for (let lo = hi + 1; lo < rules.length; lo++) {
-      const lower = rules[lo]!;
-      if (lower.conditions.length === 0) continue;
-      if (!effectivelyConjunctive(lower)) continue;
-      const subset = [...higherSet].every((k) =>
-        lower.conditions.some((c) => key(c) === k),
-      );
-      if (subset) {
-        findings.push({
-          ruleId: lower.id,
-          message: `Rule ${hi + 1} always fires first for any shopper this rule would match — this rule can never fire.`,
-        });
-      }
+  rules.forEach((rule, i) => {
+    const by = shadowingRules(doc, i);
+    if (!by) return;
+    const nums = by.map((j) => j + 1);
+    findings.push({
+      ruleId: rule.id,
+      message:
+        nums.length === 1
+          ? `Rule ${nums[0]} always fires first for any shopper this rule would match — this rule can never fire.`
+          : `Rules ${joinList(nums)} always fire first for any shopper this rule would match — this rule can never fire.`,
+    });
+  });
+  return findings;
+}
+
+/** "1", "1 and 2", "1, 3 and 4" — the mock's nlist. */
+export function joinList(items: ReadonlyArray<string | number>): string {
+  const a = items.map(String);
+  return a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : (a[0] ?? "");
+}
+
+// ── Logic step — the shadow walk and the impossible all-of (B12/B14) ────────
+
+/** Above this many candidate answer combinations the walk gives up and
+ *  flags nothing (sound but silent — the mock's cap). */
+export const SHADOW_WALK_CAP = 200_000;
+/** A multi-select naming more answers than this would enumerate 2^k subsets
+ *  before the cap could bite — treated as over the cap. */
+const MAX_NAMED_MULTI = 16;
+
+/** A question is ALWAYS answered when it is required and no route from the
+ *  intro can reach a result/end without passing it (the V2 stop-at walk). A
+ *  doc without an intro is conservatively "not always answered". */
+export function questionAlwaysAnswered(doc: QuizDoc, questionId: string): boolean {
+  const node = doc.nodes.find((n) => n.id === questionId);
+  if (!node || node.type !== "question") return false;
+  if (node.data.required === false) return false;
+  const intro = introId(doc);
+  if (!intro) return false;
+  const walk = stopAtWalk(doc, intro, questionId);
+  return ![...walk].some((id) => id !== questionId && isTerminalNode(doc, id));
+}
+
+type QuestionNodeT = Extract<QuizDoc["nodes"][number], { type: "question" }>;
+
+/** How many answers a shopper can pick on this question at most. */
+function maxPicks(q: QuestionNodeT): number {
+  const n = q.data.answers.length;
+  if (q.data.question_type !== "multi_select") return Math.min(1, n);
+  return Math.max(1, Math.min(n, q.data.max_selections ?? n));
+}
+
+/** An "all of" `is` group (question NOT in any_of, 2+ live answers) asking
+ *  for more answers than the question lets a shopper pick: more than
+ *  max_selections on a multi-select, or 2+ on any one-answer type. Such a
+ *  group can never hold. Under match:"any" the rule is impossible only when
+ *  EVERY group is. Returns the first impossible group, or null. */
+export function impossibleAllOf(
+  rule: Pick<DecisionRule, "conditions" | "any_of" | "match">,
+  doc: QuizDoc,
+): { questionId: string; needs: number; canPick: number } | null {
+  const anyOf = new Set(rule.any_of ?? []);
+  const groupIds = [...new Set(rule.conditions.map((c) => c.question_id))];
+  const found: Array<{ questionId: string; needs: number; canPick: number }> = [];
+  for (const qid of groupIds) {
+    const node = doc.nodes.find((n) => n.id === qid);
+    if (!node || node.type !== "question" || anyOf.has(qid)) continue;
+    const live = new Set(node.data.answers.map((a) => a.id));
+    const needs = new Set(
+      rule.conditions
+        .filter((c) => c.question_id === qid && c.op === "is" && live.has(c.answer_id))
+        .map((c) => c.answer_id),
+    ).size;
+    const canPick = maxPicks(node);
+    if (needs >= 2 && needs > canPick) found.push({ questionId: qid, needs, canPick });
+  }
+  if (found.length === 0) return null;
+  if (rule.match === "any" && found.length < groupIds.length) return null;
+  return found[0]!;
+}
+
+/** One question group of `rule` judged on its own — ruleConditionsMatch on
+ *  that group alone (the predicate's own groupOk, never re-derived). */
+function groupHolds(rule: DecisionRule, questionId: string, picked: ReadonlySet<string>): boolean {
+  const conditions = rule.conditions.filter((c) => c.question_id === questionId);
+  if (conditions.length === 0) return true;
+  return ruleConditionsMatch({ conditions, any_of: rule.any_of }, picked);
+}
+
+/** What shoppers can answer on `q`, restricted to the answers the rules name
+ *  (mock `picksFor`): one-answer types → each named answer alone, plus
+ *  "none of the named" when an unnamed answer exists or the question can be
+ *  skipped; multi-select → every subset of the named answers that fits
+ *  min/max once unnamed picks are counted (plus the empty set when it can be
+ *  skipped). An unreachable question is never answered. null = over cap. */
+function candidateStates(
+  doc: QuizDoc,
+  q: QuestionNodeT,
+  named: readonly string[],
+  reachable: ReadonlySet<string> | null,
+): string[][] | null {
+  if (reachable && !reachable.has(q.id)) return [[]];
+  const skippable = !questionAlwaysAnswered(doc, q.id);
+  const other = q.data.answers.length - named.length;
+  if (q.data.question_type !== "multi_select") {
+    const out = named.map((id) => [id]);
+    if (other > 0 || skippable) out.push([]);
+    return out;
+  }
+  if (named.length > MAX_NAMED_MULTI) return null;
+  const n = q.data.answers.length;
+  const min = Math.max(1, Math.min(n, q.data.min_selections ?? 1));
+  const max = maxPicks(q);
+  const out: string[][] = [];
+  for (let m = 0; m < 1 << named.length; m++) {
+    const s = named.filter((_, b) => (m >> b) & 1);
+    if ((skippable && s.length === 0) || (s.length <= max && s.length + other >= min)) {
+      out.push(s);
     }
   }
-  return findings;
+  return out;
+}
+
+/** The shopper-set walk (mock `shadowedBy`, B12): the 0-based indexes of
+ *  the earlier rules that catch EVERY shopper rule `index` could match —
+ *  one rule when one suffices on its own, else the union — or null when
+ *  some shopper gets through (or the rule is half-built, impossible,
+ *  match:"any", matches nobody, or the walk exceeds SHADOW_WALK_CAP).
+ *  Evaluates candidate answer sets with ruleConditionsMatch; questions are
+ *  treated independently, which only adds combinations, so a flag is sound.
+ *  Earlier rules with no conditions never catch (the engine skips them). */
+export function shadowingRules(doc: QuizDoc, index: number): number[] | null {
+  const rules = doc.decision_rules ?? [];
+  const r = rules[index];
+  if (!r || r.conditions.length === 0 || r.match === "any") return null;
+  if (impossibleAllOf(r, doc)) return null;
+  const earlier = rules
+    .slice(0, index)
+    .map((rule, i) => ({ rule, i }))
+    .filter(({ rule }) => rule.conditions.length > 0);
+  if (earlier.length === 0) return null;
+
+  const set = [...earlier.map((e) => e.rule), r];
+  const namedQids = new Set(set.flatMap((x) => x.conditions.map((c) => c.question_id)));
+  const qs = doc.nodes.filter(
+    (n): n is QuestionNodeT => n.type === "question" && namedQids.has(n.id),
+  );
+  // r's groups on DELETED questions: judged with no picks (the engine never
+  // sees an answer there) — an `is` group there means r matches nobody.
+  const liveQids = new Set(qs.map((q) => q.id));
+  for (const qid of namedQids) {
+    if (!liveQids.has(qid) && !groupHolds(r, qid, new Set())) return null;
+  }
+  const intro = introId(doc);
+  const reachable = intro ? reachableNodeIds(doc, intro) : null;
+  const opts: string[][][] = [];
+  let combos = 1;
+  for (const q of qs) {
+    const named = q.data.answers
+      .map((a) => a.id)
+      .filter((id) =>
+        set.some((x) => x.conditions.some((c) => c.question_id === q.id && c.answer_id === id)),
+      );
+    const states = candidateStates(doc, q, named, reachable);
+    if (!states) return null;
+    const allowed = states.filter((p) => groupHolds(r, q.id, new Set(p)));
+    if (allowed.length === 0) return null; // r matches nobody — its own warning
+    combos *= allowed.length;
+    if (combos > SHADOW_WALK_CAP) return null;
+    opts.push(allowed);
+  }
+  const pos = new Map(qs.map((q, d) => [q.id, d]));
+  const decidedAt = (rule: DecisionRule) =>
+    Math.max(-1, ...rule.conditions.map((c) => pos.get(c.question_id) ?? -1));
+
+  const by = new Set<number>();
+  const walk = (
+    d: number,
+    live: ReadonlyArray<{ rule: DecisionRule; i: number }>,
+    picked: ReadonlySet<string>,
+  ): boolean => {
+    let rest = live;
+    while (rest.length > 0 && decidedAt(rest[0]!.rule) < d) {
+      if (ruleConditionsMatch(rest[0]!.rule, picked)) {
+        by.add(rest[0]!.i);
+        return true;
+      }
+      rest = rest.slice(1);
+    }
+    if (rest.length === 0 || d >= qs.length) return false;
+    const qid = qs[d]!.id;
+    return opts[d]!.every((p) => {
+      const pSet = new Set(p);
+      const next = rest.filter(
+        (e) => e.rule.match === "any" || groupHolds(e.rule, qid, pSet),
+      );
+      return walk(d + 1, next, new Set([...picked, ...p]));
+    });
+  };
+
+  for (const e of earlier) {
+    by.clear();
+    if (walk(0, [e], new Set())) return [e.i];
+  }
+  by.clear();
+  return walk(0, earlier, new Set()) ? [...by].sort((a, b) => a - b) : null;
 }
 
 /** Advisory (audit 2026-08-28) — a match:"any" rule carrying a question

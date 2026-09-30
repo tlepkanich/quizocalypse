@@ -393,6 +393,51 @@ export function duplicateDecisionRule(doc: QuizDoc, ruleId: string): QuizDoc {
   return { ...doc, decision_rules: next };
 }
 
+// ── Logic step redesign (D1, D7) ─────────────────────────────────────────────
+
+/** D1 — the ONLY writer of the top-level `logic_style` field (the title
+ *  switch). Returns its input when the stored value already matches; writes
+ *  the key even when it matches what inference would produce (an explicit
+ *  pick must survive the merchant later deleting the rule or filter role
+ *  inference read). Never touches roles, mappings, filter values or rules:
+ *  switching is lossless both ways. A legacy doc never gains the key. */
+export function setLogicStyle(doc: QuizDoc, style: "rules" | "attributes"): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  if (doc.logic_style === style) return doc;
+  return { ...doc, logic_style: style };
+}
+
+/** D7 — the inverse of one or more rule deletes (the Undo toast, and Import's
+ *  Undo). Each entry's rule object is re-inserted by id at its `index`,
+ *  clamped to the list. Entries apply LOWEST INDEX FIRST (stable for ties),
+ *  so `index` must be the rule's position in the list as it stood BEFORE the
+ *  batch of deletes (its original position): restoring [A@0, B@1] into the
+ *  remaining list rebuilds the original order. An id that already exists is
+ *  skipped (idempotent). References are not checked — a missing answer or
+ *  recommendation comes back flagged, which is the honest state. Returns the
+ *  input doc when nothing was inserted. */
+export function restoreDecisionRules(
+  doc: QuizDoc,
+  entries: ReadonlyArray<{ rule: DecisionRule; index: number }>,
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const rules = [...(doc.decision_rules ?? [])];
+  const ordered = entries
+    .map((e, order) => ({ ...e, order }))
+    .sort((a, b) => a.index - b.index || a.order - b.order);
+  let inserted = 0;
+  for (const { rule, index } of ordered) {
+    if (rules.some((r) => r.id === rule.id)) continue;
+    const at = Number.isFinite(index)
+      ? Math.max(0, Math.min(rules.length, Math.floor(index)))
+      : rules.length;
+    rules.splice(at, 0, rule);
+    inserted++;
+  }
+  if (inserted === 0) return doc;
+  return { ...doc, decision_rules: rules };
+}
+
 // ── Logic tab (HANDOFF §5/§6) — filter-question mapping mutations ───────────
 
 /** The complete filter-value state the set/value menus write for one answer.

@@ -9,6 +9,7 @@ import {
   unstable_parseMultipartFormData,
   unstable_createMemoryUploadHandler,
 } from "@remix-run/node";
+import { z } from "zod";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
 import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
@@ -68,8 +69,16 @@ import {
   MIN_GOAL_CHARS,
   loadFunnelDraft,
   writeDoc,
+  writeSession,
+  writeContent,
+  DraftWriteError,
   type FunnelShop,
 } from "./funnelDraft.server";
+
+const SaveStampBody = z.object({
+  id: z.string().min(1).max(64),
+  seq: z.number().int().nonnegative(),
+});
 
 // The funnel's action — every stage transition. `builderPath` is surface-specific
 // (studio → /studio/:id?mode=ai, embedded → /app/quizzes/:id/studio?mode=ai) so
@@ -89,24 +98,17 @@ export async function runStep1FunnelAction(
     return await runStep1FunnelActionImpl(shop, quizId, request, opts);
   } catch (err) {
     if (err instanceof Response) throw err;
+    // writeContent / writeSession refusals: a JSON error the client's save
+    // state reads, never a thrown Response (item 8).
+    if (err instanceof DraftWriteError) {
+      return json({ ok: false, error: err.message }, { status: err.status });
+    }
     logFor("step1Funnel").error({ err, quizId }, "action failed");
     return json(
       { ok: false, error: "Couldn't save your change — please try again." },
       { status: 500 },
     );
   }
-}
-
-type FunnelSession = NonNullable<Quiz["build_session"]>;
-
-/** The server's session, plus the client's results_guided state (and only
- *  that — the stage and every other key stay server-owned). */
-export function withClientResultsGuided(
-  server: FunnelSession | undefined,
-  client: FunnelSession | undefined,
-): FunnelSession | undefined {
-  if (!server || !client?.results_guided) return server;
-  return { ...server, results_guided: client.results_guided };
 }
 
 async function runStep1FunnelActionImpl(
@@ -125,7 +127,7 @@ async function runStep1FunnelActionImpl(
   // request.formData() — a JSON body has no form fields to read.
   const contentType = request.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
-    const body = (await request.json()) as { doc: unknown };
+    const body = (await request.json()) as { doc: unknown; save?: unknown };
     const parsed = Quiz.safeParse(body.doc);
     if (!parsed.success) {
       return json(
@@ -133,22 +135,22 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
+    // P2-11 — the editing session's commit sequence (useQuizDraft). Absent
+    // or malformed → an unordered write, exactly as before.
+    const stamp = SaveStampBody.safeParse(body.save);
+    const save = stamp.success ? stamp.data : undefined;
     // Autosave persists DOC CONTENT only. build_session / stage is owned by the
     // navigation intents — so we keep the SERVER's current session, never the
-    // client doc's. This makes a debounced PUT that races a stage transition
-    // safe in EITHER order: the PUT can never rewind the stage, and the merchant's
-    // last edit is preserved whichever request lands last.
-    await prisma.quiz.update({
-      where: { id: quiz.id },
-      // Results handoff §15 — the guided Results step's builder-only state is
-      // the one client-written build_session key (it never touches the stage).
-      data: {
-        draftJson: Quiz.parse({
-          ...parsed.data,
-          build_session: withClientResultsGuided(session, parsed.data.build_session),
-        }) as never,
-      },
-    });
+    // client doc's. Logic step redesign: that session is re-read under a row
+    // lock in the same transaction as the write (writeContent), so a PUT that
+    // overlaps a stage transition can never rewind the stage, and the stage
+    // intents (writeSession) can never overwrite the content this PUT wrote.
+    const written = await writeContent(quiz.id, parsed.data, save);
+    if (written === "stale") {
+      // A newer save of this session already landed; this older one wrote
+      // nothing. The client that sent it has moved on (it aborted this PUT).
+      return json({ ok: false, stale: true, error: "A newer save already landed." }, { status: 409 });
+    }
     return json({ ok: true, savedAt: new Date().toISOString() });
   }
 
@@ -720,24 +722,14 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
-    // Goal-brief fields (start-modal-flow mock) — optional sharpeners. Audience
-    // + factors fold into the stored goal text (it IS the brief, and every goal
-    // consumer — prompts, prefills — should see the whole thing). Length pins
-    // the synthetic type's question_range to an exact count, which the template
-    // pass reads as its question-count instruction. Absent fields (the Shape
-    // page's plain write-your-goal card sends none) keep today's behavior.
-    const audience = String(form.get("audience") ?? "").trim().slice(0, 200);
-    const factors = String(form.get("factors") ?? "").trim().slice(0, 200);
+    // HOME-3 (first-run handoff §9) — every goal box asks for three things:
+    // goal, question count, intro screen. Audience / deciding factors are gone
+    // (no UI sent them here). An explicit length (3–12) pins the synthetic
+    // type's question_range; absent keeps the 4–7 default.
     const lengthRaw = Number(form.get("length"));
     const questionLength =
-      Number.isInteger(lengthRaw) && lengthRaw >= 3 && lengthRaw <= 7 ? lengthRaw : null;
-    const goalBrief = [
-      goal,
-      audience ? `Audience: ${audience}` : "",
-      factors ? `Deciding factors: ${factors}` : "",
-    ]
-      .filter(Boolean)
-      .join("\n");
+      Number.isInteger(lengthRaw) && lengthRaw >= 3 && lengthRaw <= 12 ? lengthRaw : null;
+    const goalBrief = goal;
     // LOGIC v2 (L2-10d) — decider drafts are always direct; legacy keeps the
     // weighted default (the merchant can switch later in the Question Builder).
     const scoring =
@@ -1473,17 +1465,16 @@ async function runStep1FunnelActionImpl(
     if (!session.picked_template && !(doc.logic_model === "decider" && session.built)) {
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "logic" } });
+    await writeSession(quiz.id, { stage: "logic" });
     return json({ intent, ok: true });
   }
 
-  // Logic-step handoff §2 — the style chooser's write. build_session is
-  // server-owned (the JSON autosave never touches it), so the chooser picks
-  // its style through an intent like every other session field. Lossless by
-  // construction: nothing else on the doc is touched, so switching styles
-  // never strips an answer's filter values — flipping back restores the
-  // mapping. "points" is deliberately NOT accepted: the Point based card
-  // renders and does nothing (inert) until that path is built.
+  // Logic-step handoff §2 — the retired chooser's write (build_session
+  // .logic_style). Logic step redesign (D1): the style is a DOC field now,
+  // written by setLogicStyle through the autosave; the client no longer sends
+  // this intent. The branch stays for one release so an in-flight client
+  // cannot 400, and it writes the session only (writeSession), never the
+  // stale doc it read. An unknown style is still a 400.
   if (intent === "set-logic-style") {
     const style = String(form.get("style") ?? "");
     if (style !== "rules" && style !== "attributes") {
@@ -1492,10 +1483,7 @@ async function runStep1FunnelActionImpl(
     if (doc.logic_model !== "decider") {
       return json({ intent, ok: false, error: "Not a decider quiz." }, { status: 400 });
     }
-    await writeDoc(quiz.id, {
-      ...doc,
-      build_session: { ...session, logic_style: style },
-    });
+    await writeSession(quiz.id, { logic_style: style });
     return json({ intent, ok: true });
   }
 
@@ -1526,10 +1514,7 @@ async function runStep1FunnelActionImpl(
         { status: 400 },
       );
     }
-    await writeDoc(quiz.id, {
-      ...doc,
-      build_session: { ...session, stage: target as FunnelStep },
-    });
+    await writeSession(quiz.id, { stage: target as FunnelStep });
     return json({ intent, ok: true });
   }
 
@@ -1547,7 +1532,7 @@ async function runStep1FunnelActionImpl(
     if (!session.picked_template && !(doc.logic_model === "decider" && session.built)) {
       return json({ intent, ok: false, error: "No template selected." }, { status: 400 });
     }
-    await writeDoc(quiz.id, { ...doc, build_session: { ...session, stage: "rec_page" } });
+    await writeSession(quiz.id, { stage: "rec_page" });
     return json({ intent, ok: true });
   }
 

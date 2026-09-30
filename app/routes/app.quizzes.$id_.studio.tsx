@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { UnifiedWorkspace } from "../components/studio/UnifiedWorkspace";
 import { ClientOnly, BuilderSkeleton } from "../components/studio/ClientOnly";
+import { QzToastProvider } from "../components/qz-toast";
 import {
   loadQuizEditorData,
   handleQuizEditorAction,
@@ -49,8 +50,12 @@ export default function StudioRoute() {
   // Client-only (see ClientOnly): the admin builder skips SSR to avoid the
   // recoverable React #418 hydration mismatches it would otherwise throw.
   return (
-    <ClientOnly fallback={<BuilderSkeleton />}>
-      {() => <UnifiedWorkspace data={data} chrome="embedded" />}
-    </ClientOnly>
+    // D21 (owner 2026-09-22): mirror studio_.$id.tsx — without a provider
+    // useQzToast is a no-op here and every Undo toast would be invisible.
+    <QzToastProvider>
+      <ClientOnly fallback={<BuilderSkeleton />}>
+        {() => <UnifiedWorkspace data={data} chrome="embedded" />}
+      </ClientOnly>
+    </QzToastProvider>
   );
 }

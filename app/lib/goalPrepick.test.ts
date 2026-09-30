@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_PREPICK_KEYS,
-  foldGoalBrief,
   friendlyPrepickError,
   prepickWritePolicy,
   resolveGoalPickRows,
@@ -10,8 +9,7 @@ import {
 import type { GroupingProduct } from "./categoryGrouping";
 import { hydrateCollectionProducts } from "./categoryGrouping";
 
-// FLOW-1 — the goal pre-pick's pure half: brief folding (the shape-goal-build
-// shape), AI-key resolution (dedupe/cap/hallucination-drop through the same
+// FLOW-1 — the goal pre-pick's pure half: AI-key resolution (dedupe/cap/hallucination-drop through the same
 // bucketRowsFor trust boundary the browser uses), and the four-outcome copy.
 
 const products: GroupingProduct[] = [
@@ -37,25 +35,6 @@ function inputs(): BucketResolveInputs {
     ]),
   };
 }
-
-describe("foldGoalBrief", () => {
-  it("folds audience + factors into the stored goal text", () => {
-    expect(foldGoalBrief("Find the right board", "New riders", "Terrain, budget")).toBe(
-      "Find the right board\nAudience: New riders\nDeciding factors: Terrain, budget",
-    );
-  });
-
-  it("omits empty sharpeners (the plain-goal shape)", () => {
-    expect(foldGoalBrief("Find the right board", "  ", "")).toBe("Find the right board");
-  });
-
-  it("caps the field lengths (goal 500, sharpeners 200)", () => {
-    const folded = foldGoalBrief("g".repeat(600), "a".repeat(300), "");
-    const [goalLine, audLine] = folded.split("\n");
-    expect(goalLine).toHaveLength(500);
-    expect(audLine).toBe(`Audience: ${"a".repeat(200)}`);
-  });
-});
 
 describe("resolveGoalPickRows", () => {
   it("resolves collection keys to member-bearing rows", () => {

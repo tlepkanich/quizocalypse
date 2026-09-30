@@ -73,6 +73,10 @@ model Shop {
   // merchant-initiated, visible-error spends.
   aiRecCopyEnabled Boolean @default(true)
 
+  // HOME-3 — Home's per-shop state (app/lib/homeState.ts parses it): the
+  // first-open dialog's one-time timestamp + the last dismissed reminder.
+  homeState Json?
+
   // FAST F1 — cached quiz-strategy web research for the create funnel. Shape:
   // { text: string, positioning_hash: string, at: ISO string } (see
   // app/lib/shopWebResearch.server.ts). The research inputs are SHOP-LEVEL only

@@ -10,6 +10,7 @@ import { computeAnswerWeights } from "./answerPerformance";
 import { StoredMembershipSchema } from "./groupMembership";
 import { flattenMetafields, variantOptionsOf } from "./productIndexing";
 import { filterAnswerMatchCount } from "./filterMatching";
+import { engineLogicStyle } from "./logicStyle";
 import {
   BrandTokens,
   resolveDesignTokens,
@@ -253,6 +254,22 @@ export function collectDeciderTargetIds(doc: QuizDoc): Set<string> {
   for (const rule of doc.decision_rules ?? []) {
     ids.add(rule.target_id);
     // Logic tab (HANDOFF G1) — multi-target rules: every target must bake.
+    for (const t of rule.target_ids ?? []) ids.add(t);
+  }
+  return ids;
+}
+
+/** Logic step D1/D3 — the targets a publish must FETCH, CHECK and BAKE. In
+ *  Rules only (engineLogicStyle "rules") the engine never reads answer
+ *  mappings, so only rule targets count: a leftover mapping on a question
+ *  that no longer decides anything must not block (or bloat) the publish.
+ *  Every other doc gets collectDeciderTargetIds unchanged (the builder's
+ *  category scope and quiz insights keep reading that one). */
+export function collectPublishTargetIds(doc: QuizDoc): Set<string> {
+  if (engineLogicStyle(doc) !== "rules") return collectDeciderTargetIds(doc);
+  const ids = new Set<string>();
+  for (const rule of doc.decision_rules ?? []) {
+    ids.add(rule.target_id);
     for (const t of rule.target_ids ?? []) ids.add(t);
   }
   return ids;
@@ -576,7 +593,7 @@ export async function publishQuiz(
   // LOGIC v2 — decider targets are Category rows too; fetch them in the same
   // pass (the extra select columns feed target_index and are harmless for
   // legacy docs, whose deciderTargetIds set is always empty).
-  const deciderTargetIds = collectDeciderTargetIds(doc);
+  const deciderTargetIds = collectPublishTargetIds(doc);
   const fetchCategoryIds = new Set([...allCategoryIds, ...deciderTargetIds]);
   const categoryRows =
     fetchCategoryIds.size > 0
@@ -607,9 +624,12 @@ export async function publishQuiz(
     }
     // Logic tab (HANDOFF §13.3) — two more hard gates:
     // 1. A Starting-set answer with NO target strands every shopper who picks
-    //    it on the fallback. Block, name the answers.
+    //    it on the fallback. Block, name the answers. Skipped in Rules only
+    //    (D1/D3): the engine never reads the picking question there.
     const untargeted: Array<{ path: string; message: string }> = [];
+    const rulesOnly = engineLogicStyle(doc) === "rules";
     for (const n of doc.nodes) {
+      if (rulesOnly) break;
       if (n.type !== "question" || n.data.role !== "decides") continue;
       for (const a of n.data.answers) {
         if (!a.target_id)
@@ -749,8 +769,9 @@ export async function publishQuiz(
   // exists: a narrowing answer whose values match ZERO sellable products
   // silently dead-ends the pool (in the doc it looks identical to matching
   // everything). Pass-throughs (no_preference / unmapped → count null) never
-  // block. Decider docs only.
-  if (doc.logic_model === "decider") {
+  // block. Decider docs only — and never in Rules only, where narrowing does
+  // not run (D1), so a filter answer cannot dead-end a pool.
+  if (doc.logic_model === "decider" && engineLogicStyle(doc) !== "rules") {
     const sellableIndex = productIndex.filter(isSellable);
     const zeroMatch: Array<{ path: string; message: string }> = [];
     for (const n of doc.nodes) {

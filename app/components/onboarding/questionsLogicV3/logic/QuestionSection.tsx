@@ -424,7 +424,7 @@ export function QuestionSection({
                 {deciderBlocked ? "Picks the result (needs single-pick)" : "Picks the result"}
               </option>
               <option value="filter">Narrows</option>
-              <option value="qualifier">Asked only</option>
+              <option value="qualifier">Info only</option>
             </select>
           </div>
           <div className="qz-s3-set-r">

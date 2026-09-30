@@ -4,7 +4,7 @@ import type { Product, Collection } from "@prisma/client";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc, OosBehavior } from "./quizSchema";
 import type { DesignTokensT } from "./designTokens";
-import { buildSeedQuiz } from "./seedQuiz";
+import { buildSeedQuiz, setIntroHidden } from "./seedQuiz";
 import {
   buildScopedIndex,
   scopeCatalogToChosen,
@@ -106,6 +106,13 @@ export interface OnboardingBuildInput {
   // threaded through the re-seed exactly like design_tokens — without it a
   // Shape-step regenerate would silently wipe the merchant's rec-page setup.
   recPageSettings?: QuizDoc["rec_page_settings"];
+  // Logic step (handoff §18 S1): the saved logic style rides the re-seed the
+  // same way, so rebuilding from Step 1 never drops the merchant's choice.
+  logicStyle?: QuizDoc["logic_style"];
+  // HOME-3 — the goal-first brief's "Intro screen" off. Stamped on the SEED's
+  // intro (data.hidden), which applyDeciderQuestionFlow keeps as the chain
+  // head. Absent → byte-identical build.
+  hideIntro?: boolean;
   // FAST F2 — pre-resolved catalog inputs (the SAME product/collection/shop
   // rows the catalog step below queries), prefetched by the funnel's
   // templating job concurrently with template generation. ABSENT (the wizard /
@@ -179,7 +186,7 @@ export async function runAiOnboardingBuild(
   if (input.templateGuidance) {
     goalContext += `\n\n${input.templateGuidance}`;
   }
-  const seed = buildSeedQuiz(name, xtype);
+  const seed = setIntroHidden(buildSeedQuiz(name, xtype), input.hideIntro === true);
   // Step 2 — overlay the dials' tokenPatch (radius/spacing) onto the base tokens
   // (the merchant's designTokens if any, else the seed's house tokens).
   const baseTokens = input.designTokens ?? seed.design_tokens;
@@ -200,6 +207,7 @@ export async function runAiOnboardingBuild(
           ...(decider && input.recPageSettings
             ? { rec_page_settings: input.recPageSettings }
             : {}),
+          ...(decider && input.logicStyle ? { logic_style: input.logicStyle } : {}),
         })
       : seed;
   // §7 — the decider reveal owns contact capture; a generated email gate would

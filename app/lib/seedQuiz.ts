@@ -33,6 +33,23 @@ export function seedIntroBestPractice(doc: Quiz): Quiz {
   };
 }
 
+// HOME-3 — the Home composer's "Intro screen" switch. Hiding writes
+// data.hidden (the node stays as the flow anchor — the runtime then starts on
+// its outbound step); showing DELETES the key so an untouched doc stays
+// byte-identical. Pure; returns the SAME doc object when nothing changes.
+export function setIntroHidden(doc: Quiz, hidden: boolean): Quiz {
+  const intro = doc.nodes.find((n) => n.type === "intro");
+  if (!intro || intro.type !== "intro" || Boolean(intro.data.hidden) === hidden) return doc;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) => {
+      if (n.id !== intro.id || n.type !== "intro") return n;
+      const { hidden: _drop, ...rest } = n.data;
+      return { ...n, data: hidden ? { ...rest, hidden: true } : rest };
+    }),
+  };
+}
+
 // Minimal valid quiz a fresh "New quiz" creates — an intro + one starter
 // question, wired. The merchant then groups products into buckets (Step 1),
 // which creates result pages, and builds questions manually or via Smart Build.

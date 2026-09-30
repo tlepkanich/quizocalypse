@@ -4,9 +4,14 @@ import { isFreeformType } from "../../../lib/quizSchema";
 import type { Quiz, Answer } from "../../../lib/quizSchema";
 import type { BuilderCategory } from "../../builder/stepProps";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
-import type { OrderedQuestion } from "../../../lib/questionOrder";
+import { orderedQuestions, type OrderedQuestion } from "../../../lib/questionOrder";
 import { answerNextNode } from "../../../lib/pathAnalyzer";
-import { moveDecider, setAnswerRoute, setQuestionRole } from "../../../lib/quizMutations";
+import {
+  changeQuestionRole,
+  restoreQuestionLogic,
+  setAnswerRoute,
+  snapshotQuestionLogic,
+} from "../../../lib/quizMutations";
 import { filterAnswerMatchingProducts } from "../../../lib/filterMatching";
 import { formatMoney } from "../../../lib/formatMoney";
 import { formatTimeAgo } from "../../../lib/formatDate";
@@ -15,77 +20,46 @@ import {
   applyNarrowField,
   derivedNarrowField,
   derivedNarrowLabel,
-  narrowAppliedToast,
+  fieldSlotLabel,
   popoverShopifyUrl,
-  ROLE_FOOT,
-  ROLE_JOBS,
 } from "./logicTabFields";
 import { AttributePickerDialog } from "./AttributePickerDialog";
 import { QzPopover } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
+import type { LogicUndoPush } from "./useLogicUndo";
+import {
+  ROLE_BUTTON,
+  ROLE_LOSS_COPY,
+  ROLE_MENU,
+  ROLE_MENU_FOOT,
+  ROUTE_COPY,
+  SHEET_COPY,
+} from "./logicCopy";
+
+/** The Table's words for a role (the sheet's "What it does" column). */
+const ROLE_TABLE = SHEET_COPY.does;
 
 // ════════════════════════════════════════════════════════════════════════════
-// Logic tab (HANDOFF §6.4/§6.5 + DECISIONS) — the cell popovers that SURVIVED
-// the UNIFIED one-window (P10/P11): the product menu behind every count and
-// the forward-only route menu. QRTZ-H5 adds back the ONE role menu (the
-// mock's role popover, shared.mjs 443–452) as QuestionRoleControl — shared
-// verbatim by the Overview ledger and the Logic table so the role-flip flow
-// can never drift between surfaces; answer MAPPING still lives in
-// QuestionWindow.tsx (reached through the mapping cells). All popovers ride
-// QzPopover (portal to body: the builder's preview pane pointer-traps
-// in-flow overlays; one-at-a-time registry; Esc/outside close). Every write
-// goes through a pure mutation → commit(next).
+// Logic tab — the popovers behind the question pane's controls: the product
+// menu behind every count (§6.4), the forward-only route menu (mock
+// routeMenu) and the ONE role control (mock roleMenu, D9). Shared by the
+// Logic step's question pane and the Questions step's Overview ledger
+// (variant only swaps the trigger's dress), so the role flow can never drift
+// between surfaces. Every popover rides QzPopover (portal to body; one at a
+// time; Esc / outside click close; focus in on open and back to the trigger
+// on close). Every write goes through a pure mutation → commit(next).
 // ════════════════════════════════════════════════════════════════════════════
 
 type QuizDoc = Quiz;
 type Commit = (doc: QuizDoc) => void;
 
-function MenuShell({
-  title,
-  footer,
-  children,
-}: {
-  title?: ReactNode;
-  /** QRTZ-S6 — mock .pop-foot/.pp-foot: a quiet teaching sentence at the end. */
-  footer?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <div className="qz-ltab-menu">
-      {title ? <div className="qz-ltab-menu-title">{title}</div> : null}
-      {children}
-      {footer ? <div className="qz-ltab-menu-foot">{footer}</div> : null}
-    </div>
-  );
-}
+/** The Undo seam a host passes (LogicTabCard's one useLogicUndo run). */
+export type PaneUndo = { push: (p: LogicUndoPush<QuizDoc>) => void };
 
-function MenuRow({
-  onClick,
-  current,
-  children,
-  sub,
-}: {
-  onClick?: () => void;
-  current?: boolean;
-  children: ReactNode;
-  sub?: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      className={`qz-ltab-menu-row${current ? " is-current" : ""}`}
-      onClick={onClick}
-    >
-      <span className="qz-ltab-menu-row-main">{children}</span>
-      {sub ? <span className="qz-ltab-menu-row-sub">{sub}</span> : null}
-    </button>
-  );
-}
+/** The mock's short(): past 30 characters, the first 28 (trimmed) and "…". */
+const short = (t: string) => (t.length > 30 ? `${t.slice(0, 28).trimEnd()}…` : t);
 
-const truncate = (s: string, n = 24) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
-// ── §6.4 the product menu — behind every count ──────────────────────────────
-
+// ── the product menu — behind every count ──────────────────────────────────
 // QRTZ-S6/H3 — the popover's kind, for the title tag + the footer sentence
 // (mock .pp-title's `tag is-col` + .pp-foot). Decides answers take their
 // target's source; narrows answers only get a kind when the selection is
@@ -170,7 +144,7 @@ export function ProductCountButton({
         ? [...productIndex]
         : (filterAnswerMatchingProducts(answer, productIndex) ?? []);
     return [];
-  }, [answer, role, catById, productIndex, decCat]);
+  }, [answer, role, productIndex, decCat]);
   const kind = popoverKind(role, answer, catById, decCat);
   // QRTZ-H3 (mock .pp-title) — the title is the TARGET's name where one
   // exists (decides); a narrows selection has no single name (no mock
@@ -300,7 +274,68 @@ export function ProductCountButton({
   );
 }
 
-// ── §6.5 the route menu — forward-only ──────────────────────────────────────
+
+// ── the route: where an answer goes (mock pane .go, routeMenu) ──────────────
+
+/** Walk past content steps to the next question or the results. */
+function walkToQuestion(
+  doc: QuizDoc,
+  start: string | null,
+  qByNode: ReadonlyMap<string, number>,
+): string | null {
+  let nextId = start;
+  for (let hops = 0; nextId && hops < 24; hops++) {
+    const cur = nextId;
+    if (qByNode.has(cur)) break;
+    const node = doc.nodes.find((n) => n.id === cur);
+    if (!node || node.type === "result" || node.type === "end") break;
+    nextId = doc.edges.find((e) => e.source === cur)?.target ?? null;
+  }
+  return nextId;
+}
+
+export type AnswerRoute = {
+  /** "next" = the question numbered one higher; a node id = a later
+   *  question; "results" = a result / end node (or nothing after it). */
+  current: "next" | "results" | string;
+  label: string;
+  /** Dark and bold: the answer has its own edge that goes somewhere other
+   *  than the question's default (mock .go.set, B64). */
+  set: boolean;
+};
+
+/** '→ Next', '→ Q4' or '→ Results' for one answer, and whether it is set. */
+export function answerRoute(
+  doc: QuizDoc,
+  q: OrderedQuestion,
+  answer: Answer,
+  questions: readonly OrderedQuestion[],
+): AnswerRoute {
+  const qByNode = new Map(questions.map((x) => [x.node.id, x.qIndex]));
+  const resolve = (id: string | null): AnswerRoute["current"] => {
+    const at = walkToQuestion(doc, id, qByNode);
+    if (!at) {
+      return questions.some((x) => x.qIndex === q.qIndex + 1) ? "next" : "results";
+    }
+    const n = qByNode.get(at);
+    if (n === undefined) return "results";
+    return n === q.qIndex + 1 ? "next" : at;
+  };
+  const current = resolve(answerNextNode(doc, q.node.id, answer.edge_handle_id));
+  const own = doc.edges.some(
+    (e) => e.source === q.node.id && e.source_handle === answer.edge_handle_id,
+  );
+  const fallback = resolve(
+    doc.edges.find((e) => e.source === q.node.id && !e.source_handle)?.target ?? null,
+  );
+  const label =
+    current === "next"
+      ? ROUTE_COPY.next
+      : current === "results"
+        ? ROUTE_COPY.results
+        : `Q${qByNode.get(current) ?? "?"}`;
+  return { current, label, set: own && current !== fallback };
+}
 
 export function RouteMenuButton({
   doc,
@@ -308,111 +343,171 @@ export function RouteMenuButton({
   answer,
   questions,
   commit,
-  label,
+  getLatestDoc,
+  table,
 }: {
   doc: QuizDoc;
   q: OrderedQuestion;
   answer: Answer;
   questions: OrderedQuestion[];
-  commit: Commit;
-  label: ReactNode;
+  /** Absent = read-only: the label renders without a menu. */
+  commit?: Commit;
+  getLatestDoc?: () => QuizDoc;
+  /** The Table's dress for the SAME menu (mock troute): its cell text and
+   *  accessible name; the popover never touches the Edit selection (B40). */
+  table?: { label: string; ariaLabel: string };
 }) {
   const [open, setOpen] = useState(false);
+  const route = answerRoute(doc, q, answer, questions);
   const nextQ = questions.find((x) => x.qIndex === q.qIndex + 1);
   const later = questions.filter((x) => x.qIndex > q.qIndex + 1);
-  const resultNode = doc.nodes.find((n) => n.type === "result");
-  // UNIFIED (mock routeMenu) — the current destination is marked. Resolved
-  // the same way the route CELL resolves it: walk past content steps to the
-  // next question / results.
-  const current = useMemo((): "next" | "results" | string | null => {
-    let nextId = answerNextNode(doc, q.node.id, answer.edge_handle_id);
-    const qByNode = new Map(questions.map((x) => [x.node.id, x.qIndex]));
-    for (let hops = 0; nextId && hops < 24; hops++) {
-      const cur = nextId;
-      if (qByNode.has(cur)) break;
-      const node = doc.nodes.find((n) => n.id === cur);
-      if (!node || node.type === "result" || node.type === "end") break;
-      nextId = doc.edges.find((e) => e.source === cur)?.target ?? null;
-    }
-    if (!nextId) return null;
-    const nq = qByNode.get(nextId);
-    if (nq === undefined) return "results";
-    return nq === q.qIndex + 1 ? "next" : nextId;
-  }, [doc, q, answer, questions]);
+  const resultNode = doc.nodes.find((n) => n.type === "result" || n.type === "end");
+  const go = (target: string | null) => {
+    setOpen(false);
+    if (!commit) return;
+    const latest = getLatestDoc?.() ?? doc;
+    const next = setAnswerRoute(latest, q.node.id, answer.id, target);
+    if (next !== latest) commit(next);
+  };
+  // One text run (mock .go "→ Next"): a separate arrow span became its own
+  // flex item and took the 5px gap on top of the space. The button carries
+  // its own aria-label, so the arrow never reaches a screen reader.
+  const label = <>{`→ ${route.label}`}</>;
+  if (!commit) {
+    if (table) return <span className="qz-lg-tdim">{table.label}</span>;
+    return <span className={`qz-lg-go is-static${route.set ? " is-set" : ""}`}>{label}</span>;
+  }
+  const item = (on: boolean, cls: string, body: ReactNode, onPick: () => void, key: string) => (
+    <button
+      key={key}
+      type="button"
+      role="menuitemradio"
+      aria-checked={on}
+      className={`qz-lg-mi${cls}${on ? " is-on" : ""}`}
+      onClick={onPick}
+    >
+      {body}
+    </button>
+  );
   return (
     <QzPopover
       open={open}
       onOpenChange={setOpen}
-      maxWidth={320}
-      trigger={<button type="button" className="qz-ltab-cellbtn">{label}</button>}
-      content={
-        <MenuShell title={`${answer.text} · goes to`}>
-          <MenuRow
-            current={current === "next"}
-            sub={
-              nextQ ? truncate(nextQ.node.data.text, 34) : "straight to the results"
-            }
-            onClick={() => {
-              commit(setAnswerRoute(doc, q.node.id, answer.id, null));
-              setOpen(false);
-            }}
+      width={280}
+      maxWidth={280}
+      align="end"
+      ariaHaspopup="menu"
+      manageFocus
+      closeOnAnchorHidden
+      className="qz-lg-pop"
+      offset={6}
+      trigger={
+        table ? (
+          <button type="button" className="qz-lg-tbtn is-dim" aria-label={table.ariaLabel}>
+            {table.label}
+            <span className="qz-lg-cv" aria-hidden>
+              ▾
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`qz-lg-go${route.set ? " is-set" : ""}`}
+            aria-label={ROUTE_COPY.goesTo(answer.text, route.label)}
+            data-pane-control="route"
+            data-answer-id={answer.id}
           >
-            The next question
-          </MenuRow>
-          {later.map((x) => (
-            <MenuRow
-              key={x.node.id}
-              current={current === x.node.id}
-              sub={`skips ${x.qIndex - q.qIndex - 1} question${
-                x.qIndex - q.qIndex - 1 === 1 ? "" : "s"
-              }`}
-              onClick={() => {
-                commit(setAnswerRoute(doc, q.node.id, answer.id, x.node.id));
-                setOpen(false);
-              }}
-            >
-              Q{x.qIndex} — {truncate(x.node.data.text, 28)}
-            </MenuRow>
-          ))}
-          {resultNode ? (
-            <>
-              <div className="qz-ltab-menu-sep" aria-hidden />
-              <MenuRow
-                current={current === "results"}
-                onClick={() => {
-                  commit(setAnswerRoute(doc, q.node.id, answer.id, resultNode.id));
-                  setOpen(false);
-                }}
-              >
-                Straight to the results
-              </MenuRow>
-            </>
-          ) : null}
-        </MenuShell>
+            {label}
+          </button>
+        )
+      }
+      content={
+        <>
+          <div className="qz-lg-pt">{ROUTE_COPY.title(answer.text)}</div>
+          <div role="menu" aria-label={ROUTE_COPY.menuLabel(answer.text)}>
+            {item(
+              route.current === "next" || (!nextQ && route.current === "results" && !route.set),
+              " qz-lg-mi2",
+              <>
+                <span className="qz-lg-mi2-t">{ROUTE_COPY.nextQuestion}</span>
+                <span className="qz-lg-mi2-d">
+                  {nextQ ? short(nextQ.node.data.text) : ROUTE_COPY.lastQuestion}
+                </span>
+              </>,
+              () => go(null),
+              "next",
+            )}
+            {later.map((x) =>
+              item(
+                route.current === x.node.id,
+                "",
+                <>
+                  <span className="qz-lg-mi-n">Q{x.qIndex}</span>
+                  <span className="qz-lg-mi-h">{ROUTE_COPY.skips(x.qIndex - q.qIndex - 1)}</span>
+                </>,
+                () => go(x.node.id),
+                x.node.id,
+              ),
+            )}
+            {resultNode
+              ? item(
+                  route.current === "results" && (!!nextQ || route.set),
+                  "",
+                  <span className="qz-lg-mi-n">{ROUTE_COPY.straight}</span>,
+                  () => go(resultNode.id),
+                  "results",
+                )
+              : null}
+          </div>
+        </>
       }
     />
   );
 }
 
-// ── QRTZ-H5 — the ONE role control (pill → role menu → attribute dialog) ────
+// ── the ONE role control (trigger → "Question N does" → attribute dialog) ──
 
-const stripQ = (s: string) => s.replace(/\s*\?\s*$/, "");
+type RoleKey = (typeof ROLE_MENU)[number]["k"];
+const STORED: Record<RoleKey, "decides" | "filter" | "qualifier"> = {
+  decides: "decides",
+  filter: "filter",
+  info: "qualifier",
+};
 
-/* QRTZ-OB1 (mock role popover, shared.mjs 443–452) + QRTZ-H2 (mock .ap +
-   .attr-slot) + QRTZ-H5 (owner unification): the role pill, its "Question N
-   does" menu, the derived attr-slot and the attribute dialog as ONE shared
-   control. The Overview ledger and the Logic table render the SAME component
-   (variant only swaps the pill's dress), so:
-     - every role write is the same barrel mutation (moveDecider promotes,
-       setQuestionRole demotes — QuestionWindow's setJob semantics);
-     - flipping an UNMAPPED question to Narrows opens the dialog INSTEAD of
-       the role write — role + field + seeded values commit TOGETHER through
-       applyNarrowField on Use, so Cancel leaves zero half-state (there is no
-       role write to revert — reverting a decides→filter flip would have to
-       run moveDecider back, which wipes the decider's answer targets);
-     - the derived-attribute line is the mock's attr-slot: a picker that
-       opens the SAME dialog to change the field (never the QuestionWindow —
-       the owner's H5 call: one surface everywhere). */
+function answerValueCount(a: Answer): number {
+  return (
+    a.tags.length +
+    (a.collection_filter ? 1 : 0) +
+    (a.collection_filters?.length ?? 0) +
+    (a.metafield_filters?.length ?? 0) +
+    (a.variant_filters?.length ?? 0) +
+    (a.product_type_filters?.length ?? 0) +
+    (a.no_preference ? 1 : 0)
+  );
+}
+
+/** The D9 toast for what a role change removed ("" when nothing went). */
+function lossMessage(
+  doc: QuizDoc,
+  lost: ReturnType<typeof changeQuestionRole>["lost"],
+): string {
+  const qIndex = new Map(orderedQuestions(doc).map((q) => [q.node.id, q.qIndex]));
+  const parts: string[] = [];
+  if (lost.targets) parts.push(ROLE_LOSS_COPY.targets(qIndex.get(lost.targets.nodeId) ?? 0, lost.targets.count));
+  if (lost.values) parts.push(ROLE_LOSS_COPY.values(qIndex.get(lost.values.nodeId) ?? 0, lost.values.count));
+  return parts.join(" · ");
+}
+
+/* The role pill, its "Question N does" menu (mock roleMenu: 300px, two-line
+   menuitemradio rows, the loss line on each row, the foot), the attribute
+   slot and the attribute dialog, as ONE control:
+     - every role write is changeQuestionRole, the ONE path (D9): a move of
+       "Picks the result" clears both questions' recommendations and leaving
+       "Narrows" clears that question's values, and one toast names what went
+       with an Undo (restoreQuestionLogic from a snapshot taken first);
+     - flipping an UNMAPPED question to Narrows opens the attribute dialog
+       INSTEAD of the role write; Use commits role, field and seeded values
+       together, Cancel writes nothing (D19). */
 export function QuestionRoleControl({
   doc,
   node,
@@ -422,20 +517,28 @@ export function QuestionRoleControl({
   hasNarrowFields,
   onCommit,
   variant,
+  undo,
+  getLatestDoc,
+  onRoleChanged,
 }: {
   doc: QuizDoc;
   node: OrderedQuestion["node"];
   qIndex: number;
-  /** The current decider's question number (for "now on QN"), null if none. */
+  /** The current picking question's number (for the move line), null if none. */
   deciderQIndex: number | null;
   productIndex: IndexedProduct[];
   /** narrowFieldOptions(productIndex).length > 0, memoized ONCE per surface. */
   hasNarrowFields: boolean;
   onCommit: Commit;
-  /** Pill dress only — the flow is identical: "overview" = the ledger's
-   *  .qz-ovw-role tag, "table" = the Logic table's .qz-ltab-pill, "pane" =
-   *  the question widget's text-with-caret role button (QWIDGET). */
+  /** Trigger dress only: "pane" = the question pane's text with a caret,
+   *  "overview" = the Questions step ledger's tag, "table" = the Logic
+   *  Table's "What it does" cell (mock trole: no attribute slot). */
   variant: "overview" | "table" | "pane";
+  /** The host's Undo run; absent = the loss toast carries no Undo. */
+  undo?: PaneUndo;
+  getLatestDoc?: () => QuizDoc;
+  /** Any pick (the pane disarms the tray). */
+  onRoleChanged?: () => void;
 }) {
   const toast = useQzToast();
   const [open, setOpen] = useState(false);
@@ -443,47 +546,47 @@ export function QuestionRoleControl({
   const role = node.data.role;
   const isDecider = role === "decides";
   const isFilter = role === "filter";
-  // QWIDGET decision 2 — a multi-select may decide; only freeform cannot.
+  const cur: RoleKey = isDecider ? "decides" : isFilter ? "filter" : "info";
   const cannotDecide = isFreeformType(node.data.question_type);
-  // QWIDGET §3.2 copy on the pane; the older surfaces keep their vocabulary.
   const label =
     variant === "pane"
-      ? isDecider
-        ? "Picks results"
-        : isFilter
-          ? "Narrows results"
-          : "Info only"
-      : isDecider
-        ? "Picks the result"
-        : isFilter
-          ? "Narrows"
-          : "Asked only";
+      ? ROLE_BUTTON[cur]
+      : (ROLE_MENU.find((j) => j.k === cur)?.n ?? ROLE_BUTTON.info);
   const derivedField = derivedNarrowField(node.data.answers);
+  const valueCount = isFilter ? node.data.answers.reduce((s, a) => s + answerValueCount(a), 0) : 0;
+  const latest = () => getLatestDoc?.() ?? doc;
 
-  // Mirrors QuestionWindow's setJob byte-for-byte in semantics: promote via
-  // moveDecider (one decider per quiz), demote via setQuestionRole.
-  const setJob = (job: (typeof ROLE_JOBS)[number]["k"]) => {
+  const announce = (message: string, snap: ReturnType<typeof snapshotQuestionLogic>) => {
+    if (!message) return;
+    if (undo) undo.push({ message, kind: "question", inverse: (d) => restoreQuestionLogic(d, snap) });
+    else toast(message);
+  };
+
+  const snapFor = (d: QuizDoc) => {
+    const oldPicker = d.nodes.find(
+      (n) => n.type === "question" && n.data.role === "decides" && n.id !== node.id,
+    );
+    return snapshotQuestionLogic(d, oldPicker ? [node.id, oldPicker.id] : [node.id]);
+  };
+
+  const apply = (k: RoleKey) => {
+    const base = latest();
+    const snap = snapFor(base);
+    const { doc: next, lost } = changeQuestionRole(base, node.id, STORED[k]);
+    if (next === base) return;
+    onCommit(next);
+    announce(lossMessage(base, lost), snap);
+  };
+
+  const setJob = (k: RoleKey) => {
     setOpen(false);
-    if (job === "decides") {
-      if (isDecider) return;
-      const prev = doc.nodes.find(
-        (n) => n.type === "question" && n.data.role === "decides",
-      );
-      onCommit(moveDecider(doc, node.id));
-      if (prev && prev.id !== node.id && prev.type === "question")
-        toast(
-          `"${stripQ(node.data.text)}" now picks the result (was "${stripQ(prev.data.text)}")`,
-        );
-      return;
-    }
-    if (job === "filter" && isFilter) return;
-    if (job === "info" && !isDecider && !isFilter) return;
-    if (job === "filter") {
-      // QRTZ-H2 — a freshly-flipped Narrows question narrows by NOTHING when
-      // no answer carries a selection. With fields to offer, the dialog opens
-      // INSTEAD of the role write (Use applies both; Cancel writes nothing).
-      // With no narrowable fields the plain role write keeps today's
-      // behavior — the Logic window's "anything" mode stays reachable.
+    onRoleChanged?.();
+    if (k === cur) return;
+    if (k === "decides" && cannotDecide) return;
+    if (k === "filter") {
+      // A freshly flipped Narrows question narrows by NOTHING when no answer
+      // carries a selection. With fields to offer, the dialog opens INSTEAD
+      // of the role write (Use applies both; Cancel writes nothing).
       const hasMapping = node.data.answers.some(
         (a) => a.no_preference === true || answerHasSelection(a),
       );
@@ -492,19 +595,28 @@ export function QuestionRoleControl({
         return;
       }
     }
-    onCommit(setQuestionRole(doc, node.id, job === "filter" ? "filter" : "qualifier"));
+    apply(k);
   };
 
-  // The dialog's Use — ONE commit through applyNarrowField (QRTZ-H5: the
-  // role+field+values composition lives in logicTabFields, nowhere else).
+  // The dialog's Use: the role change (its D9 loss) and the field in ONE
+  // commit, with one Undo that restores both.
   const applyField = (field: string) => {
     setPickerOpen(false);
-    const applied = applyNarrowField(doc, node.id, productIndex, field);
-    // Re-picking the current field is a no-op — re-seeding would overwrite
+    const base = latest();
+    const snap = snapFor(base);
+    const moved = isFilter ? { doc: base, lost: {} } : changeQuestionRole(base, node.id, "filter");
+    const applied = applyNarrowField(moved.doc, node.id, productIndex, field);
+    // Re-picking the current field is a no-op: re-seeding would overwrite
     // hand-tuned per-answer values with guesses.
     if (!applied) return;
     onCommit(applied.doc);
-    toast(narrowAppliedToast(node.data.text, field, applied.mapped, applied.unmatched));
+    const msg = [
+      ROLE_LOSS_COPY.narrowApplied(fieldSlotLabel(field), applied.mapped, applied.unmatched),
+      lossMessage(base, moved.lost),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    announce(msg, snap);
   };
 
   const narrowLabel = derivedNarrowLabel(node.data.answers);
@@ -512,101 +624,106 @@ export function QuestionRoleControl({
     variant === "pane" ? (
       <button
         type="button"
-        className={`qz-lw-rolebtn${open ? " is-open" : ""}`}
-        aria-label={`Question ${qIndex} role: ${label}`}
+        className="qz-lg-rolebtn"
+        aria-label={ROLE_LOSS_COPY.pillLabel(qIndex, label)}
+        data-pane-control="role"
       >
-        {label}
-        <span className="qz-lw-rolebtn-cv" aria-hidden>▾</span>
+        {label} <span className="qz-lg-cv" aria-hidden>▾</span>
       </button>
     ) : variant === "overview" ? (
       <button
         type="button"
         className={`qz-ovw-role${isDecider ? " is-decider" : ""}`}
-        aria-label={`Question ${qIndex} role: ${label}`}
+        aria-label={ROLE_LOSS_COPY.pillLabel(qIndex, label)}
       >
         {label} <span className="qz-ovw-role-caret" aria-hidden>▾</span>
       </button>
     ) : (
       <button
         type="button"
-        className={`qz-ltab-pill${isDecider ? " is-start" : ""} qz-ltab-pill-btn`}
-        aria-label={`Question ${qIndex} role: ${label}`}
+        className={`qz-lg-tbtn is-does is-${cur}`}
+        aria-label={ROLE_LOSS_COPY.pillLabel(qIndex, ROLE_TABLE[cur])}
       >
-        {label}{" "}
-        <span className="qz-ltab-caret" aria-hidden>
+        {ROLE_TABLE[cur]}
+        <span className="qz-lg-cv" aria-hidden>
           ▾
         </span>
       </button>
     );
 
+  const title = `Question ${qIndex} does`;
   return (
     <div
       className={
         variant === "overview"
           ? "qz-ovw-rolestack"
           : variant === "pane"
-            ? "qz-lw-rolestack"
-            : "qz-ltab-rolestack"
+            ? "qz-lg-rolestack"
+            : "qz-lg-trole"
       }
     >
       <QzPopover
         open={open}
         onOpenChange={setOpen}
-        maxWidth={340}
+        width={300}
+        maxWidth={300}
+        align={variant === "pane" ? "end" : "start"}
+        ariaHaspopup="menu"
+        manageFocus
+        closeOnAnchorHidden
+        className="qz-lg-pop"
+        offset={6}
         trigger={pill}
         content={
-          // QRTZ-H2 — the owner-reported cutoff was the row LABELS: the sub
-          // hint's flex:0 0 auto squeezed the main ("Narrows" → "Narro…").
-          // The scoped class flips the shrink side (see the H2 CSS section).
-          <div className="qz-ltab-menu qz-h2-rolemenu">
-            {/* Mock .pop-head ("Question 1 does", shared.mjs line 444). */}
-            <div className="qz-ltab-menu-title">Question {qIndex} does</div>
-            {ROLE_JOBS.map((j) => {
-              const on =
-                j.k === "decides" ? isDecider : j.k === "filter" ? isFilter : !isDecider && !isFilter;
-              const sub =
-                j.k === "decides" && cannotDecide
-                  ? "needs answers to choose from"
-                  : j.k === "decides" && deciderQIndex !== null && !isDecider
-                    ? `now on Q${deciderQIndex}`
-                    : j.hint;
-              return (
-                <button
-                  key={j.k}
-                  type="button"
-                  className={`qz-ltab-menu-row${on ? " is-current" : ""}`}
-                  disabled={j.k === "decides" && cannotDecide}
-                  onClick={() => setJob(j.k)}
-                >
-                  <span className="qz-ltab-menu-row-main">{j.n}</span>
-                  <span className="qz-ltab-menu-row-sub">{sub}</span>
-                </button>
-              );
-            })}
-            {/* Mock .pop-foot verbatim (shared.mjs line 451). */}
-            <div className="qz-qwin-rolefoot">{ROLE_FOOT}</div>
-          </div>
+          <>
+            <div className="qz-lg-pt">{title}</div>
+            <div role="menu" aria-label={title} data-testid="role-menu">
+              {ROLE_MENU.map((j) => {
+                const on = j.k === cur;
+                const disabled = j.k === "decides" && cannotDecide;
+                const extra =
+                  (j.k === "decides" && !isDecider && deciderQIndex !== null
+                    ? ROLE_LOSS_COPY.moves(deciderQIndex)
+                    : "") + (isFilter && j.k !== "filter" && valueCount > 0 ? ROLE_LOSS_COPY.clearsValues(qIndex) : "");
+                return (
+                  <button
+                    key={j.k}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={on}
+                    disabled={disabled}
+                    className={`qz-lg-mi qz-lg-mi2${on ? " is-on" : ""}`}
+                    onClick={() => setJob(j.k)}
+                  >
+                    <span className="qz-lg-mi2-t">{j.n}</span>
+                    <span className="qz-lg-mi2-d">
+                      {disabled ? ROLE_LOSS_COPY.cannotPick : j.hint}
+                      {disabled ? "" : extra}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="qz-lg-pfoot">{ROLE_MENU_FOOT}</div>
+          </>
         }
       />
-      {isFilter ? (
+      {isFilter && variant !== "table" ? (
         hasNarrowFields ? (
-          // QRTZ-H2 (mock .attr-slot, base.mjs 603–618) — the derived line is
-          // a PICKER: click opens the dialog to change the field. The
-          // unmapped state is the mock's dashed "Choose attribute" slot.
           narrowLabel === "nothing yet" ? (
             <button
               type="button"
               className="qz-ap-slot is-empty"
-              title="Choose the attribute this question narrows by"
+              title={ROLE_LOSS_COPY.attrChooseTip}
               onClick={() => setPickerOpen(true)}
             >
-              Choose attribute
+              {ROLE_LOSS_COPY.attrChoose}
             </button>
           ) : (
             <button
               type="button"
               className="qz-ap-slot"
-              title={`narrows on ${narrowLabel} — change the attribute`}
+              title={ROLE_LOSS_COPY.attrTip(narrowLabel)}
               onClick={() => setPickerOpen(true)}
             >
               <span>

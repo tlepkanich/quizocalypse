@@ -181,6 +181,9 @@
   --qz-ls-crit-line: #E8C4C0;
   --qz-ls-cell-bg:   #FBFAFD;
   --qz-radius-toast: 6px;
+  /* Toast action (D7 Undo) — the mock's violet-on-ink .tundo (#C9BFFF); no
+     existing token is light enough to read on --qz-ink. */
+  --qz-accent-on-ink: #C9BFFF;
   --qz-radius-pill:  6px;   /* DELIBERATE: pills become rounded rects */
   --qz-phone-r:      20px;  /* NEW — phone-preview corner; device geometry,
                                deliberately not on the --radius scale */
@@ -1358,7 +1361,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    fade), in after a 160ms delay on expand so the width has mostly settled.
    Collapsed horizontal padding stays 10px so the 40px rows fit in 60px. */
 .qz-rail {
-  width: 224px; flex: 0 0 auto;
+  width: 176px; flex: 0 0 auto; /* HOME-3 (handoff §13.3) — was 224 */
   position: sticky; top: 0; align-self: flex-start;
   height: 100vh;
   display: flex; flex-direction: column;
@@ -1382,7 +1385,7 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
    a merely-invisible label would keep its flex space and push the icon out
    of the centered 40px rows. */
 .qz-rail-label {
-  white-space: nowrap; overflow: hidden; max-width: 200px;
+  white-space: nowrap; overflow: hidden; max-width: 150px;
   opacity: 1; visibility: visible;
   transition:
     opacity var(--qz-dur-fast) var(--qz-ease) 160ms,
@@ -1459,12 +1462,11 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 .qz-rail-foot { border-top: 1px solid var(--qz-rule); padding-top: 14px; }
 .qz-rail-account { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
 .qz-rail-account > .qz-rail-label { flex: 1 1 auto; font-size: 13.5px; font-weight: 500; }
-/* Avatar — mock: 22px, squared (--r-sm), accent fill, 11/700. */
+/* Avatar — HOME-3 (handoff §13.3): the Wiskr mark, same 22px footprint,
+   no fill, no letter. */
 .qz-rail-avatar {
-  width: 22px; height: 22px; flex: 0 0 auto; border-radius: var(--qz-radius-sm);
+  width: 22px; height: 22px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
-  background: var(--qz-accent); color: #fff;
-  font-size: 11px; font-weight: 700; line-height: 1;
 }
 .qz-rail.is-collapsed .qz-rail-account { flex-direction: column; gap: 8px; padding: 0; }
 /* The account label would still hold flex space when merely invisible, so it
@@ -2179,7 +2181,10 @@ body[data-qz] .qz-rb-rail-row:focus-visible {
 .qz-rb-stock.is-out { color: var(--qz-crit); }
 /* Mock railEmpty: dashed lavender box, glyph, quiet copy. */
 .qz-rb-rail-empty {
-  margin: 4px 0; border: 1px dashed color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
+  /* Same box as the filled list (see --qz-rb-rail-h) — centered copy. */
+  height: var(--qz-rb-rail-h); box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  margin: 0; border: 1px dashed color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
   border-radius: var(--qz-radius); background: var(--qz-accent-tint);
   padding: 20px 14px; text-align: center;
 }
@@ -3510,9 +3515,15 @@ body[data-qz] .qz-ql-adel:focus-visible { outline: none; box-shadow: var(--qz-sh
   padding: 0 6px; border-radius: var(--qz-radius-pill); font-size: 12px; font-weight: 600;
   background: var(--qz-cream-2); color: var(--qz-ink-2); font-variant-numeric: tabular-nums;
 }
-/* The five-row cut is MEASURED (inline max-height from the fifth real row);
-   the fade marks continuation, it does not truncate access (still scrolls). */
-.qz-rb-rail-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+/* ONE fixed height for the list AND the empty state, so the rail never grows
+   or shrinks as picks land (owner 2026-09-29). Sized to hold five two-line
+   group rows plus a section label. The fade marks continuation, it does not
+   truncate access (still scrolls). */
+.qz-rb-rail { --qz-rb-rail-h: 296px; }
+.qz-rb-rail-list {
+  display: flex; flex-direction: column; gap: 6px; overflow-y: auto;
+  height: var(--qz-rb-rail-h); box-sizing: border-box;
+}
 .qz-rb-rail-list.is-fade {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
           mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent);
@@ -3843,38 +3854,6 @@ body[data-qz] .qz-ql-adel:focus-visible { outline: none; box-shadow: var(--qz-sh
 .qz-sm-rec { font-family: var(--qz-font-body); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--qz-accent-ink); }
 .qz-sm-back { border: none; background: transparent; color: var(--qz-ink-4); font-size: 12.5px; cursor: pointer; font-family: inherit; padding: 6px 8px; border-radius: 8px; margin: 0 0 8px -8px; }
 .qz-sm-back:hover { background: var(--qz-cream-2); color: var(--qz-ink-3); }
-.qz-sm-track {
-  border: 1px solid color-mix(in srgb, var(--qz-accent) 14%, var(--qz-rule));
-  background: color-mix(in srgb, var(--qz-accent) 3%, var(--qz-paper));
-  border-radius: var(--qz-radius-lg); padding: 13px 14px; margin-bottom: 18px;
-}
-.qz-sm-thead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
-.qz-sm-tlbl { font-size: 12.5px; font-weight: 600; }
-.qz-sm-tcnt { font-size: 11.5px; font-weight: 600; color: var(--qz-accent-ink); }
-.qz-sm-tcols { display: flex; gap: 8px; }
-.qz-sm-tcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; }
-.qz-sm-sbar { display: block; width: 100%; height: 5px; border-radius: var(--qz-radius-pill); background: var(--qz-cream-2); transition: background .3s ease; }
-.qz-sm-tcol.is-done .qz-sm-sbar { background: var(--qz-accent); }
-.qz-sm-titem { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--qz-ink-4); min-width: 0; }
-.qz-sm-titem .qz-sm-c {
-  width: 15px; height: 15px; border-radius: 50%; border: 1.5px dashed var(--qz-ink-25);
-  display: grid; place-items: center; font-size: 9px; color: transparent; transition: all .2s; flex: none;
-}
-.qz-sm-tcol.is-done .qz-sm-titem { color: var(--qz-accent-ink); font-weight: 600; }
-.qz-sm-tcol.is-done .qz-sm-titem .qz-sm-c { background: var(--qz-accent); border: 1.5px solid var(--qz-accent); color: #fff; }
-.qz-sm-field { margin-bottom: 15px; }
-.qz-sm-flabel { display: block; font-size: 13px; font-weight: 600; margin-bottom: 3px; }
-.qz-sm-fhint { display: block; font-size: 11.5px; color: var(--qz-ink-4); margin-bottom: 7px; }
-.qz-sm-inp { width: 100%; font-family: inherit; font-size: 13px; color: var(--qz-ink); background: var(--qz-paper); border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius); padding: 10px 12px; outline: none; }
-.qz-sm-inp:focus { border-color: var(--qz-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 14%, transparent); }
-textarea.qz-sm-inp { resize: vertical; min-height: 62px; line-height: 1.5; }
-.qz-sm-seg { display: flex; gap: 6px; }
-.qz-sm-segb { border: 1px solid var(--qz-rule-strong); background: var(--qz-paper); color: var(--qz-ink-3); font-size: 13px; font-weight: 500; padding: 8px 15px; border-radius: var(--qz-radius); cursor: pointer; font-family: inherit; }
-.qz-sm-segb.is-on { background: var(--qz-accent); color: #fff; border-color: var(--qz-accent); }
-.qz-sm-foot { display: flex; align-items: center; gap: 10px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--qz-rule-2); }
-.qz-sm-gen { border: none; background: var(--qz-accent); color: #fff; font-size: 13px; font-weight: 500; padding: 11px 20px; border-radius: var(--qz-radius); cursor: pointer; font-family: inherit; }
-.qz-sm-gen:disabled { background: color-mix(in srgb, var(--qz-accent) 42%, var(--qz-paper)); cursor: not-allowed; }
-.qz-sm-note { font-size: 11.5px; color: var(--qz-ink-25); margin-left: auto; }
 @media (prefers-reduced-motion: reduce) { .qz-sm-ico i { animation: none; } }
 .qz-link-quiet {
   align-self: flex-start; padding: 0; background: none; border: none; cursor: pointer;
@@ -4324,6 +4303,17 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
    content box stays exactly where it was (net-zero geometry, every modal). */
 .qz-modal-body { font-size: 14px; color: var(--qz-ink-3); overflow-y: auto; min-height: 0; padding: 4px; margin: -4px; }
 .qz-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; }
+/* LOGIC-STEP Phase 3 (mock placeToast, B34): while a toast is up QzToastProvider
+   publishes --qz-toast-reserve (toast height + 28px) on :root. The window gives
+   up that strip at the bottom — the scrim pads by it, the box re-centres in
+   what is left and its own scroll absorbs the difference — so a toast never
+   covers a window's footer. Unset (no toast) = the original 24px / 90vh. */
+.qz-modal-scrim {
+  padding-bottom: max(24px, calc(var(--qz-toast-reserve, 0px) + env(safe-area-inset-bottom, 0px)));
+  transition: padding-bottom var(--qz-dur) var(--qz-ease);
+}
+.qz-modal { max-height: min(90vh, calc(100vh - 24px - var(--qz-toast-reserve, -100vh))); }
+@media (prefers-reduced-motion: reduce) { .qz-modal-scrim { transition: none; } }
 .qz-btn-danger { background: var(--qz-paper); color: var(--qz-warn); }
 .qz-btn-danger:hover { background: var(--qz-warn); color: #fff; }
 
@@ -4383,6 +4373,13 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
 .qz-menu-item:disabled { opacity: .5; cursor: default; }
 .qz-menu-item-crit { color: var(--qz-crit); }
 .qz-menu-item-crit:hover:not(:disabled) { background: var(--qz-crit-tint); color: var(--qz-crit); }
+/* LOGIC-STEP Phase 3 — menuitemradio (mock mitem .on), right hint, title line
+   (mock .pt). Additive: plain action menus never render these. */
+.qz-menu-item.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-menu-item.is-on:hover:not(:disabled) { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-menu-hint { margin-left: auto; padding-left: 12px; font-size: 11.5px; color: var(--qz-ink-4); }
+.qz-menu-title { font-size: 12px; font-weight: 700; color: var(--qz-ink); padding: 0 4px 8px; }
+body[data-qz] .qz-menu-item:focus-visible, .qz-menu-item:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
 
 .qz-popover-anchor { display: inline-flex; }
 @keyframes qz-popover-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -4397,18 +4394,33 @@ body[data-qz] .qz-stepnav-pill:focus-visible { outline: 2px solid var(--qz-accen
   animation: qz-popover-in var(--qz-dur-fast) var(--qz-ease);
 }
 
-/* — Toast (§7.5): bottom-center ink pill, queue of 1, non-interactive — */
+/* — Toast (§7.5): bottom-center ink pill, queue of 1 ————————————————
+   Logic-step mock #toast geometry (2026-09 LOGIC-STEP): bottom 20px plus the
+   safe-area inset, 9px 14px, 13px text, capped so a long D9 sentence wraps
+   inside the pill. The pill stays pointer-events:none; 2026-09-22 owner
+   ruling D7 adds ONE optional action button (.qz-toast-action, mock .tundo),
+   which alone takes the pointer. */
 @keyframes qz-toast-in { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .qz-toast {
-  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   z-index: var(--qz-z-toast);
-  background: var(--qz-ink); color: var(--qz-cream);
-  font-size: 13px; font-weight: 500;
-  padding: 10px 18px; border-radius: var(--qz-radius-toast);
+  background: var(--qz-ink); color: var(--qz-on-accent);
+  font-size: 13px; line-height: 1.45;
+  padding: 9px 14px; border-radius: var(--qz-radius-toast);
+  max-width: min(560px, calc(100% - 32px));
   box-shadow: var(--qz-lift-3);
   pointer-events: none;
   animation: qz-toast-in var(--qz-dur) var(--qz-ease);
 }
+.qz-toast-action {
+  border: 0; background: none; padding: 0; margin-left: 10px;
+  font: inherit; font-weight: 700; color: var(--qz-accent-on-ink);
+  cursor: pointer; pointer-events: auto;
+  border-radius: var(--qz-radius-sm);
+}
+body[data-qz] .qz-toast-action:focus-visible, .qz-toast-action:focus-visible { outline: 2px solid var(--qz-accent-on-ink); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .qz-toast { animation: none; } }
 
 /* ════════════════════════════════════════════════════════════════════════════
    QL3-P1 — Step-3 two-view shell (.qz-s3-*), decider docs behind ?step3=v3.
@@ -5633,10 +5645,7 @@ body[data-qz] .qz-s3-editable:focus-visible {
    MATCHES cell + its popover editor · the capture terminal module. ── */
 /* AUDIT-23 — overview-cards page geometry: the mock's .wrap is a CENTERED
    1080px column (1036px of content after its 22px gutters). */
-/* Owner 2026-08-18 — "make the entire answers section wider": the Logic view
-   widens from 1076 to the Questions card's 1248 rhythm; the table's Answer
-   column (the flexible cell) absorbs the extra width. */
-.qz-s3-logicview { display: flex; flex-direction: column; gap: 12px; padding: 16px 20px 40px; max-width: 1248px; width: 100%; margin: 0 auto; }
+/* .qz-s3-logicview geometry moved to the "Logic step redesign" block (D20). */
 /* QRTZ-G3 — the sub-header + "How this quiz resolves" explainer strip are
    retired: the artifact's Logic screen is the two cards and nothing else. */
 
@@ -5715,45 +5724,6 @@ body[data-qz] .qz-s3-editable:focus-visible {
   .qz-lsc-spin { animation: none; }
   .qz-lsc-eng { transition: none; }
 }
-
-/* ── Live screens B/K chrome — the workspace h1 + the collapsible
-   explainer (ledebox/stagelede) + the exact .lbar style bar. ── */
-.qz-ls-h1 { margin: 8px 0 0; font-size: var(--qz-t-h2); font-weight: 700; letter-spacing: -0.02em; line-height: 1.3; }
-.qz-ls-ledebox { margin-top: 2px; }
-.qz-ls-ledebox > summary {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
-  font-size: 11px; font-weight: 700; color: var(--qz-ink-4);
-  text-transform: uppercase; letter-spacing: .05em; padding: 3px 0;
-}
-.qz-ls-ledebox > summary::-webkit-details-marker { display: none; }
-.qz-ls-ledebox > summary::after { content: "▾"; font-size: 10px; }
-.qz-ls-ledebox > summary:hover { color: var(--qz-accent-ink); }
-.qz-ls-lede {
-  margin: 6px 0 0; max-width: 74ch; font-size: 13.5px; line-height: 1.62; color: var(--qz-ink-4);
-}
-.qz-ls-lede b { color: var(--qz-ink-3); font-weight: 700; }
-.qz-ls-ll { display: block; }
-.qz-ls-ll.is-ex {
-  margin: 7px 0; padding: 7px 11px; border-left: 2px solid var(--qz-accent-line);
-  background: var(--qz-accent-wash); border-radius: 0 var(--qz-radius-sm) var(--qz-radius-sm) 0;
-  color: var(--qz-ink-3); width: fit-content; max-width: 100%;
-}
-.qz-ls-ll.is-ex b { color: var(--qz-accent-ink); }
-.qz-lsb {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  padding: 12px 15px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
-  background: var(--qz-paper); font-size: 13px; color: var(--qz-ink-3);
-}
-.qz-lsb-label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--qz-ink-4); font-weight: 600; }
-.qz-lsb-style { font-weight: 600; font-size: 15px; color: var(--qz-ink); }
-.qz-lsb-note { font-size: 13px; color: var(--qz-ink-4); }
-.qz-lsb-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.qz-lsb-switch, .qz-lsb-check {
-  appearance: none; font: inherit; cursor: pointer; font-size: 12.5px; font-weight: 600;
-  padding: 5px 11px; border-radius: var(--qz-radius); border: 1px solid var(--qz-rule-strong);
-  background: var(--qz-paper); color: var(--qz-ink-3);
-}
-.qz-lsb-switch:hover, .qz-lsb-check:hover { color: var(--qz-accent-ink); border-color: var(--qz-accent); }
 
 /* Two columns: map + 356px sticky rules column (spec §2, fits at 1024). */
 /* logic-page-v4 — single-column stacked (Rules → map → Fallback), not a
@@ -6988,30 +6958,6 @@ button.qz-qcard-fig:hover b::after { border-top-color: var(--qz-ink-3); }
 
 /* ── Create-quiz dialog — the Home composer, in a modal ─────────────── */
 .qz-modal.qz-create-modal { align-self: flex-start; margin-top: calc(8vh - 24px); }
-.qz-goalbox { padding: 12px 12px 9px; background: var(--qz-paper);
-              border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius-lg); }
-.qz-goalbox:focus-within { border-color: var(--qz-accent); box-shadow: var(--qz-shadow-focus); }
-.qz-goalbox textarea { width: 100%; min-height: 52px; border: 0; outline: none; resize: none;
-                       background: transparent; color: var(--qz-ink);
-                       font: inherit; font-size: 15px; line-height: 1.5; }
-.qz-goalbox textarea::placeholder { color: var(--qz-ink-4); }
-.qz-goalbox-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.qz-goalbox-more { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none;
-                   padding: 6px 8px; border-radius: var(--qz-radius); font: inherit; font-size: 13px;
-                   font-weight: 600; color: var(--qz-ink-4); cursor: pointer; }
-.qz-goalbox-more:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
-.qz-goalbox-brief { display: none; border-top: 1px solid var(--qz-rule-2);
-                    margin-top: 8px; padding: 12px 2px 10px; gap: 12px; }
-.qz-goalbox-brief.is-open { display: grid; }
-.qz-goalbox-brief label { display: block; font-size: 11px; font-weight: 700; color: var(--qz-ink-4);
-                          text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
-.qz-goalbox-brief .qz-input { padding: 8px 12px; font-size: 13.5px; }
-.qz-goalbox-go   { flex: none; width: 34px; height: 34px; border: 0; cursor: pointer;
-                   border-radius: var(--qz-radius); background: var(--qz-accent); color: #fff;
-                   display: flex; align-items: center; justify-content: center; font-size: 15px; }
-.qz-goalbox-go:hover { background: var(--qz-accent-2); }
-.qz-goalbox-go:disabled { opacity: 0.6; cursor: default; }
-.qz-goal-err    { margin: 10px 2px 0; font-size: 13px; color: var(--qz-crit); }
 .qz-goal-extras { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px;
                   padding: 10px 4px 0; border-top: 1px solid var(--qz-rule-2); }
 
@@ -7388,90 +7334,23 @@ body[data-qz] .qz-cust-row:focus-visible {
    CSS). Four quartz literals have no repo token and ride scoped custom
    props (--qz-h3-*), declared on the stack root AND on the portalled
    products popover. */
-.qz-ltab-stack, .qz-pp {
+.qz-lg-card, .qz-pp {
   --qz-h3-group-rule: 1.5px solid #CFCADD; /* quartz --group-rule */
   --qz-h3-qcell-bg: #FBFAFD;               /* quartz --qcell-bg */
   --qz-h3-tag-bg: #F2F1F6;                 /* quartz --tag-a/b-bg */
   --qz-h3-tag-ink: #453F58;                /* quartz --tag-a/b-ink */
   --qz-h3-tag-line: #E1DEEA;               /* quartz --tag-a/b-line */
 }
-/* (LW — the .qz-ltab section card, its .qz-ltab-hd header and the old
-   hairline rule list are retired: the ledger is the .qz-lw-rzone card and
-   the questions live in the .qz-lw-grid workspace. .qz-ltab-empty and
-   .qz-ltab-rnum stay — the rzone empty state and the Explainers' numbered
-   rows still render them.) */
-.qz-ltab-empty { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-3); padding: 10px 18px; margin: 0; }
+/* (.qz-ltab-rnum stays: the Explainers' numbered rows still render it. The
+   ledger it served is retired by the Logic step redesign's rules list.) */
 .qz-ltab-rnum {
   flex: none; width: 22px; height: 22px; display: grid; place-items: center;
   border-radius: var(--qz-radius-sm); font-size: 11px; color: var(--qz-ink-4);
   background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
   font-variant-numeric: tabular-nums;
 }
-/* Drag rides the row (mock .rcard draws NO grip); the λ pill is the handle. */
-.qz-lw-rcard[draggable="true"] .qz-lw-rn { cursor: grab; }
-.qz-ltab-rwhen { color: var(--qz-ink-4); }
-.qz-ltab-arrow { color: var(--qz-ink-4); padding: 0 3px; }
-.qz-ltab-ans {
-  font-weight: 600; color: var(--qz-ink); background: var(--qz-cream-2);
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
-  padding: 1px 6px;
-}
-.qz-ltab-op {
-  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em;
-  color: var(--qz-ink-4); padding: 0 2px;
-}
-.qz-ltab-verb { font-weight: 600; }
-.qz-ltab-verb.is-show, .qz-ltab-verb.is-highlight { color: var(--qz-ok); }
-.qz-ltab-verb.is-exclude, .qz-ltab-verb.is-hide { color: var(--qz-crit); }
-/* Logic-step §4 — Pin (action "prioritize") joins the verb set. */
-.qz-ltab-verb.is-pin { color: var(--qz-accent-ink); }
-.qz-ltab-rkind { font-size: 10.5px; color: var(--qz-ink-4); }
-/* P4 — delete (mock .icon-btn, hover-revealed) + the visually-hidden
-   keyboard reorder pair (a11y — hidden visually, never from the tree);
-   §3.3 fresh-rule highlight (1800 ms). */
-.qz-ltab-ractions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-.qz-ltab-ricon {
-  width: 26px; height: 26px; flex: none; display: grid; place-items: center;
-  font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
-  border: 0; background: transparent; color: var(--qz-ink-4);
-  border-radius: var(--qz-radius-sm); opacity: 0;
-}
-.qz-lw-rcard:hover .qz-ltab-ricon, .qz-ltab-ricon:focus-visible { opacity: 1; }
-.qz-ltab-ricon:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
-.qz-ltab-rmove {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
-  border: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
-}
-.qz-ltab-rmove:focus-visible {
-  position: static; width: auto; height: auto; margin: 0; padding: 3px 6px;
-  overflow: visible; clip: auto; white-space: normal;
-  font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
-  background: var(--qz-cream-2); color: var(--qz-ink);
-  border-radius: var(--qz-radius-sm);
-}
-.qz-lw-rcard.is-fresh { background: var(--qz-accent-wash); transition: background 0.4s ease; }
-/* Logic-step mock 09 — the [Qn answer] condition chips and the never-fires
-   surfaces (shared by the LW rzone rows). */
 .qz-ltab-rnum { width: auto; min-width: 22px; padding: 0 5px; }
-.qz-ltab-cchip {
-  display: inline-flex; align-items: baseline; gap: 5px;
-  background: var(--qz-cream-2); border: 1px solid var(--qz-rule);
-  border-radius: var(--qz-radius-sm); padding: 1px 6px;
-}
-.qz-ltab-cchip .qz-ltab-ans { background: none; border: none; padding: 0; }
-.qz-ltab-cchip .qz-ltab-op { padding: 0; }
-.qz-ltab-qn { font-size: 10px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
-.qz-ltab-rflag { display: block; margin: 2px 0 0; font-size: 12px; color: var(--qz-ink-4); line-height: 1.5; }
-.qz-ltab-rflagchip {
-  display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
-  text-transform: uppercase; padding: 1px 6px; border-radius: var(--qz-radius-sm);
-  background: var(--qz-warn-wash); color: var(--qz-warn); border: 1px solid var(--qz-warn-edge);
-}
-.qz-ltab-rulebanner {
-  margin: 0 0 4px; padding: 8px 12px; font-size: 12.5px; color: var(--qz-warn);
-  background: var(--qz-warn-tint); border: 1px solid var(--qz-warn-edge);
-  border-radius: var(--qz-radius);
-}
+
 /* Funnel RuleRow's read-only multi-target badge (review L1-1). */
 .qz-s3-rr-multi { font-size: 12px; color: var(--qz-ink-4); font-style: italic; }
 
@@ -7608,15 +7487,7 @@ body[data-qz] .qz-cust-row:focus-visible {
 /* ── P6/H3 — the per-card explain buttons + explainer sheets (§7).
    Mock .explain-btn (base.mjs 1392–1399): accent-washed, 12.5/600,
    the ✦ icon at 11px. ── */
-.qz-ltab-how {
-  font: inherit; display: inline-flex; align-items: center; gap: 7px;
-  font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap;
-  border: 1px solid var(--qz-accent-line); background: var(--qz-accent-wash);
-  color: var(--qz-accent-ink);
-  padding: 6px 12px; border-radius: var(--qz-radius);
-}
-.qz-ltab-how:hover { background: var(--qz-paper); border-color: var(--qz-accent); }
-.qz-ltab-how-ico { font-size: 11px; }
+
 .qz-xpl {
   display: flex; flex-direction: column;
   width: min(900px, 94vw); max-height: 92vh;
@@ -7805,26 +7676,6 @@ body[data-qz] .qz-cust-row:focus-visible {
   padding: 10px 20px 14px; border-top: 1px solid var(--qz-rule);
 }
 .qz-xpl-ft-btns { display: flex; gap: 8px; }
-/* (LW — the QRTZ-H3 five-column .qz-ltab-tbl table is retired: the
-   workspace renders the .qz-lw-at grid inside one detail panel. The pill,
-   rolestack, tag, count-button and goto-val classes below survive — the
-   QuestionRoleControl, ProductCountButton and RouteMenuButton still wear
-   them.) */
-.qz-ltab-rolestack { display: grid; gap: 5px; justify-items: start; min-width: 0; max-width: 100%; }
-.qz-ltab-rolestack .qz-ap-slot { margin-top: 0; }
-.qz-ltab-pill {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 10.5px; font-weight: 400; text-transform: uppercase;
-  letter-spacing: 0.05em; white-space: nowrap;
-  padding: 3px 8px; border-radius: var(--qz-radius-pill);
-  border: 1px solid var(--qz-rule);
-  background: var(--qz-paper); color: var(--qz-ink-4);
-}
-.qz-ltab-pill.is-start {
-  background: var(--qz-accent-wash); border-color: var(--qz-accent-line);
-  color: var(--qz-accent-ink); font-weight: 600;
-}
-.qz-ltab-caret { flex: none; font-size: 8px; opacity: 0.7; }
 /* Mock .tag — the mapcell tag set: one quartz value tone (tag-a ≡ tag-b),
    the accent is-col for collections, the bordered is-none "No filter"
    (quartz --tag-none-style: normal — not italic). */
@@ -7846,7 +7697,6 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .qz-ltab-muted { color: var(--qz-ink-25); }
 .qz-ltab-soft { color: var(--qz-ink-4); }
-.qz-ltab-bad { color: var(--qz-crit); font-weight: 600; }
 /* Mock .count-btn — the count is a control that opens the products behind
    the trigger. */
 .qz-ltab-countbtn {
@@ -7860,18 +7710,12 @@ body[data-qz] .qz-cust-row:focus-visible {
   background: var(--qz-accent-wash); border-color: var(--qz-accent-line);
   color: var(--qz-accent-ink);
 }
-/* Mock .goto-val — the destination with its ::before arrow. */
-.qz-ltab-gotoval {
-  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
-  font-size: 12.5px; color: var(--qz-ink-4);
-}
-.qz-ltab-gotoval::before { content: "→"; color: var(--qz-rule-strong); }
 
-/* ══ LW — the Logic workspace (Live artifact screenWorkspace: mock-live.html
-   + mock-live-css.txt through the token map). The .lgrid rail + ONE detail
-   panel, the .at mapping grid (plus the KEPT fifth Then-go-to column), the
-   value picker, the products popover dress and the .rzone rules ledger.
-   New classes are qz-lw-*, tokens only. ══ */
+/* ══ LW — the Logic workspace grid. Only the grid and its rail survive: the
+   Logic step's question widget still carries .qz-lw-grid / .qz-lw-rail
+   (with .qz-lw-grid--3 for its rules column, restyled under "Logic step
+   redesign" below). The rest of the LW / QWIDGET dress was retired with the
+   widget it drew. ══ */
 
 /* — the grid: rail 296px | detail (#paneLive .lgrid) — */
 .qz-lw-grid {
@@ -7887,434 +7731,6 @@ body[data-qz] .qz-cust-row:focus-visible {
   .qz-lw-grid { grid-template-columns: 1fr; }
   .qz-lw-rail { border-right: 0; border-bottom: 1px solid var(--qz-rule); }
 }
-.qz-lw-railhead { display: flex; align-items: center; gap: 6px; padding: 5px 8px 8px; }
-.qz-lw-railh {
-  font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--qz-ink-4); font-weight: 600;
-}
-/* The rail-head's ✦ door to the questions explainer (the ledger keeps the
-   full "✦ How rules work" button — both stay reachable). */
-.qz-lw-howmini {
-  font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
-  border: none; background: none; color: var(--qz-accent-ink);
-  padding: 2px 5px; border-radius: var(--qz-radius-sm); margin-left: auto;
-}
-.qz-lw-howmini:hover { background: var(--qz-accent-wash); }
-/* Rail rows (#paneLive .qi). */
-.qz-lw-qi {
-  display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 9px;
-  width: 100%; padding: 10px 13px; border-radius: var(--qz-radius);
-  align-items: start; text-align: left; border: none; background: none;
-  cursor: pointer; font: inherit; color: var(--qz-ink);
-}
-.qz-lw-qi:hover { background: var(--qz-cream-2); }
-.qz-lw-qi.is-on, .qz-lw-qi.is-on:hover { background: var(--qz-accent-wash); }
-.qz-lw-qn {
-  font-size: 11px; color: var(--qz-ink-4); padding-top: 2px;
-  font-variant-numeric: tabular-nums;
-}
-.qz-lw-qi.is-on .qz-lw-qn { color: var(--qz-accent-ink); }
-.qz-lw-qbody { min-width: 0; }
-.qz-lw-qt { display: block; font-size: 13.5px; font-weight: 500; line-height: 1.4; }
-.qz-lw-qi.is-on .qz-lw-qt { color: var(--qz-accent-ink); font-weight: 600; }
-.qz-lw-qr {
-  font-size: 12px; color: var(--qz-ink-4); margin-top: 3px;
-  display: flex; align-items: center; gap: 6px;
-}
-.qz-lw-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
-.qz-lw-dot.is-dec { background: var(--qz-accent); }
-.qz-lw-dot.is-nar { background: var(--qz-ok); }
-.qz-lw-dot.is-info { background: var(--qz-ink-25); }
-.qz-lw-dot.is-bad { background: var(--qz-crit); }
-.qz-lw-qadd {
-  width: 100%; text-align: left; padding: 11px 13px; margin-top: 6px;
-  border-radius: var(--qz-radius); font: inherit; font-size: 13px;
-  color: var(--qz-ink-4); border: 1px dashed var(--qz-ls-line2);
-  background: none; cursor: pointer;
-}
-.qz-lw-qadd:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
-.qz-lw-detail { min-width: 0; }
-
-/* — the ONE detail panel (.dpanel / .drole / .dhead) — */
-.qz-lw-panel { padding: 20px 22px; }
-.qz-lw-drole {
-  display: flex; align-items: center; gap: 10px;
-  padding-bottom: 11px; margin-bottom: 12px;
-  border-bottom: 1px solid var(--qz-rule);
-}
-.qz-lw-drl {
-  font-size: 10.5px; font-weight: 700; color: var(--qz-ink-4);
-  text-transform: uppercase; letter-spacing: 0.05em;
-}
-.qz-lw-dhead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.qz-lw-dhead h3 {
-  flex: 1; min-width: 200px; margin: 0;
-  font-size: 19px; font-weight: 600; letter-spacing: -0.014em;
-}
-
-/* — the mapping grid (.at/.ah/.ar): the Live's four columns + the KEPT
-   158px Then-go-to column (skip-logic is owner-resolved). — */
-.qz-lw-at {
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
-  overflow: hidden; margin-top: 14px;
-}
-.qz-lw-ah, .qz-lw-ar {
-  display: grid;
-  grid-template-columns: 30px minmax(150px, 0.62fr) minmax(0, 2.2fr) 110px 158px;
-  gap: 12px;
-}
-.qz-lw-ah {
-  padding: 10px 16px; background: var(--qz-cream-2);
-  border-bottom: 1px solid var(--qz-rule);
-  font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--qz-ink-4); font-weight: 600;
-}
-.qz-lw-ah .is-r { text-align: right; }
-.qz-lw-ar {
-  padding: 13px 16px; border-bottom: 1px solid var(--qz-rule);
-  align-items: center; font-size: 14px;
-}
-.qz-lw-ar:last-child { border-bottom: 0; }
-.qz-lw-akey { font-size: 11.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
-.qz-lw-atext { min-width: 0; font-weight: 500; }
-.qz-lw-acell { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
-/* Value chips (.vchip): ok-washed; dashed .is-all "Keeps everything" /
-   "no effect yet"; warn-tinted .is-rule λ chips on info rows. */
-.qz-lw-vchip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 7px 5px 11px; border-radius: var(--qz-radius-sm);
-  font-size: 13px; font-weight: 500;
-  background: var(--qz-live-wash); color: var(--qz-ok);
-  border: 1px solid var(--qz-ls-ok-line);
-}
-.qz-lw-vchip.is-all {
-  background: var(--qz-paper); color: var(--qz-ink-4);
-  border-color: var(--qz-ls-line2); border-style: dashed; padding-right: 9px;
-}
-.qz-lw-vchip.is-rule {
-  background: var(--qz-ls-warn-wash); color: var(--qz-warn);
-  border-color: var(--qz-ls-warn-line);
-}
-.qz-lw-x {
-  font: inherit; font-size: 12px; line-height: 1; opacity: 0.5;
-  border: none; background: none; color: inherit; cursor: pointer; padding: 0;
-}
-.qz-lw-x:hover { opacity: 1; }
-.qz-lw-vadd {
-  padding: 5px 11px; border-radius: var(--qz-radius-sm);
-  border: 1px dashed var(--qz-ls-line2); font: inherit; font-size: 12.5px;
-  color: var(--qz-ink-4); font-weight: 500; background: none; cursor: pointer;
-}
-.qz-lw-vadd:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
-.qz-lw-vadd.is-empty {
-  border-color: var(--qz-ls-warn-line); color: var(--qz-warn);
-  background: var(--qz-ls-warn-wash); border-style: solid;
-}
-.qz-lw-vadd.is-empty:hover { border-color: var(--qz-warn); color: var(--qz-warn); }
-/* The count column (.acount): warn "not set", crit zero, the dashed-underline
-   clickable number (the doorway to the products behind it). */
-.qz-lw-acount {
-  text-align: right; font-size: 13.5px; color: var(--qz-ink-4);
-  white-space: nowrap; font-variant-numeric: tabular-nums;
-}
-.qz-lw-acount.is-unset { color: var(--qz-warn); font-weight: 500; }
-.qz-lw-acount.is-zero { color: var(--qz-crit); font-weight: 700; }
-.qz-lw-acount.is-zero .qz-lw-cnum b { color: var(--qz-crit); }
-.qz-lw-acount .qz-ltab-countbtn { margin-left: auto; }
-.qz-lw-cnum { border-bottom: 1px dashed var(--qz-rule-strong); }
-.qz-lw-cnum b { font-weight: 600; color: var(--qz-ink); }
-.qz-ltab-countbtn:hover .qz-lw-cnum { border-bottom-color: var(--qz-accent); }
-.qz-lw-of { color: var(--qz-ink-25); }
-.qz-lw-dash { color: var(--qz-ink-25); }
-.qz-lw-aroute { min-width: 0; }
-
-/* ══ QWIDGET — the question widget (Format B), rebuilt to the "Question
-   Widget" artifact. Rail rows carry a ROLE tag; the pane holds the title, a
-   text-with-caret role control, the RECOMMENDATIONS FROM STEP 1 tray (or a
-   hairline), and four-column answer rows: key · answer · mapping · go-to.
-   The CELL is the control; chips, counts and ×s are buttons inside it. ══ */
-.qz-lw-grid--b { grid-template-columns: 318px minmax(0, 1fr); }
-.qz-lw-railn { font-size: 10px; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
-.qz-lw-grid--b .qz-lw-qi { display: flex; align-items: flex-start; gap: 9px; padding: 9px 10px; }
-.qz-lw-grid--b .qz-lw-qn { flex: 0 0 14px; line-height: 1.6; padding-top: 0; }
-.qz-lw-qtxt {
-  flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.4; color: var(--qz-ink-3);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.qz-lw-qi.is-on .qz-lw-qtxt { color: var(--qz-ink); font-weight: 600; }
-.qz-lw-qi.is-on, .qz-lw-qi.is-on:hover { background: var(--qz-paper); box-shadow: var(--qz-lift-1); }
-.qz-lw-qtag {
-  flex: 0 0 auto; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  padding: 2px 6px; border-radius: var(--qz-radius-sm); background: var(--qz-cream-2); color: var(--qz-ink-25); margin-top: 2px;
-}
-.qz-lw-qtag.is-decides { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-lw-qtag.is-filter { background: var(--qz-cream-2); color: var(--qz-ink-3); }
-/* the pane */
-.qz-lw-pane { padding: 18px 20px; min-width: 0; }
-.qz-lw-paneh { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
-.qz-lw-panet { margin: 0; font-size: 18px; font-weight: 700; line-height: 1.35; color: var(--qz-ink); max-width: 46ch; }
-.qz-lw-prule { height: 1px; background: var(--qz-rule); margin: 0 0 16px; }
-.qz-lw-rolestack { display: grid; gap: 5px; justify-items: end; flex: 0 0 auto; }
-.qz-lw-rolebtn {
-  display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 13px; font-weight: 700;
-  color: var(--qz-ink); background: transparent; border: 1px solid transparent; border-radius: var(--qz-radius);
-  padding: 5px 9px; cursor: pointer; white-space: nowrap;
-}
-.qz-lw-rolebtn:hover { background: var(--qz-cream-2); border-color: var(--qz-rule); }
-.qz-lw-rolebtn.is-open { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
-.qz-lw-rolebtn.is-static { cursor: default; }
-.qz-lw-rolebtn-cv { color: var(--qz-ink-25); font-size: 9px; }
-/* the tray — neutral, not purple: purple means one thing here, the armed card */
-.qz-lw-tray {
-  margin: 0 0 16px; padding: 9px 12px 11px; border: 1px solid var(--qz-rule);
-  background: var(--qz-ls-cell-bg); border-radius: var(--qz-radius-lg);
-}
-.qz-lw-tray-h { display: flex; align-items: center; gap: 12px; min-height: 24px; }
-.qz-lw-tray-lb { flex: 1; font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--qz-ink-25); white-space: nowrap; }
-.qz-lw-tray-hint { font-size: 12px; font-weight: 600; color: var(--qz-accent-ink); }
-.qz-lw-tray-c { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
-.qz-lw-tw { display: inline-flex; }
-.qz-lw-tcard {
-  display: inline-flex; align-items: center; gap: 9px; max-width: 230px;
-  font: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink);
-  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
-  padding: 4px 11px 4px 4px; cursor: pointer;
-  transition: border-color var(--qz-dur) var(--qz-ease), box-shadow var(--qz-dur) var(--qz-ease);
-}
-.qz-lw-tcard:hover { border-color: var(--qz-ls-line2); box-shadow: var(--qz-lift-1); }
-.qz-lw-tcard.is-armed { border-color: var(--qz-accent); background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 700; box-shadow: var(--qz-lift-1); }
-.qz-lw-tcard.is-used { color: var(--qz-ink-25); }
-.qz-lw-tcard.is-used .qz-lw-thumb { opacity: .55; }
-.qz-lw-tcard:disabled { cursor: default; }
-.qz-lw-tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.qz-lw-thumb {
-  width: 30px; height: 30px; flex: 0 0 30px; border-radius: var(--qz-radius-sm); object-fit: cover;
-  background: linear-gradient(145deg, var(--qz-accent-wash), var(--qz-cream-2));
-  box-shadow: inset 0 0 0 1px rgba(32, 28, 46, .05);
-}
-.qz-lw-tmore {
-  align-self: center; font: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink-3);
-  background: none; border: 1px dashed var(--qz-ls-line2); border-radius: var(--qz-radius);
-  padding: 9px 12px; cursor: pointer; white-space: nowrap; font-variant-numeric: tabular-nums;
-}
-.qz-lw-tmore:hover { color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
-/* answer rows: key · answer · mapping · then-go-to (no PRODUCTS column) */
-.qz-lw-arows { display: flex; flex-direction: column; }
-.qz-lw-arow {
-  display: grid; grid-template-columns: 20px minmax(0, 1fr) 236px 104px; gap: 14px;
-  align-items: center; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2);
-}
-.qz-lw-arow:last-of-type { border-bottom: 0; }
-.qz-lw-arow .qz-lw-akey { font-size: 11px; color: var(--qz-ink-25); }
-.qz-lw-arow .qz-lw-atext { color: var(--qz-ink); font-size: 14.5px; line-height: 1.45; min-width: 0; font-weight: 400; }
-.qz-lw-acellw { min-width: 0; }
-/* only the CELL's own anchor stretches — the count button's anchor inside
-   the chip must keep its shrink-to-fit width or it squeezes the name */
-.qz-lw-acellw > .qz-popover-anchor { display: flex; width: 100%; }
-/* The CELL is the white square: the chip, the count and the clear × are
-   siblings inside it (a button cannot contain a button). */
-.qz-lw-cell {
-  /* QWIDGET-M — several chips per cell: wrap instead of overflowing the
-     236px mapping column; row-gap keeps wrapped chips readable. */
-  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 2px; width: 100%; background: transparent; cursor: pointer;
-  border: 1px solid transparent; border-radius: var(--qz-radius); padding: 2px 3px 2px 2px; min-height: 30px;
-  transition: border-color var(--qz-dur) var(--qz-ease), background var(--qz-dur) var(--qz-ease);
-}
-.qz-lw-cell:hover { background: var(--qz-paper); border-color: var(--qz-rule); }
-.qz-lw-cell.is-open { background: var(--qz-paper); border-color: var(--qz-accent-line); }
-body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
-.qz-lw-cell.is-blank { border-style: dashed; border-color: var(--qz-ls-line2); }
-.qz-lw-cell.is-blank:hover { border-color: var(--qz-accent); }
-.qz-lw-cell.is-drop { border-style: dashed; border-color: var(--qz-accent); background: var(--qz-accent-wash); }
-/* the cell you changed flashes purple and settles */
-@media (prefers-reduced-motion: no-preference) {
-  .qz-lw-cell.is-flash { animation: qz-lw-flash 2.6s var(--qz-ease) forwards; }
-  @keyframes qz-lw-flash {
-    0%, 65% { background: var(--qz-accent-wash); border-color: var(--qz-accent); }
-    100% { background: transparent; border-color: transparent; }
-  }
-}
-@media (prefers-reduced-motion: reduce) { .qz-lw-cell.is-flash { background: var(--qz-accent-wash); border-color: var(--qz-accent); } }
-.qz-lw-vbtn {
-  display: flex; align-items: center; gap: 4px; width: 100%; font-size: 13px; font-weight: 600; color: var(--qz-ink);
-  padding: 4px 7px; text-align: left;
-}
-.qz-lw-vbtn.is-empty { color: var(--qz-ink-25); font-weight: 500; }
-.qz-lw-cell:hover .qz-lw-vbtn.is-empty { color: var(--qz-accent-ink); }
-.qz-lw-cv { margin-left: auto; color: var(--qz-ink-25); font-size: 9px; padding-left: 4px; }
-.qz-lw-placesay { font-size: 12px; font-weight: 700; color: var(--qz-accent-ink); padding: 4px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.qz-lw-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 4px; flex: 1; min-width: 0; padding: 3px 4px; }
-.qz-lw-chipw { display: inline-flex; align-items: center; position: relative; border-radius: var(--qz-radius-sm); max-width: 100%; }
-.qz-lw-chipw:hover { background: var(--qz-cream-2); }
-.qz-lw-chip {
-  display: inline-flex; align-items: center; gap: 5px; padding: 2px 4px 2px 6px; border-radius: var(--qz-radius-sm);
-  font-size: 13px; font-weight: 700; color: var(--qz-ink); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.qz-lw-chip.is-all { font-weight: 600; color: var(--qz-ink-4); }
-.qz-lw-qf { color: var(--qz-ink-25); font-weight: 500; padding-left: 5px; }
-/* the count lives INSIDE the chip, next to the thing it counts — and it still
-   opens the products popover */
-.qz-lw-chipw .qz-ltab-countbtn { padding: 1px 5px; font-size: 11px; }
-.qz-lw-cn { font-size: 11px; font-weight: 600; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
-.qz-lw-cn.is-zero { color: var(--qz-crit); }
-.qz-lw-chips > .qz-popover-anchor .qz-ltab-countbtn { padding: 1px 6px; font-size: 11px; }
-/* one ×, one chip — hidden until the row is under the pointer or focused */
-.qz-lw-xone {
-  width: 16px; height: 16px; flex: 0 0 16px; border: 0; background: none; color: var(--qz-ink-25);
-  font-size: 12px; line-height: 1; cursor: pointer; font-family: inherit; border-radius: 3px; margin-right: 2px;
-  opacity: 0; transition: opacity var(--qz-dur-fast) var(--qz-ease);
-}
-.qz-lw-arow:hover .qz-lw-xone, .qz-lw-chipw:focus-within .qz-lw-xone, .qz-lw-xone:focus-visible { opacity: .85; }
-.qz-lw-xone:hover { opacity: 1; background: var(--qz-paper); color: var(--qz-crit); }
-/* Info only: the stored values are KEPT but inert */
-.qz-lw-vinert { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 3px 6px; font-size: 13px; color: var(--qz-ink-25); }
-.qz-lw-ichip { display: inline-block; padding: 2px 7px; border-radius: var(--qz-radius-sm); background: var(--qz-cream-2); color: var(--qz-ink-25); font-size: 12.5px; font-weight: 600; }
-/* then-go-to: near-silent by default; the overridden row is the one you see */
-.qz-lw-aroute .qz-ltab-cellbtn { margin: 0; padding: 0; }
-.qz-lw-go {
-  display: inline-flex; align-items: center; gap: 5px; width: 100%; font-size: 12.5px; font-weight: 500;
-  color: var(--qz-ink-25); border: 1px solid transparent; border-radius: var(--qz-radius); padding: 3px 6px; white-space: nowrap;
-}
-.qz-ltab-cellbtn:hover .qz-lw-go { background: var(--qz-cream-2); border-color: var(--qz-rule); color: var(--qz-ink-3); }
-.qz-lw-go.is-set { color: var(--qz-ink); font-weight: 600; }
-/* §6 routing option A — the multi-select warning on the deciding rows */
-.qz-lw-routewarn { margin-top: 10px; padding: 9px 12px; border: 1px solid var(--qz-ls-warn-line); background: var(--qz-ls-warn-wash); border-radius: var(--qz-radius); }
-.qz-lw-routewarn p { margin: 0; font-size: 12.5px; color: var(--qz-warn); line-height: 1.5; }
-.qz-lw-routewarn p + p { margin-top: 4px; }
-.qz-lw-routewarn p.is-error { color: var(--qz-crit); }
-/* the pickers (shared chrome): title · rows with a › drill-in · foot */
-.qz-lw-vp-title { font-size: 14px; font-weight: 700; color: var(--qz-ink); padding: 2px 2px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-lw-vp-title span { color: var(--qz-ink-4); font-weight: 600; }
-.qz-lw-vp-row { display: flex; align-items: center; gap: 0; }
-.qz-lw-vp-row .qz-lw-vp-opt { flex: 1; min-width: 0; }
-.qz-lw-vp-opt.is-radio { grid-template-columns: 14px minmax(0, 1fr); }
-.qz-lw-vp-tk { width: 14px; color: var(--qz-accent-ink); font-size: 11px; }
-.qz-lw-vp-q { color: var(--qz-ink-25); font-size: 11.5px; font-weight: 500; padding-left: 7px; }
-.qz-lw-vp-drill {
-  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; height: 28px; border: 0; background: none;
-  color: var(--qz-ink-25); border-radius: var(--qz-radius-sm); cursor: pointer; font: inherit; font-size: 12px;
-  font-variant-numeric: tabular-nums; padding: 0 8px 0 10px; line-height: 1;
-}
-.qz-lw-vp-drill:hover { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-lw-vp-drill.is-flat { cursor: default; opacity: .55; }
-.qz-lw-vp-drill.is-flat:hover { background: none; color: var(--qz-ink-25); }
-.qz-lw-vp-more { margin: 0; padding: 9px 9px 2px; font-size: 12px; color: var(--qz-ink-25); }
-.qz-lw-pp { display: flex; align-items: center; gap: 10px; padding: 6px 9px; border-radius: var(--qz-radius-sm); }
-.qz-lw-pp:hover { background: var(--qz-ls-cell-bg); }
-.qz-lw-pp-sw { width: 28px; height: 28px; flex: 0 0 28px; border-radius: var(--qz-radius-sm); object-fit: cover; background: linear-gradient(145deg, var(--qz-accent-wash), var(--qz-cream-2)); box-shadow: inset 0 0 0 1px rgba(32, 28, 46, .05); }
-.qz-lw-pp-nm { font-size: 13.5px; color: var(--qz-ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-lw-pp-ty { margin-left: auto; font-size: 11.5px; color: var(--qz-ink-25); white-space: nowrap; }
-@media (max-width: 900px) {
-  .qz-lw-grid--b { grid-template-columns: 1fr; }
-  .qz-lw-arow { grid-template-columns: 20px minmax(0, 1fr); }
-  .qz-lw-acellw, .qz-lw-aroute { grid-column: 2; }
-}
-
-/* — the rules ledger (.rzone/.rhead/.rcard) — */
-.qz-lw-rzone {
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
-  background: var(--qz-paper); overflow: hidden;
-}
-.qz-lw-rhead {
-  display: flex; align-items: center; gap: 10px; padding: 12px 15px;
-  border-bottom: 1px solid var(--qz-rule); background: var(--qz-cream-2);
-  flex-wrap: wrap;
-}
-.qz-lw-rhead h4 { margin: 0; font-size: 14.5px; font-weight: 600; }
-.qz-lw-rsub { font-size: 12.5px; color: var(--qz-ink-4); }
-.qz-lw-rright { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.qz-lw-rzone .qz-ltab-rulebanner { margin: 12px 15px 0; }
-.qz-lw-rlist {
-  list-style: none; margin: 0; padding: 12px 15px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.qz-lw-rcard {
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
-  padding: 12px 14px; background: var(--qz-paper);
-  display: flex; gap: 12px; align-items: center;
-}
-.qz-lw-rn {
-  flex: none; font-size: 11px; font-weight: 700; color: var(--qz-warn);
-  background: var(--qz-ls-warn-wash); border: 1px solid var(--qz-ls-warn-line);
-  padding: 3px 7px; border-radius: var(--qz-radius-sm);
-  font-variant-numeric: tabular-nums;
-}
-.qz-lw-rline { flex: 1; min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); line-height: 1.7; }
-.qz-lw-rsent { display: block; }
-.qz-lw-rline b { color: var(--qz-ink); font-weight: 600; }
-/* Target chips (.tchip) inside the sentence. */
-.qz-lw-tchip {
-  display: inline-flex; padding: 3px 10px; border-radius: var(--qz-radius-sm);
-  font-size: 12.5px; font-weight: 500; vertical-align: baseline;
-  background: var(--qz-live-wash); color: var(--qz-ok);
-  border: 1px solid var(--qz-ls-ok-line);
-}
-
-/* — the value picker (Live I: .pop-b search · source chips · groups ·
-   ✓ option rows · the union footer). Lives inside .qz-popover, which owns
-   the card chrome; the footer bleeds the popover's 14/16 padding. — */
-.qz-lw-vp { min-width: 300px; }
-.qz-lw-vp-srch {
-  width: 100%; padding: 7px 10px; border: 1px solid var(--qz-rule);
-  border-radius: var(--qz-radius); background: var(--qz-paper);
-  font: inherit; font-size: 13px; margin-bottom: 9px; color: var(--qz-ink);
-}
-.qz-lw-vp-srch:focus { outline: none; border-color: var(--qz-accent); }
-.qz-lw-vp-tfilt { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
-.qz-lw-vp-tf {
-  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
-  border-radius: var(--qz-radius); font: inherit; font-size: 12px;
-  font-weight: 500; border: 1px solid var(--qz-rule); color: var(--qz-ink-4);
-  background: var(--qz-paper); cursor: pointer;
-}
-.qz-lw-vp-tf .qz-lw-vp-c { font-size: 11px; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
-.qz-lw-vp-tf.is-on { background: var(--qz-ink); color: var(--qz-paper); border-color: var(--qz-ink); }
-.qz-lw-vp-tf.is-on .qz-lw-vp-c { color: var(--qz-paper); opacity: 0.7; }
-.qz-lw-vp-grp {
-  font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--qz-ink-4); font-weight: 600; padding: 9px 5px 6px;
-  display: flex; align-items: center; gap: 7px;
-}
-.qz-lw-vp-grp b { color: var(--qz-accent-ink); }
-.qz-lw-vp-all {
-  margin-left: auto; font: inherit; font-size: 11px; color: var(--qz-accent-ink);
-  font-weight: 600; text-transform: none; letter-spacing: 0;
-  border: none; background: none; cursor: pointer; padding: 0;
-}
-.qz-lw-vp-all:hover { text-decoration: underline; }
-.qz-lw-vp-opt {
-  display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 10px;
-  align-items: center; padding: 7px; border-radius: var(--qz-radius);
-  width: 100%; border: none; background: none; text-align: left;
-  cursor: pointer; font: inherit; color: var(--qz-ink);
-}
-.qz-lw-vp-opt:hover { background: var(--qz-cream-2); }
-.qz-lw-vp-opt.is-on, .qz-lw-vp-opt.is-on:hover { background: var(--qz-accent-wash); }
-.qz-lw-vp-box {
-  width: 16px; height: 16px; border-radius: var(--qz-radius-sm);
-  border: 1.5px solid var(--qz-rule-strong); display: grid; place-items: center;
-  font-size: 9px; color: transparent;
-}
-.qz-lw-vp-opt.is-on .qz-lw-vp-box {
-  background: var(--qz-accent); border-color: var(--qz-accent); color: var(--qz-paper);
-}
-.qz-lw-vp-ov { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-lw-vp-on { font-size: 11.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
-.qz-lw-vp-none { margin: 0; padding: 10px 5px; font-size: 12.5px; color: var(--qz-ink-4); }
-/* The group list scrolls on its own (mock .ppl) so the search, source chips
-   and the Done footer stay in reach however long the read-out runs — and the
-   whole picker stays short enough for QzPopover's flip estimate, so an
-   answer row near the fold still gets a fully-visible popover. */
-.qz-lw-vp-list { max-height: min(32vh, 230px); overflow-y: auto; }
-.qz-lw-vp-foot {
-  border-top: 1px solid var(--qz-rule); padding: 10px 13px;
-  background: var(--qz-cream-2); display: flex; align-items: center; gap: 9px;
-  font-size: 12px; color: var(--qz-ink-3);
-  margin: 9px -16px -14px; /* bleed .qz-popover's 14/16 padding */
-  position: sticky; bottom: -14px; /* stays in reach if the popover scrolls */
-}
-.qz-lw-vp-foot b { color: var(--qz-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
-.qz-lw-vp-fbtns { margin-left: auto; display: flex; gap: 8px; }
 
 /* Retained for sibling surfaces — the Logic TABLE now draws .qz-ltab-tag
    (QRTZ-H3), but QuestionWindow keeps its chips + hue palette (§11),
@@ -8341,30 +7757,11 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 .qz-ltab-rbtn:disabled { color: var(--qz-ink-25); cursor: default; background: none; }
 
 /* ── P3 — the cell popovers (§6.4/§6.5) + interactive cells ── */
-.qz-ltab-pill-btn, .qz-ltab-cellbtn { font: inherit; cursor: pointer; text-align: left; }
-.qz-ltab-cellbtn { border: none; background: none; padding: 0; }
-/* The pill button keeps .qz-ltab-pill's own border/padding (mock .role);
-   hover per base.mjs 588. */
-.qz-ltab-pill-btn { font-size: 10.5px; }
-.qz-ltab-pill-btn:hover { border-color: var(--qz-rule-strong); color: var(--qz-ink-3); }
-.qz-ltab-pill-btn.is-start:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
-.qz-ltab-cellbtn { display: block; width: 100%; border-radius: 6px; padding: 1px 4px; margin: -1px -4px; }
-.qz-ltab-cellbtn:hover { background: var(--qz-cream-2); }
 .qz-ltab-menu { display: flex; flex-direction: column; gap: 1px; padding: 6px; min-width: 240px; max-height: min(52vh, 460px); overflow-y: auto; }
 .qz-ltab-menu-title {
   font-size: 11px; font-weight: 700; color: var(--qz-ink-3);
   padding: 4px 8px 6px; border-bottom: 1px solid var(--qz-cream-2); margin-bottom: 3px;
 }
-.qz-ltab-menu-row {
-  font: inherit; display: flex; align-items: baseline; justify-content: space-between;
-  gap: 10px; width: 100%; text-align: left; background: none; border: none;
-  cursor: pointer; padding: 5px 8px; border-radius: 8px; font-size: 12.5px;
-  color: var(--qz-ink);
-}
-.qz-ltab-menu-row:hover { background: var(--qz-cream-2); }
-.qz-ltab-menu-row.is-current { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-ltab-menu-row-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qz-ltab-menu-row-sub { flex: 0 0 auto; font-size: 11px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
 .qz-ltab-menu-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 8px; }
 .qz-ltab-menu-chip {
   font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
@@ -8383,8 +7780,6 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
   color: var(--qz-ink-4); padding: 6px 8px 2px;
 }
 .qz-ltab-menu-none { font-size: 11.5px; color: var(--qz-ink-4); padding: 6px 8px; }
-/* Mock .msep — the divider before "Straight to the results". */
-.qz-ltab-menu-sep { height: 1px; background: var(--qz-cream-2); margin: 4px 2px; }
 .qz-ltab-menu-products { display: flex; flex-direction: column; gap: 2px; }
 .qz-ltab-menu-product {
   display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 3px 8px;
@@ -8506,7 +7901,6 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 .qz-ltable-cancel {
   font: inherit; font-size: 11px; border: none; background: none; cursor: pointer; color: var(--qz-ink-3); padding: 2px;
 }
-
 
 /* (--qz-warn-wash now lives in the main :root — the audit-fix patch block
    that used to sit here was folded up during the Quartz swap.) */
@@ -10192,20 +9586,6 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 .qz-devframe[data-qz-tier="desktop"] .qz-rg-gwrap { max-width: 420px; margin: 0 auto; }
 
 /* ═══ QRTZ-S6 — logic + results ═══ */
-/* (.qz-ltab-hdmeta retired with the two-card headers — LW.) */
-/* Rule drag-reorder (row is the handle — the mock draws no grip; the
-   visually-hidden ↑/↓ pair stays the keyboard path). */
-.qz-lw-rcard.is-dragging { opacity: 0.4; }
-.qz-lw-rcard.is-drop-target { box-shadow: inset 0 2px 0 0 var(--qz-accent); }
-/* (QRTZ-H3: the compact popover product-list rules — countline/pmain/pname/
-   pmeta/stock — are retired; the popover is the mock's .pp grid now, styled
-   in the QRTZ-H3 section.) */
-/* Popover foot sentences (mock .pop-foot / .pp-foot). */
-.qz-ltab-menu-foot {
-  margin-top: 6px; padding: 10px 8px 4px; border-top: 1px solid var(--qz-rule);
-  font-size: 12px; color: var(--qz-ink-3); line-height: 1.5;
-}
-.qz-ltab-menu-foot b { color: var(--qz-ink); font-weight: 600; }
 /* Attribute picker (mock .ap): low-coverage flag + coverage note — re-homed
    into the question window by QRTZ-D2 (field group headers + bank footer). */
 .qz-ltab-menu-thin {
@@ -10253,205 +9633,446 @@ body[data-qz] .qz-lw-cell:focus-visible { outline: 2px solid var(--qz-accent); o
 /* — QzSectionHeader count chip (mock hm-count: "4 to do"). — */
 .qz-section-count { font-size: 12.5px; color: var(--qz-ink-4); }
 
-/* ── Studio home — the composer page, two states (home.mjs / HOME_CSS) ──
-   Everything is prefixed `hm-`; the sheet already owns .qz-stat, .qz-card
-   and chip families, so prefixing is what lets this drop in safely.
-   The composer is the anchor: identical in both states. It keeps two
-   scoped departures from the system — a 14px radius and a real shadow —
-   because it is the one thing on the page you are meant to type into. */
+/* ── Studio Home — HOME-3, the first-run handoff (2026-09-22) ──────────────
+   First open (a dialog, once per shop) · No quiz yet (the create card) ·
+   With a quiz (the reminder, the two-row create module, Also waiting + Last
+   30 days, Your quizzes). Prefixed `hm3-`; the goal box family (hm3-goal,
+   hm3-box, hm3-ctrls, hm3-btn, hm3-go, hm3-mart…) is the shared GoalBox
+   component and also renders on /studio/goal and the Create quiz dialog.
+   Surface values are the handoff's §13.4 (the Crest shapes it names):
+   22px cards, 12px inner boxes, pill buttons / selects / tags. */
 
-/* The ONE tinted page in the product. Everything else is white paper. */
-.home2 {
-  flex: 1 1 auto; display: flex; flex-direction: column;
-  padding: 0; background: var(--qz-home-ground);
+/* The page ground is the Wiskr print — the Crest tile over white (§13.4).
+   Nothing that carries meaning sits on it: every text is on a card (§13.1). */
+.hm3 {
+  flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
+  padding: 34px 32px 48px;
+  background: var(--qz-paper) url("/crest-10.svg") 0 0 / 360px 240px repeat;
 }
-.home2 .hm-col { max-width: 640px; margin: 0 auto; width: 100%; }
-.home2 .hm-top { text-align: center; }
-
-/* Empty: the composer sits optically centred — heavier padding below than
-   above, so it lands slightly high, which is where the eye expects it. */
-.home2.is-none { justify-content: center; min-height: 620px; }
-.home2.is-none .hm-top { padding: 28px 30px 84px; }
-.home2.is-has  .hm-top { padding: 46px 30px 0; }
-
-/* Size is a function of state, not a setting: 37px is a welcome on a blank
-   page; the same 37px above a checklist would shout over its own content. */
-.home2 .hm-h1 { max-width: 720px; margin: 0 auto; text-wrap: balance; }
-.home2.is-none .hm-h1 { font-size: 37px; line-height: 1.14; letter-spacing: -0.031em; font-weight: 700; }
-.home2.is-has  .hm-h1 { font-size: 27px; line-height: 1.2; letter-spacing: -0.022em; font-weight: 600; }
-
-.home2 .hm-composer {
-  margin-top: 20px; text-align: left; background: var(--qz-paper);
-  border: 1px solid var(--qz-rule); border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(32,28,46,.05), 0 10px 28px -12px rgba(32,28,46,.20);
-  transition: box-shadow 200ms var(--qz-ease), border-color 130ms var(--qz-ease);
+@media print, (forced-colors: active) { .hm3 { background-image: none; } }
+/* Vertical centring that can never clip: auto margins take spare room and
+   collapse to 0 when the column is taller than the page. */
+.hm3-col { width: 100%; max-width: 840px; margin-block: auto; }
+.hm3-stack { display: flex; flex-direction: column; gap: 18px; }
+.hm3-ic {
+  display: block; flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
 }
-.home2 .hm-composer:focus-within {
-  border-color: var(--qz-accent);
-  box-shadow: 0 1px 2px rgba(32,28,46,.05), 0 16px 40px -14px rgba(32,28,46,.26);
-}
-.home2 .hm-composer textarea {
-  display: block; width: 100%; border: 0; background: none; resize: none;
-  padding: 18px 18px 2px; font: inherit; font-size: 16px; line-height: 1.5;
-  color: var(--qz-ink); outline: none; min-height: 56px; font-family: var(--qz-font-body);
-}
-.home2 .hm-composer textarea::placeholder { color: var(--qz-ink-4); }
-.home2 .hm-bar { display: flex; align-items: center; gap: 10px; padding: 8px 9px 9px 11px; }
-.home2 .hm-grow { margin-left: auto; }
 
-.home2 .hm-addmore {
-  display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent;
-  background: none; border-radius: var(--qz-radius); padding: 7px 9px; font-size: 13px;
-  font-weight: 500; color: var(--qz-ink-4); cursor: pointer; font-family: inherit;
-}
-.home2 .hm-addmore:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
-.home2 .hm-addmore svg { width: 14px; height: 14px; flex: none; }
-.home2 .hm-chev { transition: transform 200ms var(--qz-ease); }
-.home2 .hm-addmore[aria-expanded="true"] .hm-chev { transform: rotate(180deg); }
-
-/* The brief is collapsed by default — the goal alone is enough to draft. */
-.home2 .hm-brief { display: none; border-top: 1px solid var(--qz-rule); padding: 14px 18px 0; gap: 13px; }
-.home2 .hm-brief.is-open { display: grid; }
-.home2 .hm-brief-row { display: grid; gap: 5px; }
-.home2 .hm-brief-row label {
-  font-size: 11px; font-weight: 700; letter-spacing: .09em;
+.hm3-card { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: 22px; }
+.hm3-lbl {
+  margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--qz-ink-4);
 }
-.home2 .hm-brief-row input {
-  border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius);
-  background: var(--qz-paper); padding: 9px 11px; font: inherit; font-size: 14px;
-  color: var(--qz-ink); outline: none; font-family: var(--qz-font-body);
+.hm3-sechead { display: flex; align-items: center; gap: 12px; }
+.hm3-link { margin-left: auto; font-size: 13px; font-weight: 600; color: var(--qz-accent-2); text-decoration: none; }
+.hm3-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.hm3-q {
+  margin: 0; font-size: 27px; line-height: 1.14; font-weight: 700;
+  letter-spacing: -.026em; text-wrap: balance; color: var(--qz-ink);
 }
-.home2 .hm-brief-row input:focus { border-color: var(--qz-accent); box-shadow: 0 0 0 3px var(--qz-accent-wash); }
-.home2 .hm-brief-note { font-size: 12.5px; color: var(--qz-ink-4); margin: 1px 0 0; }
+.hm3-q:focus { outline: none; }
 
-/* Idle until there is something to send — the button reports state rather
-   than inviting a click that cannot do anything. */
-.home2 .hm-go {
-  flex: none; width: 34px; height: 34px; display: grid; place-items: center;
-  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
-  background: var(--qz-cream-2); color: var(--qz-ink-4); cursor: pointer;
+/* — The composer box — */
+.hm3-box {
+  width: 100%; padding: 16px 18px 14px; border: 1px solid var(--qz-rule-2); border-radius: 12px;
+  background: var(--qz-ls-cell-bg); text-align: left;
+  transition: background 160ms var(--qz-ease), border-color 160ms var(--qz-ease);
 }
-.home2 .hm-go svg { width: 16px; height: 16px; }
-.home2 .hm-go.is-ready { background: var(--qz-accent); border-color: var(--qz-accent); color: #FFFFFF; }
-.home2 .hm-go.is-ready:hover { background: var(--qz-accent-2); border-color: var(--qz-accent-2); }
-.home2 .hm-go:disabled { opacity: .6; cursor: default; }
-/* QRTZ-H — the drafting round-trip gets visible feedback: the arrow becomes
-   a ring while the goal action runs (the click used to look like a no-op). */
-.home2 .hm-go .hm-go-ring {
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, .35); border-top-color: #FFFFFF;
-  animation: hm-go-spin 700ms linear infinite;
+.hm3-box:focus-within {
+  background: var(--qz-paper); border-color: var(--qz-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--qz-accent) 28%, transparent);
 }
-.home2 .hm-go.is-busy { opacity: 1; }
-@keyframes hm-go-spin { to { transform: rotate(360deg); } }
+.hm3-box textarea, .hm3-makerow-body textarea {
+  display: block; width: 100%; margin: 0; padding: 0; border: 0; outline: none; resize: none;
+  background: transparent; color: var(--qz-ink); font-family: inherit;
+}
+.hm3-box textarea { min-height: 96px; font-size: 20px; line-height: 1.4; }
+/* Densities (§5): dialog 21px · page 20px · Home's full card 18px/1.45. */
+.hm3-goal.is-dialog .hm3-box textarea { font-size: 21px; }
+.hm3-goal.is-card .hm3-box textarea { min-height: 92px; font-size: 18px; line-height: 1.45; }
+.hm3-goal.is-card .hm3-selwrap select, .hm3-goal.is-row .hm3-selwrap select { height: 32px; }
+.hm3-goal.is-card .hm3-sw, .hm3-goal.is-row .hm3-sw { width: 30px; height: 18px; }
+.hm3-goal.is-card .hm3-sw::after, .hm3-goal.is-row .hm3-sw::after { width: 14px; height: 14px; }
+.hm3-goal.is-card .hm3-sw:checked::after, .hm3-goal.is-row .hm3-sw:checked::after { transform: translateX(12px); }
+.hm3-box textarea:focus-visible, .hm3-makerow-body textarea:focus-visible { outline: none; }
+.hm3-box textarea::placeholder, .hm3-makerow-body textarea::placeholder { color: var(--qz-ink-4); }
+.hm3-passive { min-height: 92px; font-size: 20px; line-height: 1.4; color: var(--qz-ink-4); }
+.hm3-boxbar, .hm3-rowbar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px;
+}
+.hm3-boxbar { margin-top: 14px; }
+.hm3-ctrls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; }
+.hm3-qsel { display: inline-flex; align-items: center; gap: 8px; }
+.hm3-qsel label { font-size: 13px; font-weight: 600; color: var(--qz-ink-3); }
+.hm3-selwrap { position: relative; display: inline-flex; }
+.hm3-selwrap select {
+  height: 34px; min-width: 88px; padding: 0 30px 0 14px; border: 0; border-radius: 999px;
+  background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-rule); color: var(--qz-ink);
+  font: inherit; font-size: 13px; font-weight: 600; line-height: 1; cursor: pointer;
+  appearance: none; -webkit-appearance: none;
+}
+.hm3-selwrap select:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+.hm3-selwrap .hm3-ic {
+  position: absolute; right: 8px; top: 50%; width: 14px; height: 14px; margin-top: -7px;
+  pointer-events: none; color: var(--qz-ink-3);
+}
+.hm3-swlabel {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 32px;
+  font-size: 13px; font-weight: 600; color: var(--qz-ink-3); cursor: pointer;
+}
+.hm3-sw {
+  appearance: none; -webkit-appearance: none; position: relative; flex: none;
+  width: 34px; height: 20px; margin: 0; border-radius: 999px; background: var(--qz-rule);
+  cursor: pointer; transition: background 140ms var(--qz-ease);
+}
+.hm3-sw::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px;
+  background: var(--qz-paper); box-shadow: var(--qz-lift-1);
+  transition: transform 140ms var(--qz-ease);
+}
+.hm3-sw:checked { background: var(--qz-accent); }
+.hm3-sw:checked::after { transform: translateX(14px); }
+.hm3-error { margin: 8px 2px 0; font-size: 13px; color: var(--qz-crit); }
+
+.hm3-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px;
+  padding: 12px 22px; border: 0; border-radius: 999px; background: var(--qz-accent);
+  color: var(--qz-on-accent); cursor: pointer; font: inherit; font-size: 15px; font-weight: 600;
+  line-height: 1; white-space: nowrap; text-decoration: none;
+}
+.hm3-btn:hover { background: var(--qz-accent-2); }
+.hm3-btn[disabled] { opacity: .7; cursor: progress; }
+.hm3-btn .hm3-ic { stroke-width: 2; }
+.hm3-btn-sm { min-height: 34px; padding: 9px 16px; font-size: 13.5px; }
+.hm3-quiet {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 7px 11px;
+  border: 1px solid transparent; border-radius: 8px; color: var(--qz-ink-3);
+  font-size: 13.5px; font-weight: 500; line-height: 1; text-decoration: none;
+}
+.hm3-quiet:hover { background: var(--qz-paper); border-color: var(--qz-rule); color: var(--qz-ink); }
+.hm3-go {
+  flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0;
+  border-radius: 999px; background: var(--qz-accent); color: var(--qz-on-accent); cursor: pointer;
+}
+.hm3-go:hover { background: var(--qz-accent-2); }
+.hm3-go[disabled] { opacity: .7; cursor: progress; }
+.hm3-go .hm3-ic { width: 17px; height: 17px; stroke-width: 2; }
+
+/* — Catalog starters + the quiet paths — */
+.hm3-catalog { display: flex; flex-direction: column; gap: 8px; }
+.hm3-catalog > span, .hm3-altrow > span { font-size: 12.5px; color: var(--qz-ink-4); }
+.hm3-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.hm3-chip {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 7px 12px 7px 9px;
+  border: 1px solid var(--qz-rule); border-radius: 10px; background: var(--qz-paper);
+  color: var(--qz-ink); font: inherit; cursor: pointer; white-space: nowrap;
+  transition: transform 140ms var(--qz-ease), border-color 140ms var(--qz-ease);
+}
+.hm3-chip:hover { transform: translateY(-1px); border-color: var(--qz-rule-strong); }
+.hm3-chip[aria-pressed="true"] { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
+.hm3-chip-art {
+  flex: none; width: 18px; height: 18px; border-radius: 4px;
+  background: radial-gradient(circle at 50% 62%, var(--qz-ls-line2) 0 34%, var(--qz-rule-2) 36%);
+}
+.hm3-chip b { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.hm3-chip-meta { font-size: 12px; font-weight: 500; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.hm3-altrow {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 2px;
+  padding-top: 14px; border-top: 1px solid var(--qz-rule-2);
+}
+.hm3-altrow > span { margin-right: 4px; }
+
+/* — The create card: art panel + body — */
+.hm3-make { display: grid; grid-template-columns: 276px minmax(0, 1fr); overflow: hidden; }
+.hm3-make-art {
+  position: relative; display: grid; place-items: center; padding: 30px 24px;
+  background: linear-gradient(165deg, #F4F1FF, #E9E4FC);
+  border-right: 1px solid var(--qz-rule);
+}
+.hm3-make-body { min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 30px 32px 28px; }
+
+/* The art: a question being answered feeds a profile that resolves to a
+   match. One 9s loop; reduced motion rests on the middle answer chosen. */
+.hm3-mart { position: relative; width: 196px; height: 196px; }
+.hm3-mart-glow {
+  position: absolute; inset: 20px; border-radius: 999px; background: var(--qz-accent-line);
+  opacity: .45; animation: hm3Glow 9s var(--qz-ease) infinite;
+}
+.hm3-mq, .hm3-pf {
+  position: absolute; display: flex; flex-direction: column; background: var(--qz-paper);
+  border: 1px solid var(--qz-accent-wash); box-shadow: 0 16px 30px -20px rgba(32, 28, 46, .55);
+}
+.hm3-mq { left: 2px; top: 16px; width: 124px; gap: 7px; padding: 12px 11px; border-radius: 13px; }
+.hm3-mq-bar { width: 68%; height: 6px; border-radius: 3px; background: var(--qz-rule-2); }
+.hm3-mq-opt {
+  display: flex; align-items: center; gap: 7px; height: 22px; padding: 0 8px;
+  border: 1px solid var(--qz-rule); border-radius: 8px; background: var(--qz-paper);
+  animation: hm3Pick 9s var(--qz-ease) infinite;
+}
+.hm3-mq-opt i {
+  flex: none; width: 9px; height: 9px; border-radius: 999px; border: 1.5px solid var(--qz-ink-25);
+  animation: hm3Dot 9s var(--qz-ease) infinite;
+}
+.hm3-mq-opt b { flex: 1 1 auto; height: 5px; border-radius: 3px; background: var(--qz-rule-2); }
+.hm3-mq-opt.o2, .hm3-mq-opt.o2 i { animation-delay: 2.2s; }
+.hm3-mq-opt.o3, .hm3-mq-opt.o3 i { animation-delay: 4.4s; }
+.hm3-mq-opt.o2 { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
+.hm3-mq-opt.o2 i { border-color: var(--qz-accent); background: var(--qz-accent); }
+.hm3-pf { right: 0; bottom: 12px; width: 86px; gap: 6px; padding: 10px; border-radius: 12px; }
+.hm3-pf-row { height: 6px; border-radius: 3px; background: var(--qz-rule-2); animation: hm3Fill 9s var(--qz-ease) infinite; }
+.hm3-pf-row.r1 { width: 74%; animation-delay: .9s; }
+.hm3-pf-row.r2 { width: 90%; animation-delay: 3.1s; }
+.hm3-pf-row.r3 { width: 62%; animation-delay: 5.3s; }
+.hm3-pf-match {
+  display: flex; align-items: center; gap: 5px; height: 20px; margin-top: 2px; padding: 0 6px;
+  border: 1px solid var(--qz-accent-line); border-radius: 7px; background: var(--qz-accent-wash);
+  opacity: 0; animation: hm3Match 9s var(--qz-ease) infinite;
+}
+.hm3-pf-match .hm3-ic { width: 11px; height: 11px; stroke-width: 2.6; color: var(--qz-accent-2); }
+.hm3-pf-match i { flex: 1 1 auto; height: 5px; border-radius: 3px; background: var(--qz-accent-line); }
+.hm3-fly { position: absolute; left: 112px; width: 9px; height: 9px; border-radius: 999px; background: var(--qz-accent); opacity: 0; }
+.hm3-fly.f1 { top: 50px; animation: hm3Fly1 9s var(--qz-ease) infinite; }
+.hm3-fly.f2 { top: 79px; animation: hm3Fly2 9s var(--qz-ease) infinite; animation-delay: 2.2s; }
+.hm3-fly.f3 { top: 108px; animation: hm3Fly3 9s var(--qz-ease) infinite; animation-delay: 4.4s; }
+@keyframes hm3Pick { 0%, 1% { border-color: var(--qz-rule); background: var(--qz-paper); } 4%, 19% { border-color: var(--qz-accent); background: var(--qz-accent-wash); } 23%, 100% { border-color: var(--qz-rule); background: var(--qz-paper); } }
+@keyframes hm3Dot { 0%, 1% { border-color: var(--qz-ink-25); background: transparent; } 4%, 19% { border-color: var(--qz-accent); background: var(--qz-accent); } 23%, 100% { border-color: var(--qz-ink-25); background: transparent; } }
+@keyframes hm3Fill { 0%, 1% { background: var(--qz-rule-2); } 5%, 100% { background: var(--qz-accent); } }
+@keyframes hm3Match { 0%, 70% { opacity: 0; transform: translateY(4px); } 76%, 96% { opacity: 1; transform: translateY(0); } 99%, 100% { opacity: 0; transform: translateY(4px); } }
+@keyframes hm3Fly1 { 0%, 8% { opacity: 0; transform: translate(0, 0) scale(.5); } 10% { opacity: 1; transform: translate(4px, 4px) scale(1); } 17% { opacity: 1; transform: translate(40px, 88px) scale(.85); } 20%, 100% { opacity: 0; transform: translate(42px, 92px) scale(.4); } }
+@keyframes hm3Fly2 { 0%, 8% { opacity: 0; transform: translate(0, 0) scale(.5); } 10% { opacity: 1; transform: translate(4px, 3px) scale(1); } 17% { opacity: 1; transform: translate(40px, 59px) scale(.85); } 20%, 100% { opacity: 0; transform: translate(42px, 63px) scale(.4); } }
+@keyframes hm3Fly3 { 0%, 8% { opacity: 0; transform: translate(0, 0) scale(.5); } 10% { opacity: 1; transform: translate(4px, 2px) scale(1); } 17% { opacity: 1; transform: translate(40px, 30px) scale(.85); } 20%, 100% { opacity: 0; transform: translate(42px, 34px) scale(.4); } }
+@keyframes hm3Glow { 0%, 100% { transform: scale(1); opacity: .4; } 50% { transform: scale(1.07); opacity: .62; } }
 @media (prefers-reduced-motion: reduce) {
-  .home2 .hm-go .hm-go-ring { animation: none; border-top-color: rgba(255, 255, 255, .35); }
+  .hm3 *, .hm3 *::before, .hm3 *::after { animation: none !important; transition: none !important; }
+  .hm3-pf-match { opacity: 1; }
+  .hm3-pf-row { background: var(--qz-accent); }
 }
 
-/* The action's 400 (goal too short) surfaces here — not in the mock, but
-   the contract can reject and silence would strand the merchant. */
-.home2 .hm-error { margin: 10px 2px 0; font-size: 13px; color: var(--qz-crit); text-align: left; }
-
-/* The other ways in — weightless, so the composer keeps the page. */
-.home2 .hm-modes { margin-top: 15px; display: flex; justify-content: center; flex-wrap: wrap; gap: 3px; }
-.home2 .hm-mode {
-  display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px;
-  border: 1px solid transparent; background: none; border-radius: var(--qz-radius);
-  font-size: 13.5px; font-weight: 500; color: var(--qz-ink-4); cursor: pointer;
-  text-decoration: none;
+/* — The first-open pop-up (a QzModal with a Soft skin) — */
+.qz-modal-scrim:has(.hm3-pop) {
+  background: color-mix(in srgb, var(--qz-ink) 52%, transparent);
+  backdrop-filter: blur(9px) saturate(.85); -webkit-backdrop-filter: blur(9px) saturate(.85);
 }
-.home2 .hm-mode:hover { color: var(--qz-ink); background: var(--qz-paper); border-color: var(--qz-rule); }
-.home2 .hm-mode svg { width: 14px; height: 14px; flex: none; }
-
-/* Empty state only — once the checklist exists, global design is a row in
-   it, and this line would be the same prompt twice. */
-.home2 .hm-nudge {
-  display: inline-flex; align-items: center; gap: 7px; margin-top: 22px;
-  border: 0; background: none; padding: 7px 11px; border-radius: var(--qz-radius);
-  font-size: 13.5px; font-weight: 500; color: var(--qz-accent-ink); cursor: pointer;
-  text-decoration: none;
+.qz-modal.hm3-pop {
+  padding: 28px 30px 26px; border-radius: 22px; gap: 16px;
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--qz-accent) 30%, transparent),
+              0 0 0 8px rgba(255, 255, 255, .16), var(--qz-lift-3);
 }
-.home2 .hm-nudge:hover { background: var(--qz-accent-wash); }
-.home2 .hm-nudge svg { width: 15px; height: 15px; flex: none; }
-
-.home2 .hm-below { padding: 0 30px 56px; }
-.home2 .hm-section { padding-top: 26px; margin-top: 26px; border-top: 1px solid var(--qz-rule); }
-
-/* Section heads ride QzSectionHeader (with the new count slot), styled to
-   the mock's hm-sec-head: 11px uppercase label + count + trailing link. */
-.home2 .qz-section-head { justify-content: flex-start; align-items: baseline; gap: 12px; margin-bottom: 12px; }
-.home2 .qz-section-head .qz-h2 {
-  margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .1em;
-  text-transform: uppercase; color: var(--qz-ink-4);
+.qz-modal.hm3-pop .qz-modal-title {
+  max-width: 34ch; margin: 0 auto; padding: 0 12px; text-align: center; font-size: 30px;
+  font-weight: 500; letter-spacing: -.018em; line-height: 1.2; color: var(--qz-ink);
 }
-.home2 .qz-section-action { margin-left: auto; }
-/* Mock .link: 13/semi, accent ink, underline on hover offset 3px. */
-.home2 .qz-section-action a { font-size: 13px; font-weight: 600; color: var(--qz-accent-ink); text-decoration: none; }
-.home2 .qz-section-action a:hover { text-decoration: underline; text-underline-offset: 3px; }
-
-.home2 .hm-card { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); overflow: hidden; }
-
-.home2 .hm-todo {
-  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 13px 15px; border: 0; border-bottom: 1px solid var(--qz-rule);
-  background: none; cursor: pointer; text-decoration: none; color: inherit;
+.qz-modal.hm3-pop .qz-modal-x { top: 14px; right: 14px; width: 28px; height: 28px; border-radius: 999px; color: var(--qz-ink-25); }
+.qz-modal.hm3-pop .qz-modal-x:hover { color: var(--qz-ink-3); }
+.hm3-example {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px;
+  padding: 14px 16px; border: 1px dashed var(--qz-rule); border-radius: 12px;
 }
-.home2 .hm-todo:last-child { border-bottom: 0; }
-.home2 .hm-todo:hover { background: var(--qz-cream-2); }
-.home2 .hm-todo-ico {
-  flex: none; width: 30px; height: 30px; display: grid; place-items: center;
-  border-radius: var(--qz-radius); background: var(--qz-cream-2);
-  border: 1px solid var(--qz-rule); color: var(--qz-ink-3);
+.hm3-example p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--qz-ink-3); }
+.hm3-example b { color: var(--qz-ink); font-weight: 700; }
+.hm3-example-acts { display: inline-flex; align-items: center; gap: 8px; color: var(--qz-ink-4); }
+.hm3-linkq {
+  border: 0; background: none; padding: 0; cursor: pointer; font: inherit;
+  font-size: 13.5px; font-weight: 600; color: var(--qz-accent-2);
 }
-.home2 .hm-todo-ico svg { width: 15px; height: 15px; }
-.home2 .hm-todo-main { min-width: 0; display: grid; gap: 1px; }
-.home2 .hm-todo-main b { font-size: 14px; font-weight: 600; color: var(--qz-ink);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home2 .hm-todo-main span { font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-4); }
-.home2 .hm-todo-chev { flex: none; margin-left: auto; color: var(--qz-ink-4); }
-.home2 .hm-todo:hover .hm-todo-chev { transform: translateX(2px); }
+.hm3-linkq:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* Stat tiles — the mock's hairline grid, in the mock's hm-stat anatomy:
-   label on top (10/700/.08em uppercase), the 27px figure 6px under it,
-   delta 6px under that (home.mjs hm-stat-label → hm-stat-value →
-   hm-stat-delta). QzStat's global meld order is figure-first, so the label
-   is re-ordered to the top here — QRTZ-G6. */
-.home2 .hm-stats {
-  display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--qz-rule);
-  border-radius: var(--qz-radius-lg); background: var(--qz-paper); overflow: hidden;
+/* — Next step: the lead card while something waits — */
+.hm3-next {
+  position: relative; display: grid; grid-template-columns: 152px minmax(0, 1fr); overflow: hidden;
+  /* The one tinted card in the admin (§7.2): opaque, the tint does the
+     marking — no accent border, no violet lift. */
+  background: linear-gradient(140deg, #F8F6FF, #F1EEFD);
 }
-.home2 .hm-stats .qz-stat { padding: 14px 15px; border-right: 1px solid var(--qz-rule); background: var(--qz-paper); box-shadow: none; }
-.home2 .hm-stats .qz-stat:last-child { border-right: 0; }
-.home2 .hm-stats .qz-stat-value { font-size: 27px; line-height: 1; margin-top: 6px; }
-.home2 .hm-stats .qz-stat .qz-label { order: -1; margin-top: 0; font-size: 10px; letter-spacing: .08em; color: var(--qz-ink-4); }
-.home2 .hm-stats .qz-stat-delta { margin-top: 6px; }
+.hm3-next-side { display: grid; place-items: stretch; padding: 20px 16px; }
+.hm3-next-tile {
+  width: 112px; display: grid; align-content: center; justify-items: center; gap: 7px;
+  padding: 12px 10px 10px; background: var(--qz-paper); border: 1px solid var(--qz-accent-wash);
+  border-radius: 15px; box-shadow: 0 12px 24px -18px rgba(32, 28, 46, .5);
+}
+.hm3-next-tile > span:last-child {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .07em; line-height: 1.35;
+  text-align: center; text-transform: uppercase; color: var(--qz-ink-4);
+}
+.hm3-ring { position: relative; width: 52px; height: 52px; }
+.hm3-ring svg { display: block; transform: rotate(-90deg); }
+.hm3-ring circle { fill: none; stroke-width: 6; stroke-linecap: round; }
+.hm3-ring .trk { stroke: var(--qz-rule-2); }
+.hm3-ring .val { stroke: var(--qz-accent); }
+.hm3-ring.is-warn .val { stroke: var(--qz-warn); }
+.hm3-ring b {
+  position: absolute; inset: 0; display: grid; place-items: center; font-size: 13.5px;
+  font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+}
+.hm3-medal {
+  width: 52px; height: 52px; display: grid; place-items: center; border-radius: 999px;
+  background: var(--qz-accent-wash); color: var(--qz-accent-2);
+}
+.hm3-medal .hm3-ic { width: 23px; height: 23px; stroke-width: 1.7; }
+.hm3-medal.is-live { background: var(--qz-live-wash); color: var(--qz-ok); }
+.hm3-next-body {
+  min-width: 0; display: flex; flex-direction: column; justify-content: space-between;
+  gap: 12px; padding: 20px 26px;
+}
+.hm3-next-title {
+  margin: 0; font-size: 21px; line-height: 1.25; font-weight: 700;
+  letter-spacing: -.02em; text-wrap: balance; color: var(--qz-ink);
+}
+.hm3-next-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.hm3-steps {
+  list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px;
+  max-width: 460px; margin: 0; padding: 0;
+}
+.hm3-steps li { display: grid; gap: 6px; min-width: 0; font-size: 11px; font-weight: 500; color: var(--qz-ink-4); }
+.hm3-steps li::before { content: ""; height: 4px; border-radius: 2px; background: var(--qz-rule); }
+.hm3-steps li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm3-steps li.is-done::before { background: var(--qz-ink); }
+.hm3-steps li.is-now { color: var(--qz-ink); font-weight: 700; }
+.hm3-steps li.is-now::before { background: linear-gradient(90deg, var(--qz-accent) 0 55%, var(--qz-rule) 55%); }
+.hm3-steps li.is-stall { color: var(--qz-warn); font-weight: 700; }
+.hm3-steps li.is-stall::before { background: linear-gradient(90deg, var(--qz-warn) 0 55%, var(--qz-ls-warn-line) 55%); }
+.hm3-cardx {
+  position: absolute; top: 12px; right: 12px; z-index: 3; width: 28px; height: 28px;
+  display: grid; place-items: center; border: 0; border-radius: 999px; background: transparent;
+  color: var(--qz-ink-25); cursor: pointer;
+}
+.hm3-cardx:hover { background: var(--qz-cream-2); color: var(--qz-ink-3); }
 
-.home2 .hm-qrow {
-  display: flex; align-items: center; gap: 12px; padding: 12px 15px;
-  border-bottom: 1px solid var(--qz-rule); text-decoration: none; color: inherit;
+/* — The compact create row under the lead card — */
+.hm3-makerow { display: grid; grid-template-columns: 132px minmax(0, 1fr); overflow: hidden; }
+.hm3-makerow:focus-within { border-color: var(--qz-accent-line); }
+.hm3-makerow-art {
+  position: relative; overflow: hidden; border-right: 1px solid var(--qz-rule);
+  background: linear-gradient(165deg, #F4F1FF, #E9E4FC);
 }
-.home2 .hm-qrow:last-child { border-bottom: 0; }
-.home2 .hm-qrow:hover { background: var(--qz-cream-2); }
-.home2 .hm-qrow-main { min-width: 0; display: grid; gap: 1px; }
-.home2 .hm-qrow-main b { font-size: 14px; font-weight: 600; color: var(--qz-ink);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home2 .hm-qrow-main span { font-size: 12.5px; color: var(--qz-ink-4); }
-.home2 .hm-chip {
-  margin-left: auto; flex: none; padding: 3px 8px; border-radius: var(--qz-radius); font-size: 10px;
-  font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
-  border: 1px solid var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-4);
-}
-.home2 .hm-chip.is-live { background: var(--qz-live-wash); border-color: color-mix(in srgb, var(--qz-ok) 30%, var(--qz-paper)); color: var(--qz-ok); }
-.home2 .hm-chip.is-setup { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+/* Absolute, so the scaled art never sets the row's height. */
+.hm3-mart.is-mini { position: absolute; top: 50%; left: 50%; margin: -98px 0 0 -98px; transform: scale(.52); }
+.hm3-makerow-body { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 15px; }
+.hm3-makerow-body textarea { min-height: 44px; font-size: 16px; line-height: 1.45; }
 
-@media (max-width: 760px) { /* mock HOME_CSS breakpoint (QRTZ-G6: was 720) */
-  .home2.is-none .hm-top { padding: 20px 16px 56px; }
-  .home2.is-has .hm-top { padding: 28px 16px 0; }
-  .home2 .hm-below { padding: 0 16px 44px; }
-  .home2.is-none .hm-h1 { font-size: 27px; }
-  .home2.is-has .hm-h1 { font-size: 22px; }
-  .home2 .hm-stats { grid-template-columns: 1fr 1fr; }
+/* — Two-column band: Also waiting (or Your quizzes) + Last 30 days — */
+.hm3-grid2 { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 18px; align-items: stretch; }
+.hm3-grid2 > .hm3-card { display: flex; flex-direction: column; }
+.hm3-also { padding: 20px 24px 10px; }
+.hm3-stats { padding: 20px 22px; }
+.hm3-stats .hm3-sechead { margin-bottom: 18px; }
+/* Embedded /app only — the catalog card under the Home screens (owner
+   2026-09-29: Resync + tag enrichment stay on the embedded Home). */
+.hm3-sync { padding: 20px 22px; }
+.hm3-sync-line { margin: 12px 0 14px; font-size: 13.5px; color: var(--qz-ink-3); }
+.hm3-sync-acts { display: flex; flex-wrap: wrap; gap: 10px; }
+.hm3-row {
+  display: flex; align-items: center; gap: 14px; min-height: 58px; padding: 13px 0;
+  border-bottom: 1px solid var(--qz-rule-2);
+}
+.hm3-row:last-child { border-bottom: 0; }
+.hm3-rowtitle { flex: 1 1 auto; min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
+/* Every monogram and tile on Home is one family (§7.7): 26px, 12px radius,
+   violet wash, ink letter. No merchant brand colour in our chrome. */
+.hm3-tile, .hm3-qmark {
+  flex: none; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+  border-radius: 12px; background: var(--qz-accent-wash); color: var(--qz-ink); font-size: 12px; font-weight: 700;
+}
+.hm3-tile .hm3-ic { width: 15px; height: 15px; }
+.hm3-rowact {
+  flex: none; min-width: 104px; display: inline-flex; align-items: center; justify-content: flex-end;
+  gap: 6px; min-height: 34px; padding: 8px 10px; border-radius: 8px; color: var(--qz-ink-3);
+  font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.hm3-rowact:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.hm3-rowact .hm3-ic { width: 14px; height: 14px; color: var(--qz-ink-25); }
+
+.hm3-tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: auto; }
+.hm3-tile2 {
+  display: flex; flex-direction: column; gap: 5px; padding: 12px 14px 13px;
+  border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg);
+}
+.hm3-tile2.is-wide { grid-column: 1 / -1; }
+.hm3-tile2 b.is-range { font-size: 21px; }
+.hm3-tile2 b {
+  font-size: 27px; font-weight: 800; line-height: 1; letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums; color: var(--qz-ink);
+}
+.hm3-d { font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.hm3-d.is-up { color: var(--qz-ok); font-weight: 600; }
+.hm3-spark { display: flex; align-items: flex-end; gap: 4px; height: 34px; margin-top: 6px; }
+.hm3-spark i { flex: 1 1 auto; border-radius: 2px 2px 0 0; background: var(--qz-accent-line); }
+.hm3-spark i.is-last { background: var(--qz-accent); }
+
+/* — Your quizzes — */
+.hm3-quizzes { padding: 20px 26px 18px; }
+.hm3-quizzes.is-ingrid { padding: 20px 22px 16px; }
+.hm3-qrows { margin-top: 6px; }
+.hm3-qrow {
+  display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 12px 10px; margin: 0 -10px;
+  border-bottom: 1px solid var(--qz-rule-2); border-radius: 10px; color: var(--qz-ink); text-decoration: none;
+}
+.hm3-qrow:last-child { border-bottom: 0; }
+.hm3-qrow:hover { background: var(--qz-ls-cell-bg); }
+.hm3-qrow:hover .hm3-qmark { color: var(--qz-accent-2); }
+.hm3-tag {
+  flex: none; display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+}
+.hm3-tag.is-live { background: var(--qz-live-wash); color: var(--qz-ok); }
+.hm3-tag.is-draft { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.hm3-tag.is-setup { background: var(--qz-ls-warn-wash); color: var(--qz-warn); }
+.hm3-qname {
+  flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, 176px) 72px;
+  align-items: center; column-gap: 10px;
+}
+.hm3-qname b { min-width: 0; font-size: 14px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.hm3-qname .hm3-tag { justify-self: start; }
+.hm3-qmeter {
+  flex: 0 1 230px; min-width: 0; display: grid; grid-template-columns: 56px minmax(0, 1fr);
+  align-items: center; gap: 9px; font-size: 12.5px; color: var(--qz-ink-4);
+}
+/* The figure track is always reserved, so every sentence starts on one line. */
+.hm3-qfig { grid-column: 1; justify-self: start; display: flex; }
+.hm3-qmeter > span:last-child { grid-column: 2; }
+.hm3-qnum { flex: none; width: 104px; text-align: right; font-size: 12.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.hm3-bar { flex: none; width: 56px; height: 6px; border-radius: 3px; background: var(--qz-rule); overflow: hidden; }
+.hm3-bar i { display: block; height: 100%; border-radius: 3px; background: var(--qz-accent); }
+.hm3-dots { display: inline-flex; gap: 4px; }
+.hm3-dots i { width: 6px; height: 6px; border-radius: 2px; background: var(--qz-rule); }
+.hm3-dots i.is-on { background: var(--qz-ink); }
+.hm3-chev { color: var(--qz-ink-25); }
+.hm3-chev .hm3-ic { width: 14px; height: 14px; }
+/* In the band's left slot the rows drop the second figure, not the name. */
+.hm3-quizzes.is-ingrid .hm3-qnum { display: none; }
+.hm3-quizzes.is-ingrid .hm3-qmeter { flex-basis: 110px; grid-template-columns: minmax(0, 1fr); }
+.hm3-quizzes.is-ingrid .hm3-qfig { display: none; }
+.hm3-quizzes.is-ingrid .hm3-qmeter > span:last-child { grid-column: 1; }
+.hm3-quizzes.is-ingrid .hm3-qname { grid-template-columns: minmax(0, 150px) 72px; }
+
+@media (max-width: 860px) {
+  .hm3-make { grid-template-columns: minmax(0, 1fr); }
+  .hm3-make-art { border-right: 0; border-bottom: 1px solid var(--qz-rule); padding: 20px; }
+  .hm3-make-art .hm3-mart { width: 168px; height: 150px; }
+  .hm3-make-body { padding: 22px 20px 20px; }
+  .hm3-makerow { grid-template-columns: minmax(0, 1fr); }
+  .hm3-makerow-art { display: none; }
+  .hm3-grid2 { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .hm3 { padding: 20px 16px 40px; }
+  .hm3-next { grid-template-columns: minmax(0, 1fr); }
+  .hm3-next-side { padding: 18px 16px 0; }
+  .hm3-next-body, .hm3-make-body { padding-inline: 16px; }
+  .hm3-also, .hm3-stats, .hm3-sync, .hm3-quizzes, .hm3-quizzes.is-ingrid { padding-inline: 16px; }
+  .hm3-qmeter, .hm3-qnum { display: none; }
+  /* Narrow: the tag drops under the name instead of squeezing it. */
+  .hm3-qname, .hm3-quizzes.is-ingrid .hm3-qname { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
+  .hm3-rowact { min-width: 0; }
+  .hm3-box textarea, .hm3-passive { font-size: 17px; }
+  .hm3-q { font-size: 22px; }
+  .hm3-box { padding: 14px; }
+  .hm3-selwrap select { min-width: 0; }
+  .hm3-boxbar .hm3-btn { flex: 1 1 100%; min-width: 0; padding-inline: 12px; }
+  .hm3-qsel { flex-wrap: wrap; }
+  .hm3-chip { max-width: 100%; white-space: normal; text-align: left; }
+  .qz-modal.hm3-pop .qz-modal-title { font-size: 24px; }
 }
 
 /* ═══ QRTZ-S5 — funnel screens ═══════════════════════════════════════════
@@ -11120,7 +10741,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* ═══ QRTZ-G3 — Logic two-card view + relocated capture/fallback ═══ */
 /* The artifact's Logic screen (shared.mjs screenLogic) is two cards, Rules
    then Questions, stacked. The wrapper carries the historical testid. */
-.qz-ltab-stack { display: flex; flex-direction: column; gap: 16px; }
 
 /* Paths kept behind a quiet secondary affordance (the artifact has no tabs). */
 .qz-ltab-pathsrow { display: flex; }
@@ -11153,15 +10773,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
    Overview role-menu label fix + the clickable attr-slot (base.mjs
    603–618). Values are the mock's, colors on repo tokens. ═══════════════ */
 
-/* The owner-reported "Narrows renders cut off": .qz-ltab-menu-row gives the
-   sub hint flex:0 0 auto, so at popover width the MAIN label ellipsized
-   ("Narro…", "Asked on…"). Scoped to the Overview's role menu: the main
-   keeps its words, the hint is the shrinking side. */
-.qz-h2-rolemenu .qz-ltab-menu-row-main { flex: none; overflow: visible; }
-.qz-h2-rolemenu .qz-ltab-menu-row-sub {
-  flex: 1 1 auto; min-width: 0; text-align: right;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
 
 /* The chosen attribute is a value, not a heading — so the slot sits quiet:
    the wash, a hairline, normal weight, secondary ink (mock .attr-slot). */
@@ -11594,8 +11205,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-antabs a.is-active { color: var(--qz-accent-ink); border-bottom-color: var(--qz-accent); }
 .qz-antab-n { font-size: 11px; font-weight: 700; margin-left: 6px; padding: 1px 7px; border-radius: var(--qz-radius-pill); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
 
-
-
 /* Step ledger — the steepest drop gets a quiet flag, not a red table. */
 .qz-anworst td { background: var(--qz-warn-tint); }
 .qz-anworst-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--qz-warn); margin-left: 8px; }
@@ -11765,9 +11374,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   transition: max-width .3s cubic-bezier(.22, .61, .36, 1);
 }
 .qz-page.is-funnel:has(.qz-qf-panel .qz-devframe[data-qz-tier="desktop"]) { max-width: 1448px; }
-/* Owner 2026-08-18 — the Logic step's answers table gets the same room: the
-   page cap lifts so .qz-s3-logicview's 1248 wrap (its own cap) can bind. */
-.qz-page.is-funnel:has(.qz-s3-logicview) { max-width: 1296px; }
 /* The style chooser is a decision surface, not a table: it takes step 01's
    width. Equal specificity with the rule above, so this MUST stay after it. */
 .qz-page.is-funnel:has(.qz-lsc) { max-width: 1000px; padding: 28px 24px 72px; }
@@ -11892,8 +11498,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
   background: var(--qz-paper); box-shadow: var(--qz-lift-3); overflow: hidden;
 }
-.qz-lm-builder { width: min(1330px, 96vw); }   /* the approved pop-up size */
-.qz-lm-addq    { width: min(720px, 94vw);  }   /* mock .ovblock.addq    */
 .qz-lm-paste   { width: min(1200px, 95vw); }   /* mock --live-max       */
 .qz-lm-h {
   display: flex; align-items: center; gap: 12px;
@@ -11936,98 +11540,8 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 /* ═════════════════════════════════════════════════════════════════════
    Create-a-rule — the ONE-SCREEN build (create-rule handoff, reference
    artifact "One-Screen Rule Builder"; every value measured from it).
-   Shell overrides are scoped to .qz-lm-builder so the add-question and
-   paste-rules modals keep their own metrics.
+   What survives is the products band the rule window still renders.
    ═════════════════════════════════════════════════════════════════════ */
-.qz-lm-builder .qz-lm-h { padding: 8px 20px; }                  /* 36px bar */
-.qz-lm-builder .qz-lm-h h2 { font-size: 13.5px; line-height: 1.2; }
-.qz-lm-builder .qz-lm-close { font-size: 15px; padding: 2px 7px; }
-.qz-lm-builder .qz-lm-b { padding: 10px 20px 12px; }
-.qz-lm-builder .qz-lm-f { padding: 11px 20px; gap: 14px; justify-content: flex-end; }
-.qz-lm-sep { height: 1px; background: var(--qz-rule); margin: 9px 0; }
-.qz-lm-fcount {
-  margin-right: auto; font-size: 12.5px; color: var(--qz-ink-4);
-  font-variant-numeric: tabular-nums;
-}
-.qz-lm-fcount b { color: var(--qz-ink); font-weight: 700; }
-.qz-lm-fghost { border-color: var(--qz-rule); color: var(--qz-ink-3); }
-.qz-lm-fghost:not([disabled]):hover {
-  border-color: var(--qz-accent-line); background: var(--qz-accent-wash); color: var(--qz-accent-ink);
-}
-
-/* ── segmented control (mock .seg) — the THEN verb picker ──────────── */
-.qz-lm-seg {
-  display: flex; gap: 2px; background: #F1EFF6; padding: 2px;
-  border-radius: 7px; border: 1px solid var(--qz-rule); flex: none;
-}
-.qz-lm-seg button {
-  padding: 4px 11px; border-radius: 5px; font-size: 11.5px; font-weight: 500;
-  color: var(--qz-ink-4); border: 1px solid transparent; background: none; cursor: pointer;
-  font-family: inherit;
-}
-.qz-lm-seg button[aria-pressed="true"] {
-  background: #FFFFFF; color: var(--qz-ink); border-color: #DCD8E7;
-  box-shadow: 0 1px 1px rgba(32, 28, 46, .07); font-weight: 600;
-}
-.qz-lm-verbline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 36px; }
-.qz-lm-vseg button { padding: 6px 16px; font-size: 12.5px; font-weight: 600; }
-.qz-lm-verbhint { font-size: 11.5px; color: var(--qz-ink-4); }
-.qz-lm-legacynote { flex-basis: 100%; font-size: 10.5px; color: var(--qz-ink-4); }
-
-/* ── question ROWS (mock .qrows / .qrow) — one per question, always ─── */
-.qz-lm-qrows { display: flex; flex-direction: column; }
-.qz-lm-qrow {
-  display: grid; grid-template-columns: 176px minmax(0, 1fr) 124px; gap: 12px;
-  align-items: start; padding: 8px 0; border-top: 1px solid var(--qz-rule-2);
-}
-.qz-lm-qrow:first-child { border-top: 0; padding-top: 0; }
-.qz-lm-qc { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
-.qz-lm-qmeta { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.qz-lm-qn { font-size: 10.5px; font-weight: 600; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; flex: none; }
-.qz-lm-qbadge {
-  flex: none; font-size: 7.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--qz-accent-ink); background: var(--qz-accent-wash); border: 1px solid var(--qz-accent-line);
-  border-radius: 3px; padding: 1px 4px;
-}
-/* Clamped to three lines with the full text in `title` — whatever the
-   merchant writes, a row stays ≤ 86px. */
-.qz-lm-qt {
-  font-size: 12.5px; font-weight: 600; line-height: 1.34; color: var(--qz-ink-3);
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
-  overflow: hidden; text-overflow: ellipsis;
-}
-.qz-lm-qrow.is-on .qz-lm-qt { color: var(--qz-ink); }
-/* Fixed 130×62 answer buckets on ONE row; past ~7 answers the strip
-   scrolls sideways rather than growing the modal. */
-.qz-lm-tiles { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding-bottom: 2px; min-width: 0; }
-.qz-lm-tile {
-  flex: 0 0 130px; height: 62px;
-  border: 1px solid var(--qz-rule); border-radius: 6px; background: var(--qz-paper);
-  padding: 8px 10px; display: flex; align-items: center; overflow: hidden;
-  cursor: pointer; text-align: left; font-family: inherit;
-  transition: background .12s ease, border-color .12s ease;
-}
-.qz-lm-tx {
-  font-size: 11px; line-height: 1.28; color: var(--qz-ink-3); font-weight: 500;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  overflow: hidden; text-overflow: ellipsis;
-}
-.qz-lm-tile:hover { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); }
-.qz-lm-tile.is-on { background: var(--qz-accent); border-color: var(--qz-accent); }
-.qz-lm-tile.is-on .qz-lm-tx { color: #FFFFFF; font-weight: 600; }
-/* The operator cluster — a constant 124px column, contents flush right, so
-   "any of" appears into space the row already had and nothing reflows. */
-.qz-lm-ops { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; flex: none; }
-.qz-lm-qcf {
-  flex: none; font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3);
-  border: 1px solid var(--qz-rule); border-radius: 5px; padding: 5px 9px;
-  background: var(--qz-paper); cursor: pointer; font-family: inherit; white-space: nowrap;
-}
-.qz-lm-qcf:hover { border-color: var(--qz-accent-line); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
-.qz-lm-qcf.is-not { color: var(--qz-crit); border-color: color-mix(in srgb, var(--qz-crit) 30%, transparent); }
-.qz-lm-qcf.is-join { color: var(--qz-ink-4); }
-.qz-lm-qcf.is-join.is-fixed { cursor: default; background: var(--qz-cream-2); border-style: dashed; }
-.qz-lm-qcf.is-join.is-fixed:hover { border-color: var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-4); }
 
 /* ── the products band (mock .showband / .showhead / .tgrid / .tcard) ── */
 .qz-lm-showband {
@@ -12119,39 +11633,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   background: color-mix(in srgb, var(--qz-ok) 5%, #FFFFFF);
 }
 .qz-lm-tcard.is-done .qz-lm-pthumb { border-color: color-mix(in srgb, var(--qz-ok) 24%, var(--qz-rule)); }
-.qz-lm-tstat {
-  flex: none; font-size: 10px; font-weight: 700; letter-spacing: .02em; border-radius: 5px;
-  padding: 3px 7px; white-space: nowrap; pointer-events: none;
-}
-.qz-lm-tstat.is-needs {
-  color: var(--qz-warn); background: color-mix(in srgb, var(--qz-warn) 13%, #FFFFFF);
-  border: 1px solid color-mix(in srgb, var(--qz-warn) 30%, transparent);
-}
-.qz-lm-tstat.is-done {
-  color: var(--qz-ok); background: var(--qz-live-wash);
-  border: 1px solid color-mix(in srgb, var(--qz-ok) 26%, transparent);
-}
-/* The onboarding headline: a plain fraction, amber while there is a gap. */
-.qz-lm-cover { display: flex; align-items: baseline; gap: 5px; font-size: 11.5px; color: var(--qz-ink-4); }
-.qz-lm-frac {
-  font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums;
-  color: var(--qz-warn); background: color-mix(in srgb, var(--qz-warn) 12%, #FFFFFF);
-  border: 1px solid color-mix(in srgb, var(--qz-warn) 28%, transparent);
-  border-radius: 5px; padding: 1px 7px;
-}
-.qz-lm-frac.is-done {
-  color: var(--qz-ok); background: var(--qz-live-wash);
-  border-color: color-mix(in srgb, var(--qz-ok) 26%, transparent);
-}
-.qz-lm-expand {
-  margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--qz-ink-3);
-  border: 1px dashed var(--qz-rule-strong); border-radius: 6px; padding: 5px 10px;
-  background: var(--qz-paper); cursor: pointer; font-family: inherit;
-}
-.qz-lm-expand:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); background: var(--qz-accent-wash); }
-/* "+ Add something else" reveals the catalogue UNDER the groups. */
-.qz-lm-catbar { margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--qz-rule); }
-.qz-lm-catlabel { font-size: 11.5px; color: var(--qz-ink-4); font-weight: 700; letter-spacing: .01em; }
 /* One row at rest: the rest of the list is one click away. */
 .qz-lm-tmore {
   display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px 9px;
@@ -12253,8 +11734,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-lm-pguar b { color: var(--qz-ink-3); font-weight: 600; }
 
 /* ── add-a-question panel (mock .tq / .fld / .alist) ────────────────── */
-.qz-lm-tgrid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 620px) { .qz-lm-tgrid3 { grid-template-columns: 1fr; } }
 .qz-lm-tq {
   padding: 11px 12px; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
   background: var(--qz-paper); cursor: pointer; text-align: left; font-family: inherit;
@@ -12302,14 +11781,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
   text-align: left; width: 100%; font-family: inherit;
 }
 .qz-lm-aadd:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
-/* ── ADD-QUESTION (the ONE standard dialog, owner 2026-09-16) — QzModal shell,
-   .qz-lm band interior; these are only its own additions. ── */
-.qz-adq .qz-lm-band { min-width: 0; }
-.qz-adq-tgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-@media (max-width: 520px) { .qz-adq-tgrid { grid-template-columns: 1fr; } }
-.qz-adq-sum { font-size: 12.5px; color: var(--qz-ink-3); }
-.qz-adq-sum b { color: var(--qz-ink); }
-.qz-adq-note { margin: 2px 0 0; font-size: 12px; color: var(--qz-ink-4); }
 .qz-lm-adel:disabled { opacity: .35; cursor: default; }
 .qz-lm-adel:disabled:hover { color: inherit; }
 .qz-lm-ratingnote { font-size: 12.5px; color: var(--qz-ink-4); line-height: 1.5; }
@@ -12423,13 +11894,6 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
    two-column row (single column under 900px, matching the .qz-lw-grid
    breakpoint); the questions grid keeps the full width below.
    ═════════════════════════════════════════════════════════════════════ */
-.qz-lcov-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) 296px;
-  gap: 16px; align-items: start;
-}
-@media (max-width: 900px) {
-  .qz-lcov-row { grid-template-columns: 1fr; }
-}
 .qz-lcov {
   border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
   background: var(--qz-paper); overflow: hidden;
@@ -12584,3 +12048,1120 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
 .qz-rg-dread dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; font-size: 12.5px; }
 .qz-rg-dread dt { color: var(--qz-ink-4); font-weight: 600; }
 .qz-rg-dread dd { margin: 0; color: var(--qz-ink); line-height: 1.45; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LOGIC-STEP Phase 3 — inline text editor (.qz-ed, logicTab/InlineText.tsx).
+   Mock `.ed`: edited in place with no layout shift — the 1px 4px padding is
+   cancelled by an equal negative margin; ground wash on hover; paper with a
+   2px accent-line ring while editing (replaces the global focus outline,
+   which Chromium matches on every focused editable). An empty field with a
+   placeholder (scale points, B45) shows it via data-ph.
+   ════════════════════════════════════════════════════════════════════════════ */
+.qz-ed {
+  display: block;
+  border-radius: 3px;
+  outline: none;
+  cursor: text;
+  padding: 1px 4px;
+  margin: -1px -4px;
+  overflow-wrap: anywhere;
+}
+.qz-ed--inline { display: inline; }
+.qz-ed:hover { background: var(--qz-cream-2); }
+.qz-ed:focus,
+body[data-qz] .qz-ed:focus-visible {
+  background: var(--qz-paper);
+  box-shadow: 0 0 0 2px var(--qz-accent-line);
+  outline: none;
+}
+.qz-ed[data-ph]:empty { display: inline-block; min-width: 7em; }
+.qz-ed[data-ph]:empty::before { content: attr(data-ph); color: var(--qz-ink-4); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LOGIC-STEP Phase 3 — field save pill (.qz-fsp, logicTab/FieldSavePill.tsx,
+   D8 owner 2026-09-18). A field-level status badge, not a fifth floating
+   surface. Mock #svb geometry; corners use --qz-radius-pill (Quartz pills are
+   6px rounded rects; the mock's 999px is a literal). Sits under the sticky
+   top bar (z below --qz-z-topbar), popovers, modals and toasts.
+   ════════════════════════════════════════════════════════════════════════════ */
+.qz-fsp {
+  position: fixed; left: 0; top: 0;
+  z-index: calc(var(--qz-z-topbar) - 10);
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 20px; padding: 0 8px 0 6px;
+  border-radius: var(--qz-radius-pill);
+  font-family: var(--qz-font-body); font-size: 11.5px; font-weight: 600; line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.qz-fsp.is-saving { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-fsp.is-saved { background: var(--qz-live-wash); color: var(--qz-ok); }
+.qz-fsp.is-failed { background: var(--qz-crit-tint); color: var(--qz-crit); }
+.qz-fsp.is-fade { opacity: 0; }
+.qz-fsp svg { width: 11px; height: 11px; flex: none; }
+.qz-fsp-spin {
+  box-sizing: border-box;
+  width: 10px; height: 10px; flex: none;
+  border: 1.5px solid var(--qz-ls-line2);
+  border-top-color: var(--qz-accent);
+  border-radius: 50%;
+  animation: qz-fsp-rot 0.7s linear infinite;
+}
+@keyframes qz-fsp-rot { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .qz-fsp { transition: none; }
+  .qz-fsp-spin { animation: none; }
+}
+
+/* ══ Logic step redesign ═════════════════════════════════════════════════════
+   The Logic workspace card built to docs/design/logic-tab/rules-row/index.html
+   at the mock's 100% sizes (D20). Mock class → .qz-lg-<mock name>; every
+   colour is a --qz-* token (the mock's :root hexes map one for one:
+   --ground → --qz-cream-2, --cell → --qz-lg-cell, --line2 → --qz-ls-line2,
+   --warn-line → --qz-ls-warn-line, --crit-wash → --qz-ls-crit-wash). The few
+   values Quartz has no token for are declared below as --qz-lg-*.
+   Shared by the funnel's Logic step and the builder's Logic view (the
+   builder mounts the card without the header, D6). ══ */
+:root {
+  --qz-lg-lift: 0 1px 2px rgba(32, 28, 46, 0.08), 0 0 0 1px rgba(32, 28, 46, 0.04); /* mock --lift */
+  --qz-lg-pop: 0 12px 32px rgba(32, 28, 46, 0.16), 0 0 0 1px rgba(32, 28, 46, 0.06); /* mock --pop */
+  --qz-lg-warn-dot: #C98A1B;  /* mock --warn-dot: "needs a rule" dot */
+  --qz-lg-res: #1D4F91;       /* mock --res: recommendation chips in sentences */
+  --qz-lg-cell: #FAF9FC;      /* mock --cell (the older --qz-ls-cell-bg is a shade off) */
+  --qz-lg-res-wash: #EAF2FE;  /* mock --res-wash */
+  --qz-lg-res-line: #C9DCFB;  /* mock --res-line */
+  /* D20 size tokens (100%); a later scale factor multiplies these. */
+  --qz-logic-work-max: 1256px;
+  --qz-logic-stage-min: 1200px;
+  --qz-logic-rail-w: 262px;
+  --qz-logic-rules-w: 304px;
+}
+
+/* — the stage: the funnel page's side padding drops on this step so the
+     view's 16px is the only gutter; under 1200px the view scrolls sideways — */
+.qz-page.is-funnel:has(.qz-s3-logicview) { max-width: none; padding: 0; overflow-x: auto; }
+.qz-s3-logicview {
+  display: block; box-sizing: border-box; width: 100%;
+  max-width: var(--qz-logic-work-max); min-width: var(--qz-logic-stage-min);
+  margin: 0 auto; padding: 22px 16px 40px;
+}
+
+/* — the card (mock .card) — */
+.qz-lg-card {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg);
+  background: var(--qz-paper); overflow: hidden;
+  font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.qz-lg-card [hidden] { display: none !important; }
+.qz-lg-card :is(button, [tabindex]):focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lg-card .qz-lw-grid { border: 0; border-radius: 0; }
+.qz-lg-sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; margin: 0;
+}
+
+/* — buttons (mock .btn / .link) — */
+.qz-lg-btn {
+  border: 1px solid var(--qz-rule-strong); background: var(--qz-paper);
+  border-radius: var(--qz-radius); padding: 5px 11px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink-3); white-space: nowrap; cursor: pointer;
+}
+.qz-lg-btn:hover { border-color: var(--qz-ink-3); color: var(--qz-ink); }
+.qz-lg-btn.is-pri { border-color: var(--qz-accent); background: var(--qz-accent); color: var(--qz-on-accent); }
+.qz-lg-btn.is-pri:hover { border-color: var(--qz-accent-2); background: var(--qz-accent-2); color: var(--qz-on-accent); }
+.qz-lg-link {
+  border: 0; background: none; padding: 3px 6px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-accent-ink); cursor: pointer;
+}
+.qz-lg-link:hover { background: var(--qz-accent-wash); }
+
+/* — the status header (mock .status / .stitle / .sdesc / .more / .sact) — */
+.qz-lg-status {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px;
+  border-bottom: 1px solid var(--qz-rule); padding: 8px 12px 8px 20px;
+}
+.qz-lg-stitle-h { margin: 0; font: inherit; display: inline-flex; }
+.qz-lg-stitle {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  border: 0; background: none; padding: 2px 8px; margin-left: -8px;
+  border-radius: var(--qz-radius); font-family: inherit;
+  font-size: 20px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25;
+  color: var(--qz-ink); white-space: nowrap; cursor: pointer;
+}
+.qz-lg-stitle:hover { background: var(--qz-cream-2); }
+.qz-lg-stitle.is-static { cursor: default; }
+.qz-lg-stitle.is-static:hover { background: none; }
+.qz-lg-stitle .qz-lg-cv { font-size: 11px; color: var(--qz-ink-4); }
+.qz-lg-sdesc { flex: 1; min-width: 280px; display: flex; flex-direction: column; gap: 2px; }
+.qz-lg-status-p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--qz-ink-4); }
+.qz-lg-more {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: 8px;
+  border: 0; background: none; padding: 1px 5px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-accent-ink); cursor: pointer;
+}
+.qz-lg-more:hover { background: var(--qz-accent-wash); }
+.qz-lg-more span { font-size: 9px; }
+.qz-lg-more.is-open span { transform: rotate(180deg); }
+.qz-lg-sact { display: flex; align-items: center; gap: 10px; align-self: center; margin-left: auto; }
+.qz-lg-sact .qz-lg-link { font-size: 13px; padding: 2px 6px; }
+.qz-lg-sact .qz-lg-btn.is-pri { padding: 6px 13px; font-size: 13px; }
+
+/* Edit | Table (mock .vseg2) */
+.qz-lg-vseg2 { display: inline-flex; background: var(--qz-rule-2); border-radius: var(--qz-radius); padding: 2px; }
+.qz-lg-vseg2 button {
+  border: 0; background: none; padding: 4px 11px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink-4); cursor: pointer;
+}
+.qz-lg-vseg2 button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-lg-lift); }
+
+/* Import | Export (mock .iox) */
+.qz-lg-iox { display: inline-flex; border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius); overflow: hidden; }
+.qz-lg-iox button {
+  border: 0; background: var(--qz-paper); padding: 5px 11px;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink-3); cursor: pointer;
+}
+.qz-lg-iox button + button { border-left: 1px solid var(--qz-rule); }
+.qz-lg-iox button:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-lg-iox button:disabled { background: var(--qz-paper); color: var(--qz-ink-25); cursor: default; }
+
+/* — popovers on this screen (mock #pop / .pt / .mi) — */
+.qz-popover.qz-lg-pop { padding: 10px; font-size: 13px; line-height: 1.45; box-shadow: var(--qz-lg-pop); border-radius: var(--qz-radius-lg); }
+.qz-lg-pop .qz-menu { margin: 0; min-width: 0; }
+.qz-lg-pop .qz-menu-title, .qz-lg-pt {
+  font-size: 12px; font-weight: 700; color: var(--qz-ink);
+  padding: 4px 8px 8px; overflow-wrap: anywhere; outline: none;
+}
+.qz-lg-pop .qz-menu-item {
+  height: auto; gap: 10px; padding: 7px 8px; border-radius: var(--qz-radius);
+  font-size: 13.5px; line-height: 1.45;
+}
+.qz-lg-pop .qz-menu-hint { padding-left: 0; font-size: 11.5px; color: var(--qz-ink-4); text-align: right; }
+.qz-lg-mi {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  border: 0; background: none; border-radius: var(--qz-radius); padding: 7px 8px;
+  text-align: left; font-family: inherit; font-size: 13.5px; line-height: 1.45;
+  color: var(--qz-ink); cursor: pointer;
+}
+.qz-lg-mi:hover { background: var(--qz-cream-2); }
+.qz-lg-mi.is-static { cursor: default; }
+.qz-lg-mi.is-static:hover { background: none; }
+.qz-lg-mi-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-lg-mi-h { margin-left: auto; font-size: 11.5px; color: var(--qz-ink-4); text-align: right; white-space: nowrap; }
+.qz-lg-vptools { padding: 0 8px 4px; }
+.qz-lg-vpsearch {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--qz-rule-strong);
+  border-radius: var(--qz-radius); padding: 6px 9px;
+  font-family: inherit; font-size: 13px; color: var(--qz-ink); background: var(--qz-paper);
+}
+.qz-lg-vplist { max-height: 300px; overflow-y: auto; padding: 2px 0 4px; }
+.qz-lg-vpnone { padding: 14px 8px; text-align: center; font-size: 12.5px; color: var(--qz-ink-4); }
+
+/* — the check popover (mock checkPop / .find / .sv) and the blocked CTA — */
+.qz-lg-findlist { list-style: none; margin: 0; padding: 0; }
+.qz-lg-find {
+  display: flex; gap: 9px; align-items: flex-start; width: 100%;
+  border: 0; background: none; text-align: left; padding: 8px;
+  border-radius: var(--qz-radius); font-family: inherit; font-size: 13px; line-height: 1.45;
+  color: var(--qz-ink-3);
+}
+button.qz-lg-find { cursor: pointer; }
+button.qz-lg-find:hover { background: var(--qz-cream-2); }
+.qz-lg-sv { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
+.qz-lg-sv.is-crit { background: var(--qz-crit); }
+.qz-lg-sv.is-warn { background: var(--qz-lg-warn-dot); }
+.qz-lg-sv.is-note { background: var(--qz-ink-25); }
+.qz-lg-checkfoot { border-top: 1px solid var(--qz-rule-2); margin-top: 8px; padding-top: 8px; }
+.qz-topbar-continue.is-blocked-outline,
+.qz-topbar-continue.is-blocked-outline:hover,
+.qz-topbar-continue.is-blocked-outline:active:not(:disabled) {
+  background: var(--qz-paper); color: var(--qz-crit); box-shadow: inset 0 0 0 1px var(--qz-crit);
+}
+
+/* — Filter Results + Rules: 3 columns 262 / 1fr / 304 (D22) — */
+.qz-lw-grid.qz-lw-grid--3 { grid-template-columns: var(--qz-logic-rail-w) minmax(0, 1fr) var(--qz-logic-rules-w); }
+@media (max-width: 900px) {
+  .qz-lw-grid.qz-lw-grid--3 { grid-template-columns: var(--qz-logic-rail-w) minmax(0, 1fr) var(--qz-logic-rules-w); }
+  .qz-lw-grid--3 > .qz-lw-rail { border-right: 1px solid var(--qz-rule); border-bottom: 0; }
+}
+.qz-lw-grid--3 > .qz-lw-rail { padding: 12px; min-height: 480px; display: flex; flex-direction: column; }
+
+/* the rules column (mock .rcol / .rcol-in / .rlist / .rrow) — it fills its
+   grid cell absolutely, so extra rules scroll inside it and never grow the
+   card; the fade says there is more below (B62) */
+.qz-lg-rcol { position: relative; border-left: 1px solid var(--qz-rule); background: var(--qz-lg-cell); min-width: 0; }
+.qz-lg-rcol-in { position: absolute; inset: 0; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.qz-lg-rcol-h { display: flex; align-items: center; gap: 8px; }
+.qz-lg-rcol-h h4 { margin: 0; flex: 1; font-size: 14.5px; font-weight: 700; color: var(--qz-ink); }
+.qz-lg-rcol p { margin: 0; font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-lg-rcount { margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
+.qz-lg-rlistw { position: relative; flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.qz-lg-rlistw.is-more::after {
+  content: ""; position: absolute; left: 1px; right: 1px; bottom: 1px; height: 40px;
+  border-radius: 0 0 var(--qz-radius) var(--qz-radius);
+  background: linear-gradient(color-mix(in srgb, var(--qz-paper) 0%, transparent), var(--qz-paper));
+  pointer-events: none;
+}
+.qz-lg-rlist {
+  flex: 0 1 auto; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none;
+  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+}
+.qz-lg-rempty { padding: 10px 12px; font-size: 12.5px; color: var(--qz-ink-3); outline: none; }
+.qz-lg-rempty b { color: var(--qz-ink); }
+.qz-lg-rcol-f { margin-top: auto; display: flex; gap: 4px; }
+.qz-lg-rrow {
+  display: flex; gap: 8px; align-items: flex-start; padding: 9px 8px 9px 10px;
+  border-bottom: 1px solid var(--qz-rule-2); font-size: 13px; line-height: 1.7; cursor: pointer;
+}
+.qz-lg-rrow:last-child { border-bottom: 0; }
+.qz-lg-rrow:hover { background: var(--qz-lg-cell); }
+.qz-lg-rnum {
+  flex: 0 0 20px; height: 20px; display: grid; place-items: center; margin-top: 1px;
+  font-size: 11px; font-weight: 600; color: var(--qz-ink-4);
+  background: var(--qz-cream-2); border-radius: var(--qz-radius-sm);
+}
+.qz-lg-rsay { flex: 1; min-width: 0; color: var(--qz-ink-4); }
+
+/* the row body is ONE real button (B48) */
+.qz-lg-rbody {
+  display: flex; flex: 1; min-width: 0; border: 0; background: none; padding: 0; margin: 0;
+  font: inherit; color: inherit; text-align: left; cursor: pointer;
+}
+.qz-lg-rr .qz-lg-rbody { align-items: center; gap: 10px; }
+.qz-lg-rrow .qz-lg-rbody { align-items: flex-start; gap: 8px; }
+
+/* sentence chips (mock .cchip / .cj / .qlab) — a chip never breaks (B47) */
+.qz-lg-cchip {
+  background: var(--qz-cream-2); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-sm);
+  padding: 1px 5px; font-weight: 600; color: var(--qz-ink); white-space: nowrap;
+}
+.qz-lg-cchip.is-v { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+.qz-lg-cchip.is-res { background: var(--qz-lg-res-wash); border-color: var(--qz-lg-res-line); color: var(--qz-lg-res); }
+.qz-lg-cchip.is-missing { background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); color: var(--qz-crit); }
+.qz-lg-cj { font-weight: 800; color: var(--qz-ink); }
+.qz-lg-qlab { font-style: normal; font-weight: 600; color: var(--qz-ink-4); margin-right: 3px; }
+.qz-lg-rtag {
+  display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-crit); background: var(--qz-ls-crit-wash); border-radius: var(--qz-radius-sm); padding: 1px 6px;
+}
+.qz-lg-rr.is-dead .qz-lg-rsent, .qz-lg-rrow.is-dead .qz-lg-rsent { opacity: 0.6; }
+
+/* row controls: ↑/↓ + trash, revealed on hover AND keyboard focus (D11) */
+.qz-lg-xone {
+  width: 16px; height: 16px; border: 0; background: none; padding: 0;
+  font-family: inherit; font-size: 12px; line-height: 1; color: var(--qz-ink-25);
+  border-radius: 3px; opacity: 0; cursor: pointer;
+}
+.qz-lg-rr:hover .qz-lg-xone, .qz-lg-rrow:hover .qz-lg-xone,
+.qz-lg-rr:focus-within .qz-lg-xone, .qz-lg-rrow:focus-within .qz-lg-xone,
+.qz-lg-xone:focus-visible { opacity: 0.85; }
+.qz-lg-xone:hover { color: var(--qz-crit); opacity: 1; }
+.qz-lg-mv { display: inline-flex; gap: 2px; flex: none; }
+.qz-lg-mv .qz-lg-xone { font-size: 11px; }
+.qz-lg-mv .qz-lg-xone:hover { color: var(--qz-accent-ink); }
+.qz-lg-mv .qz-lg-xone:disabled { visibility: hidden; cursor: default; }
+.qz-lg-xdel { display: inline-grid; place-items: center; width: 22px; height: 22px; flex: none; }
+
+/* — Rules only (mock .rband / .rlist2 / .rr / .rempty2) — */
+.qz-lg-rband { padding: 16px 20px; border-bottom: 1px solid var(--qz-rule); }
+.qz-lg-rlist2 {
+  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); overflow: hidden;
+  list-style: none; margin: 0; padding: 0;
+}
+.qz-lg-rr {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 6px;
+  border-bottom: 1px solid var(--qz-rule-2); background: var(--qz-paper); cursor: pointer;
+}
+.qz-lg-rr:hover { background: var(--qz-lg-cell); }
+.qz-lg-rr:last-child { border-bottom: 0; }
+.qz-lg-grip { width: 12px; flex: none; font-size: 12px; color: var(--qz-ink-25); opacity: 0; cursor: grab; text-align: center; }
+.qz-lg-rr:hover .qz-lg-grip, .qz-lg-rr:focus-within .qz-lg-grip { opacity: 1; }
+.qz-lg-rn {
+  flex: none; min-width: 22px; height: 22px; display: grid; place-items: center;
+  border-radius: var(--qz-radius-sm); background: var(--qz-cream-2);
+  font-size: 11.5px; font-weight: 700; color: var(--qz-ink-4); font-variant-numeric: tabular-nums;
+}
+.qz-lg-rs { flex: 1; min-width: 0; font-size: 13px; line-height: 1.75; color: var(--qz-ink-4); }
+.qz-lg-rr.is-dragging { opacity: 0.4; }
+/* B18 — the line sits on the edge the rule will land on */
+.qz-lg-rr.is-over { box-shadow: inset 0 2px 0 var(--qz-accent); }
+.qz-lg-rr.is-under { box-shadow: inset 0 -2px 0 var(--qz-accent); }
+/* lit from a recommendation pill (B49) — wins over hover */
+.qz-lg-rr.is-lit, .qz-lg-rr.is-lit:hover { background: var(--qz-accent-wash); }
+/* a fresh rule / a check-popover jump: a brief OUTLINE, never the lit fill */
+.qz-lg-rr.is-flash, .qz-lg-rrow.is-flash { outline: 2px solid var(--qz-accent-line); outline-offset: -2px; }
+.qz-lg-rempty2 {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 22px 16px;
+  border: 1px dashed var(--qz-ls-line2); border-radius: var(--qz-radius-lg);
+  text-align: center; font-size: 13.5px; color: var(--qz-ink-4);
+}
+.qz-lg-rempty2 b { color: var(--qz-ink); }
+.qz-lg-rempty2 .qz-lg-btn.is-pri { padding: 7px 14px; font-size: 13px; }
+
+/* — Your recommendations (mock .viz / .recrow / .rpill / .sd) — */
+.qz-lg-viz { padding: 12px 20px 16px; background: var(--qz-lg-cell); }
+.qz-lg-viz-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+.qz-lg-viz-h h3 {
+  margin: 0; font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase;
+  font-weight: 700; color: var(--qz-ink-4);
+}
+.qz-lg-viz-sub { font-size: 12px; color: var(--qz-ink-4); }
+.qz-lg-viz-sub b { color: var(--qz-ink); font-variant-numeric: tabular-nums; }
+.qz-lg-sd { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--qz-lg-warn-dot); }
+.qz-lg-sd.is-on { background: var(--qz-ink); }
+.qz-lg-recrow { display: flex; flex-wrap: nowrap; gap: 6px; overflow: hidden; }
+.qz-lg-recrow > * { flex: none; }
+.qz-lg-recrow > .qz-popover-anchor:has(> [hidden]) { display: none; }
+.qz-lg-rpill {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 280px;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius);
+  padding: 6px 12px 6px 11px; font-family: inherit; font-size: 13.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink); cursor: default;
+}
+button.qz-lg-rpill { cursor: pointer; }
+.qz-lg-rpill .qz-lg-sd { width: 8px; height: 8px; }
+.qz-lg-rpill-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-lg-rpill.is-none { border-style: dashed; border-color: var(--qz-ls-warn-line); }
+.qz-lg-rpill.is-none:hover { border-color: var(--qz-accent); }
+.qz-lg-rpill-add { font-weight: 600; color: var(--qz-accent-ink); white-space: nowrap; }
+.qz-lg-rpill.is-add { border-style: dashed; border-color: var(--qz-ls-line2); background: none; color: var(--qz-ink-4); cursor: pointer; }
+.qz-lg-rpill.is-add:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+
+/* — Table view (agent F fills it; mock .tview) — */
+.qz-lg-tview { padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 18px; }
+
+/* ══ Logic step · the rule window, Add recommendations, Paste rules (agent E) ══
+   Built to docs/design/logic-tab/rules-row/index.html at its 100% sizes
+   (#modal .mbox .mthen .vseg .vhint .mdel .mdup .mx .mband .mband-in
+   .mband-h .frac .addelse .mrecs .rc .mq .mqlab .mrow .mqn .mqt .mtag .mop
+   .opb .manswrap .mans .bk .mwarn .mfoot .msay; #addrec .arbox .arhead
+   .artools .arsearch .artabs .arlist .argrp .arnote .arrow .kd .ct .nm
+   .arempty .arfoot). Mock tokens map as in the Logic step block above. */
+
+/* — the scrim: 16px + safe areas, and the toast strip at the bottom (B34) — */
+.qz-modal-scrim.qz-lg-mscrim {
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px
+    max(calc(16px + env(safe-area-inset-bottom, 0px)), calc(var(--qz-toast-reserve, 0px) + env(safe-area-inset-bottom, 0px)));
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.qz-lg-mbox {
+  display: flex; flex-direction: column;
+  width: fit-content; min-width: min(680px, 100%); max-width: 100%; max-height: 100%;
+  background: var(--qz-paper); border-radius: var(--qz-radius-lg); box-shadow: var(--qz-lg-pop);
+  overflow: hidden; font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.qz-lg-mbox.is-builder { width: min(1100px, 100%); }
+.qz-lg-mbox [hidden] { display: none !important; }
+.qz-lg-mbox :is(button, input, [tabindex]):focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lg-mbox button { font-family: inherit; cursor: pointer; }
+.qz-lg-mscroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+/* — What happens — */
+.qz-lg-mthen { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 18px 12px 0 22px; }
+.qz-lg-mlab, .qz-lg-mqlab {
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase; font-weight: 700; color: var(--qz-ink-4);
+}
+.qz-lg-mqlab { padding: 16px 0 0; }
+.qz-lg-vseg { display: inline-flex; background: var(--qz-cream-2); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); padding: 2px; }
+.qz-lg-vseg button {
+  border: 0; background: none; padding: 3px 10px; border-radius: var(--qz-radius-sm);
+  font-size: 12px; font-weight: 400; line-height: 1.45; color: var(--qz-ink-4);
+}
+.qz-lg-vseg button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-ink); box-shadow: var(--qz-lg-lift); }
+.qz-lg-vhint { font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-lg-msp { flex: 1; }
+.qz-lg-mdel {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid transparent; background: none; border-radius: var(--qz-radius-sm);
+  padding: 3px 8px; font-size: 12.5px; font-weight: 500; line-height: 1.45; color: var(--qz-ink-4);
+}
+.qz-lg-mdel:hover:not(:disabled), .qz-lg-mdel:focus-visible { color: var(--qz-crit); background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); }
+.qz-lg-mdel.is-dup:hover:not(:disabled), .qz-lg-mdel.is-dup:focus-visible { color: var(--qz-accent-ink); background: var(--qz-accent-wash); border-color: var(--qz-accent-line); }
+.qz-lg-mdel.is-dup:disabled { color: var(--qz-ink-25); cursor: default; }
+.qz-lg-mx {
+  width: 24px; height: 24px; border: 1px solid transparent; background: none;
+  border-radius: var(--qz-radius-sm); color: var(--qz-ink-25); font-size: 14px; line-height: 1; padding: 0;
+}
+.qz-lg-mx:hover { background: var(--qz-cream-2); border-color: var(--qz-rule); }
+.qz-lg-mnote {
+  flex: 1 0 100%; margin: 0; font-size: 12px; color: var(--qz-ink-4);
+  background: var(--qz-cream-2); border-radius: var(--qz-radius-sm); padding: 4px 8px; max-width: 640px;
+}
+
+/* — Your recommendations — */
+.qz-lg-mband { padding: 12px 22px 16px; border-bottom: 1px solid var(--qz-rule); contain: inline-size; }
+.qz-lg-mband-in { border: 1px solid var(--qz-rule); background: var(--qz-lg-cell); border-radius: var(--qz-radius-lg); padding: 9px 12px 11px; }
+.qz-lg-mband.is-builder { contain: none; }
+.qz-lg-mband-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 24px; }
+.qz-lg-tray-lb { flex: 0 0 auto; font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--qz-ink-25); }
+.qz-lg-frac { font-size: 11px; font-weight: 600; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-lg-frac b { color: var(--qz-warn); }
+.qz-lg-frac.is-all b { color: var(--qz-ink); }
+.qz-lg-addelse {
+  border: 1px dashed var(--qz-ls-line2); background: none; border-radius: var(--qz-radius);
+  padding: 3px 9px; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--qz-ink-4);
+}
+.qz-lg-addelse:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+.qz-lg-mrecs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.qz-lg-rc {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; line-height: 1.45;
+  background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  padding: 6px 10px 6px 8px; color: var(--qz-ink); cursor: pointer;
+}
+.qz-lg-rc:hover { border-color: var(--qz-ls-line2); box-shadow: var(--qz-lg-lift); }
+.qz-lg-rc.is-on { border-color: var(--qz-accent); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lg-rc.is-missing { border-color: var(--qz-ls-crit-line); background: var(--qz-ls-crit-wash); color: var(--qz-crit); }
+.qz-lg-rc.is-more { border-style: dashed; color: var(--qz-ink-4); font-family: inherit; }
+.qz-lg-rc.is-more:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-lg-rc-t {
+  display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0;
+  font: inherit; color: inherit; white-space: nowrap;
+}
+.qz-lg-rc-c {
+  border: 0; background: none; padding: 0 2px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 11px; font-weight: 600; color: var(--qz-ink-25); font-variant-numeric: tabular-nums;
+}
+.qz-lg-rc-c:hover { color: var(--qz-ink); background: var(--qz-cream-2); }
+.qz-lg-st { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--qz-lg-warn-dot); }
+.qz-lg-st.is-done { background: var(--qz-ink); }
+.qz-lg-ck {
+  width: 15px; height: 15px; flex: 0 0 15px; box-sizing: border-box;
+  border: 1px solid var(--qz-ls-line2); border-radius: 3px; background: var(--qz-paper);
+  display: grid; place-items: center; font-size: 10px; line-height: 1; color: var(--qz-on-accent);
+}
+.is-on > .qz-lg-ck, .is-on > .qz-lg-rc-t > .qz-lg-ck, .qz-lg-arrow.is-on .qz-lg-ck { background: var(--qz-accent); border-color: var(--qz-accent); }
+.qz-lg-mi.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lg-vpfoot {
+  display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--qz-rule-2);
+  margin-top: 2px; padding: 9px 2px 1px 8px; font-size: 12.5px; color: var(--qz-ink-4);
+}
+.qz-lg-vpfoot span { flex: 1; }
+.qz-lg-vpfoot b { color: var(--qz-ink); }
+
+/* — When they answer — */
+.qz-lg-mq { padding: 0 22px; }
+.qz-lg-mrow {
+  display: grid; grid-template-columns: 22px 184px 44px minmax(0, auto); gap: 10px;
+  align-items: center; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2);
+}
+.qz-lg-mrow:last-child { border-bottom: 0; }
+.qz-lg-mqn { font-size: 11.5px; font-weight: 700; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
+.qz-lg-mrow.is-live .qz-lg-mqn { color: var(--qz-accent-ink); }
+.qz-lg-mqt { font-size: 13.5px; font-weight: 400; line-height: 1.3; color: var(--qz-ink); }
+.qz-lg-mrow.is-gone .qz-lg-mqt { color: var(--qz-crit); }
+.qz-lg-mtag {
+  display: inline-block; vertical-align: 2px; margin-left: 6px;
+  font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--qz-accent-ink); background: var(--qz-accent-wash); border-radius: var(--qz-radius-sm); padding: 1px 5px;
+}
+.qz-lg-mop { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.qz-lg-opb {
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius-sm);
+  padding: 3px 4px; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--qz-ink-3);
+  text-align: center; white-space: nowrap;
+}
+.qz-lg-opb:hover { border-color: var(--qz-ls-line2); color: var(--qz-ink); }
+.qz-lg-opb.is-not { background: var(--qz-ls-warn-wash); border-color: var(--qz-ls-warn-line); color: var(--qz-warn); }
+.qz-lg-opb.is-sub { padding: 2px; font-size: 10.5px; font-weight: 500; border-style: dashed; }
+.qz-lg-opb.is-fixed { cursor: default; color: var(--qz-ink-25); border-color: var(--qz-rule-2); }
+.qz-lg-opb.is-gone { visibility: hidden; }
+.qz-lg-manswrap { position: relative; min-width: 0; }
+.qz-lg-mans { display: flex; gap: 8px; max-width: 676px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.qz-lg-manswrap.is-more::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 6px; width: 44px;
+  background: linear-gradient(90deg, transparent, var(--qz-paper)); pointer-events: none;
+}
+.qz-lg-bk {
+  flex: 0 0 104px; height: 68px; box-sizing: border-box;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius);
+  padding: 0 9px; text-align: left; font-size: 12.5px; line-height: 1.3; color: var(--qz-ink-3);
+}
+.qz-lg-bkt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.qz-lg-bk:hover { border-color: var(--qz-ls-line2); color: var(--qz-ink); }
+.qz-lg-bk.is-on { background: var(--qz-accent-wash); border-color: var(--qz-accent); color: var(--qz-accent-ink); font-weight: 600; }
+.qz-lg-mrow.is-not .qz-lg-bk.is-on { background: var(--qz-ls-warn-wash); border-color: var(--qz-lg-warn-dot); color: var(--qz-warn); }
+.qz-lg-bk.is-missing, .qz-lg-mrow.is-not .qz-lg-bk.is-missing {
+  background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); color: var(--qz-crit); font-weight: 500;
+}
+.qz-lg-bk.is-pt {
+  flex: 0 0 58px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; padding: 0 4px; text-align: center;
+}
+.qz-lg-ptn { font-size: 16px; font-weight: 700; color: var(--qz-ink); }
+.qz-lg-ptl { display: block; font-size: 10px; line-height: 1.15; color: var(--qz-ink-4); font-weight: 400; }
+.qz-lg-bk.is-pt.is-on .qz-lg-ptn { color: var(--qz-accent-ink); }
+.qz-lg-mwarn {
+  grid-column: 2 / -1; font-size: 12px; color: var(--qz-warn);
+  background: var(--qz-ls-warn-wash); border: 1px solid var(--qz-ls-warn-line);
+  border-radius: var(--qz-radius-sm); padding: 4px 8px;
+}
+
+/* — the footer: the live sentence, Cancel, & add another, the primary — */
+.qz-lg-mfoot {
+  flex: none; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px;
+  padding: 13px 14px 13px 22px; background: var(--qz-cream-2); border-top: 1px solid var(--qz-rule);
+}
+.qz-lg-msay {
+  flex: 1 1 260px; min-width: 0; contain: inline-size; font-size: 13px; color: var(--qz-ink-4);
+  line-height: 1.8; padding-top: 3px; max-height: calc(3 * 1.8em + 3px); overflow-y: auto; overscroll-behavior: contain;
+}
+.qz-lg-mfoot .qz-lg-btn, .qz-lg-arfoot .qz-lg-btn { padding: 8px 14px; font-size: 13.5px; }
+.qz-lg-mfoot .qz-lg-btn:disabled, .qz-lg-arfoot .qz-lg-btn:disabled, .qz-lg-vpfoot .qz-lg-btn:disabled {
+  border-color: var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-25); cursor: default;
+}
+.qz-lg-mfoot .qz-lg-btn[aria-disabled="true"] { cursor: progress; }
+
+/* — Add recommendations (on QzModal, 580 × max 640) — */
+.qz-modal.qz-lg-arbox {
+  padding: 0; gap: 0; max-height: min(640px, 100%, calc(100vh - 24px - var(--qz-toast-reserve, 0px)));
+  box-shadow: var(--qz-lg-pop); border-radius: var(--qz-radius-lg); line-height: 1.45;
+}
+.qz-lg-arbox .qz-modal-title {
+  font-size: 16px; letter-spacing: 0; padding: 12px 48px 12px 20px; border-bottom: 1px solid var(--qz-rule);
+}
+.qz-lg-arbox .qz-modal-x { top: 10px; right: 12px; width: 24px; height: 24px; color: var(--qz-ink-25); }
+.qz-lg-arbox .qz-modal-body { display: flex; flex-direction: column; min-height: 0; padding: 0; margin: 0; overflow: hidden; color: var(--qz-ink); }
+.qz-lg-arbox .qz-modal-footer { padding: 0; }
+.qz-modal-scrim:has(> .qz-lg-arbox) { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.qz-lg-artools { display: flex; flex-direction: column; gap: 10px; padding: 12px 20px 10px; border-bottom: 1px solid var(--qz-rule-2); }
+.qz-lg-arsearch {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--qz-rule-strong); border-radius: var(--qz-radius);
+  padding: 8px 10px; font-family: inherit; font-size: 13.5px; color: var(--qz-ink); background: var(--qz-paper);
+}
+.qz-lg-arsearch:focus { outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-line); }
+.qz-lg-artabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.qz-lg-artabs button {
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: 999px;
+  padding: 3px 11px; font-family: inherit; font-size: 12.5px; line-height: 1.45; color: var(--qz-ink-3); cursor: pointer;
+}
+.qz-lg-artabs button[aria-pressed="true"] { background: var(--qz-ink); border-color: var(--qz-ink); color: var(--qz-on-accent); }
+.qz-lg-c { font-size: 11px; color: var(--qz-ink-25); margin-left: 4px; }
+.qz-lg-artabs button[aria-pressed="true"] .qz-lg-c { color: var(--qz-accent-on-ink); }
+.qz-lg-arlist { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 10px 10px; }
+.qz-lg-argrp { font-size: 10px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; color: var(--qz-ink-4); padding: 10px 10px 4px; }
+.qz-lg-arnote { font-size: 12px; color: var(--qz-ink-4); padding: 2px 10px 6px; }
+.qz-lg-arrow { display: flex; align-items: center; gap: 10px; border-radius: var(--qz-radius); padding: 0 10px 0 0; }
+.qz-lg-arrow:hover { background: var(--qz-cream-2); }
+.qz-lg-arrow.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lg-arrow.is-off:hover { background: none; }
+.qz-lg-arsel {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+  border: 0; background: none; padding: 7px 0 7px 10px; text-align: left;
+  font-family: inherit; font-size: 13.5px; line-height: 1.45; color: inherit; cursor: pointer;
+}
+.qz-lg-arsel:disabled { cursor: default; color: var(--qz-ink-25); }
+.qz-lg-arsel:disabled > .qz-lg-ck { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-lg-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-lg-kd { font-size: 10.5px; font-weight: 600; color: var(--qz-ink-4); background: var(--qz-cream-2); border-radius: var(--qz-radius-sm); padding: 1px 6px; white-space: nowrap; }
+.qz-lg-ct { margin-left: auto; font-size: 12px; color: var(--qz-ink-4); white-space: nowrap; }
+.qz-lg-ct.is-btn { border: 0; background: none; padding: 2px 4px; border-radius: var(--qz-radius-sm); font-family: inherit; cursor: pointer; }
+.qz-lg-ct.is-btn:hover { color: var(--qz-ink); background: var(--qz-paper); }
+.qz-lg-arempty { padding: 18px 10px; text-align: center; font-size: 13px; color: var(--qz-ink-4); }
+.qz-lg-arfoot {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 11px 14px 11px 20px; background: var(--qz-cream-2); border-top: 1px solid var(--qz-rule);
+  border-radius: 0 0 var(--qz-radius-lg) var(--qz-radius-lg);
+}
+.qz-lg-arfoot span { flex: 1; font-size: 13px; color: var(--qz-ink-4); }
+.qz-lg-arfoot b { color: var(--qz-ink); }
+/* ══ Logic step · Filter Results + Rules question pane ══════════════════════
+   The rail, the question pane, the tray, the answer rows and their pickers
+   and menus (mock railItems / pane / roleMenu / picker / vpHTML / routeMenu
+   / typeMenu / trayMoreHTML and .rail .qi .qtag .railcount .pane .paneh
+   .phl .rolebtn .qtype .tray .tchip .arow .akey .atext .cell .vbtn .chipw
+   .chip .cn .xone .go .mi .mi2 .pt .pfoot .vptools .vptabs .vplist .vpg
+   .vpall .vpfoot .tpt .tpset .stp; Add a question .aqrow drag states).
+   Mock sizes at 100% (D20); every colour a --qz-* token. ══ */
+
+/* — the rail (mock .rail / .railhead / .qi / .qtag / .qadd / .railcount) — */
+.qz-lg-grid > .qz-lg-rail { background: var(--qz-lg-cell); }
+.qz-lg-railhead { display: flex; align-items: center; gap: 6px; padding: 5px 8px 8px; }
+.qz-lg-kick {
+  font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--qz-ink-4); font-weight: 600;
+}
+.qz-lg-railn { font-size: 10px; color: var(--qz-ink-25); font-variant-numeric: tabular-nums; }
+.qz-lg-qi {
+  display: flex; align-items: flex-start; gap: 9px; width: 100%;
+  padding: 9px 10px; border: 0; background: none; border-radius: var(--qz-radius);
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+}
+.qz-lg-qi:hover { background: var(--qz-cream-2); }
+.qz-lg-qi.is-on, .qz-lg-qi.is-on:hover { background: var(--qz-paper); box-shadow: var(--qz-lg-lift); }
+.qz-lg-qn {
+  flex: 0 0 14px; font-size: 11px; line-height: 1.6; color: var(--qz-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.qz-lg-qtxt {
+  flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.4; color: var(--qz-ink-3);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.qz-lg-qi.is-on .qz-lg-qtxt { color: var(--qz-ink); font-weight: 600; }
+.qz-lg-qtag {
+  flex: 0 0 auto; margin-top: 2px; padding: 2px 6px; border-radius: var(--qz-radius-sm);
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  background: var(--qz-cream-2); color: var(--qz-ink-25);
+}
+.qz-lg-qtag.is-decides { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lg-qtag.is-filter { background: var(--qz-ok-tint); color: var(--qz-ok); }
+.qz-lg-qadd {
+  width: 100%; margin-top: 6px; padding: 11px 13px; text-align: left;
+  border: 1px dashed var(--qz-ls-line2); border-radius: var(--qz-radius); background: none;
+  font-family: inherit; font-size: 13px; line-height: 1.45; color: var(--qz-ink-4); cursor: pointer;
+}
+.qz-lg-qadd:hover { border-color: var(--qz-accent-line); color: var(--qz-accent-ink); }
+.qz-lg-railcount {
+  margin-top: auto; padding: 14px 8px 2px; display: flex; flex-wrap: wrap; gap: 4px 12px;
+  font-size: 12px; color: var(--qz-ink-4);
+}
+.qz-lg-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin: 0 5px 1px 0; }
+.qz-lg-dot.is-decides { background: var(--qz-accent); }
+.qz-lg-dot.is-filter { background: var(--qz-ok); }
+.qz-lg-dot.is-info { background: var(--qz-ink-25); }
+
+/* — the pane header (mock .pane / .paneh / .phl / .rolebtn / .qtype) — */
+.qz-lg-detail { min-width: 0; }
+.qz-lg-pane { padding: 18px 20px; min-width: 0; }
+.qz-lg-paneh {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+  margin-bottom: 16px;
+}
+.qz-lg-phl { flex: 1; min-width: 0; }
+.qz-lg-panet { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.35; color: var(--qz-ink); }
+.qz-lg-qtype {
+  display: inline-flex; align-items: center; gap: 6px; margin: 5px 0 0 -7px;
+  border: 1px solid transparent; background: none; border-radius: var(--qz-radius-sm);
+  padding: 2px 7px; font-family: inherit; font-size: 12.5px; font-weight: 500; line-height: 1.45;
+  color: var(--qz-ink-4); cursor: pointer;
+}
+.qz-lg-qtype:hover, .qz-lg-qtype[aria-expanded="true"] {
+  background: var(--qz-cream-2); border-color: var(--qz-rule); color: var(--qz-ink);
+}
+.qz-lg-qtype.is-static { cursor: default; }
+.qz-lg-qtype .qz-lg-cv, .qz-lg-rolebtn .qz-lg-cv, .qz-lg-vbtn .qz-lg-cv { font-size: 9px; color: var(--qz-ink-25); }
+.qz-lg-rolestack { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: 0 0 auto; }
+.qz-lg-rolebtn {
+  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  border: 1px solid transparent; background: transparent; border-radius: var(--qz-radius);
+  padding: 5px 9px; font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.45;
+  color: var(--qz-ink); white-space: nowrap; cursor: pointer;
+}
+.qz-lg-rolebtn:hover, .qz-lg-rolebtn[aria-expanded="true"] { background: var(--qz-cream-2); border-color: var(--qz-rule); }
+.qz-lg-rolebtn.is-static { cursor: default; }
+.qz-lg-rolebtn.is-static:hover { background: none; border-color: transparent; }
+.qz-lg-prule { height: 1px; background: var(--qz-rule); margin: 0 0 8px; }
+.qz-lg-empty { margin: 8px 0; font-size: 13px; color: var(--qz-ink-4); }
+
+/* — the tray (mock .tray / .tray-lb / .tray-c / .tchip) — one row (D14) — */
+.qz-lg-tray {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 10px; padding: 6px 8px 6px 12px;
+  border: 1px solid var(--qz-rule); background: var(--qz-lg-cell); border-radius: var(--qz-radius-lg);
+}
+.qz-lg-tray-lb {
+  flex: none; font-size: 9.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  color: var(--qz-ink-25);
+}
+.qz-lg-tray-c { flex: 1; min-width: 0; display: flex; flex-wrap: nowrap; gap: 6px; overflow: hidden; }
+.qz-lg-tray-c > * { flex: none; }
+.qz-lg-tray-c > .qz-popover-anchor:has(> [hidden]) { display: none; }
+.qz-lg-tray-empty { font-size: 12.5px; color: var(--qz-ink-4); padding: 3px 0; }
+.qz-lg-tchip {
+  flex: none; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius);
+  padding: 3px 9px; font-family: inherit; font-size: 12.5px; font-weight: 600; line-height: 1.45;
+  color: var(--qz-ink); cursor: pointer;
+}
+.qz-lg-tchip:hover { border-color: var(--qz-ls-line2); }
+.qz-lg-tchip.is-fresh { color: var(--qz-ok); border-color: var(--qz-ls-ok-line); }
+.qz-lg-tchip.is-fresh:not(.is-armed):hover { border-color: var(--qz-ok); }
+.qz-lg-tchip.is-armed { border-color: var(--qz-accent); background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lg-tchip.is-more { border-style: dashed; color: var(--qz-ink-4); }
+.qz-lg-tchip.is-more:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-lg-tchip:disabled { cursor: default; }
+
+/* — answer rows (mock .arow / .akey / .atext / .cell / .vbtn / .chipw / .go) — */
+.qz-lg-arow {
+  display: grid; grid-template-columns: 18px minmax(0, 1fr) 200px 78px; gap: 10px;
+  align-items: center; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2);
+}
+.qz-lg-arow:last-child { border-bottom: 0; }
+.qz-lg-akey { font-size: 11px; color: var(--qz-ink-25); }
+.qz-lg-akey.is-num { font-size: 13px; font-weight: 700; color: var(--qz-ink-3); }
+.qz-lg-atext { min-width: 0; font-size: 14.5px; line-height: 1.45; color: var(--qz-ink); overflow-wrap: anywhere; }
+.qz-lg-ptlab { font-size: 13.5px; color: var(--qz-ink-4); }
+.qz-lg-acell { min-width: 0; }
+.qz-lg-cell {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 3px 2px;
+  width: 100%; min-height: 30px; padding: 2px 3px 2px 2px;
+  border: 1px solid transparent; border-radius: var(--qz-radius); cursor: pointer;
+}
+.qz-lg-cell:hover, .qz-lg-cell.is-open { background: var(--qz-paper); border-color: var(--qz-rule); }
+.qz-lg-cell.is-blank { border-style: dashed; border-color: var(--qz-ls-line2); }
+.qz-lg-cell.is-blank:hover, .qz-lg-cell.is-blank.is-open { border-color: var(--qz-accent); }
+.qz-lg-cell.is-drop, .qz-lg-cell.is-drop:hover {
+  border-style: dashed; border-color: var(--qz-accent); background: var(--qz-accent-wash);
+}
+.qz-lg-acell > .qz-popover-anchor { display: block; }
+.qz-lg-cnw { display: inline-flex; }
+.qz-lg-cell.is-inert { cursor: default; }
+.qz-lg-cell.is-inert:hover { background: none; border-color: transparent; }
+.qz-lg-cell.is-flash { box-shadow: 0 0 0 2px var(--qz-accent-line); }
+.qz-lg-vbtn {
+  display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
+  padding: 4px 7px; font-size: 13px; font-weight: 500; color: var(--qz-ink-25);
+}
+.qz-lg-cell:hover .qz-lg-vbtn, .qz-lg-cell.is-drop .qz-lg-vbtn { color: var(--qz-accent-ink); }
+.qz-lg-chipw { display: inline-flex; align-items: center; border-radius: var(--qz-radius-sm); padding-left: 6px; max-width: 100%; }
+.qz-lg-chipw:hover { background: var(--qz-cream-2); }
+.qz-lg-chipw.is-total { padding-left: 0; }
+.qz-lg-chip {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; font-weight: 700; color: var(--qz-ink);
+}
+.qz-lg-chip.is-all { font-weight: 600; color: var(--qz-ink-4); }
+.qz-lg-chip.is-bad { color: var(--qz-crit); font-weight: 600; }
+.qz-lg-cn {
+  padding: 0 5px; font-size: 11px; font-weight: 600; color: var(--qz-ink-25);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.qz-lg-cn.is-zero { color: var(--qz-crit); }
+.qz-lg-chipw .qz-ltab-countbtn {
+  border: 0; background: none; padding: 0; margin: 0; border-radius: var(--qz-radius-sm);
+  font: inherit; cursor: pointer;
+}
+.qz-lg-chipw .qz-ltab-countbtn:hover .qz-lg-cn { color: var(--qz-accent-ink); }
+.qz-lg-arow:hover .qz-lg-xone, .qz-lg-arow:focus-within .qz-lg-xone { opacity: 0.85; }
+.qz-lg-arow .qz-lg-xone:hover { color: var(--qz-crit); opacity: 1; }
+.qz-lg-dash { color: var(--qz-ink-25); padding-left: 7px; }
+.qz-lg-aroute { min-width: 0; }
+.qz-lg-go {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 6px;
+  border: 1px solid transparent; border-radius: var(--qz-radius); background: none;
+  font-family: inherit; font-size: 12.5px; font-weight: 500; line-height: 1.45;
+  color: var(--qz-ink-25); white-space: nowrap; cursor: pointer;
+}
+.qz-lg-go:hover, .qz-lg-go[aria-expanded="true"] { border-color: var(--qz-rule); color: var(--qz-ink-3); }
+.qz-lg-go.is-set { color: var(--qz-ink); font-weight: 600; }
+.qz-lg-go.is-static { cursor: default; }
+.qz-lg-routewarn { margin-top: 8px; font-size: 12.5px; color: var(--qz-ink-4); }
+.qz-lg-routewarn p { margin: 4px 0; }
+.qz-lg-routewarn .is-error { color: var(--qz-crit); }
+
+/* — popover rows on this pane (mock .mi.on / .mi2 / .ck / .pfoot / .tl / .pk) — */
+.qz-lg-pop .qz-lg-mi:disabled { color: var(--qz-ink-25); cursor: default; }
+.qz-lg-pop .qz-lg-mi:disabled:hover { background: none; }
+.qz-lg-mi.is-on { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-lg-mi.is-tl { font-weight: 600; }
+.qz-lg-mi.is-tl.is-fresh:not(.is-on) { color: var(--qz-ok); }
+.qz-lg-mi.is-pk { font-weight: 600; color: var(--qz-ink); }
+.qz-lg-mi.is-pk.is-fresh { color: var(--qz-ok); }
+.qz-lg-mi.is-pk.is-on { color: var(--qz-ink); }
+.qz-lg-mi.qz-lg-mi2 { flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px; }
+.qz-lg-mi2-t { font-size: 13.5px; }
+.qz-lg-mi2-d { font-size: 11.5px; color: var(--qz-ink-4); }
+.qz-lg-mi2.is-on .qz-lg-mi2-d { color: var(--qz-accent-ink); }
+.qz-lg-ck {
+  flex: 0 0 15px; width: 15px; height: 15px; display: grid; place-items: center;
+  border: 1px solid var(--qz-ls-line2); border-radius: 3px; background: var(--qz-paper);
+  font-size: 10px; line-height: 1; color: var(--qz-on-accent);
+}
+.qz-lg-mi.is-on > .qz-lg-ck { background: var(--qz-accent); border-color: var(--qz-accent); }
+.qz-lg-pfoot {
+  border-top: 1px solid var(--qz-rule-2); margin-top: 8px; padding: 9px 8px 2px;
+  font-size: 12px; color: var(--qz-ink-4); text-align: center;
+}
+.qz-lg-pt-sub { font-weight: 500; color: var(--qz-ink-4); }
+.qz-lg-vptools + .qz-lg-vptools { padding-top: 4px; }
+.qz-lg-vptools--rule { display: flex; flex-direction: column; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--qz-rule-2); }
+.qz-lg-vptabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.qz-lg-vptabs button {
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: 999px;
+  padding: 2px 9px; font-family: inherit; font-size: 12px; line-height: 1.45; color: var(--qz-ink-3); cursor: pointer;
+}
+.qz-lg-vptabs button[aria-pressed="true"] { background: var(--qz-ink); border-color: var(--qz-ink); color: var(--qz-on-accent); }
+.qz-lg-vptab-c { margin-left: 4px; font-size: 10.5px; color: var(--qz-ink-25); }
+.qz-lg-vptabs button[aria-pressed="true"] .qz-lg-vptab-c { color: var(--qz-accent-on-ink); }
+.qz-lg-vpg {
+  display: flex; align-items: center; gap: 8px; padding: 10px 8px 3px;
+  font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; font-weight: 700; color: var(--qz-ink-4);
+}
+.qz-lg-vpg span { flex: 1; min-width: 0; }
+.qz-lg-vpall {
+  border: 0; background: none; padding: 1px 4px; border-radius: var(--qz-radius-sm);
+  font-family: inherit; font-size: 11.5px; font-weight: 600; letter-spacing: 0; text-transform: none;
+  color: var(--qz-accent-ink); cursor: pointer;
+}
+.qz-lg-vpall:hover { background: var(--qz-accent-wash); }
+.qz-lg-vprow { display: flex; align-items: center; gap: 2px; }
+.qz-lg-vprow > .qz-lg-mi { flex: 1; min-width: 0; }
+.qz-lg-vpdrill {
+  flex: none; border: 0; background: none; padding: 7px 8px; border-radius: var(--qz-radius);
+  font-family: inherit; font-size: 11.5px; line-height: 1.45; color: var(--qz-ink-4);
+  white-space: nowrap; cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.qz-lg-vpdrill:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+.qz-lg-vpdrill.is-flat { cursor: default; }
+.qz-lg-vpdrill.is-flat:hover { background: none; color: var(--qz-ink-4); }
+.qz-lg-vpfoot {
+  display: flex; align-items: center; gap: 6px; margin-top: 2px; padding: 9px 2px 1px 8px;
+  border-top: 1px solid var(--qz-rule-2); font-size: 12.5px; color: var(--qz-ink-4);
+}
+.qz-lg-vpfoot > span { flex: 1; min-width: 0; }
+.qz-lg-vpfoot b { color: var(--qz-ink); }
+.qz-lg-btn.is-ghost { border-color: transparent; background: none; }
+.qz-lg-btn.is-ghost:hover { background: var(--qz-cream-2); border-color: var(--qz-rule); }
+.qz-lg-pp { display: flex; align-items: center; gap: 9px; padding: 5px 8px; font-size: 13px; }
+.qz-lg-pp-sw { flex: 0 0 26px; width: 26px; height: 26px; border-radius: var(--qz-radius-sm); background: var(--qz-cream-2); object-fit: cover; }
+.qz-lg-pp-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--qz-ink); }
+.qz-lg-pp-ty { flex: none; font-size: 11.5px; color: var(--qz-ink-4); }
+
+/* — the Question type popover (mock .tpt / .rd / .tpset / .stp / .tplab) — */
+.qz-lg-tpt .qz-lg-rd {
+  flex: none; box-sizing: border-box; width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--qz-ls-line2); background: var(--qz-paper);
+}
+.qz-lg-mi.qz-lg-tpt.is-on { background: none; color: var(--qz-ink); font-weight: 600; }
+.qz-lg-mi.qz-lg-tpt.is-on:hover { background: var(--qz-cream-2); }
+.qz-lg-tpt.is-on .qz-lg-rd { border: 4.5px solid var(--qz-accent); }
+.qz-lg-tpset {
+  display: flex; flex-direction: column; gap: 8px; margin: 6px 0 0; padding: 10px 8px 4px;
+  border-top: 1px solid var(--qz-rule-2);
+}
+.qz-lg-tprow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.qz-lg-tplb { font-size: 12.5px; font-weight: 600; color: var(--qz-ink-3); }
+.qz-lg-stp { display: inline-flex; align-items: center; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); overflow: hidden; }
+.qz-lg-stp button {
+  width: 26px; height: 24px; padding: 0; border: 0; background: var(--qz-paper);
+  font-family: inherit; font-size: 14px; line-height: 1; color: var(--qz-ink-3); cursor: pointer;
+}
+.qz-lg-stp button:hover:not(:disabled) { background: var(--qz-cream-2); }
+.qz-lg-stp button:disabled { color: var(--qz-ink-25); cursor: default; }
+.qz-lg-stv {
+  min-width: 28px; text-align: center; font-size: 12.5px; font-weight: 700; line-height: 24px;
+  font-variant-numeric: tabular-nums; border-inline: 1px solid var(--qz-rule);
+}
+.qz-lg-tplab {
+  width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--qz-rule-strong);
+  border-radius: var(--qz-radius); font-family: inherit; font-size: 12.5px; color: var(--qz-ink); background: var(--qz-paper);
+}
+.qz-lg-tplab:focus { outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-line); }
+.qz-lg-tpnote { font-size: 11.5px; color: var(--qz-ink-4); }
+
+/* ══ Logic step · Table view, Export and Import ══ */
+/* Mock .twrap / .xl / .tbtn / .tdel / .iox (docs/design/logic-tab/rules-row).
+   The sheets stack in .qz-lg-tview (above); each table scrolls sideways in
+   its own wrapper, which becomes a keyboard stop only when it scrolls. */
+.qz-lg-tsheet { min-width: 0; }
+.qz-lg-twrap { overflow-x: auto; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius); }
+.qz-lg-twrap:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
+.qz-lg-xl { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.4; }
+.qz-lg-xl th {
+  background: var(--qz-cream-2); text-align: left; font-size: 11.5px; font-weight: 700; color: var(--qz-ink-3);
+  padding: 7px 10px; border-bottom: 1px solid var(--qz-rule); border-right: 1px solid var(--qz-rule-2); white-space: nowrap;
+}
+.qz-lg-xl td {
+  padding: 7px 10px; border-top: 1px solid var(--qz-rule-2); border-right: 1px solid var(--qz-rule-2);
+  vertical-align: top; color: var(--qz-ink);
+}
+.qz-lg-xl th:last-child, .qz-lg-xl td:last-child { border-right: 0; }
+.qz-lg-xl tbody tr:first-child td { border-top: 0; }
+.qz-lg-xl tr.is-grp td { border-top: 1px solid var(--qz-rule); }
+.qz-lg-xl tr.is-go { cursor: pointer; }
+.qz-lg-xl tr.is-go:hover td { background: var(--qz-lg-cell); }
+.qz-lg-xl tr.is-muted td { color: var(--qz-ink-4); background: var(--qz-lg-cell); }
+.qz-lg-xl td.is-k { width: 40px; color: var(--qz-ink-4); font-weight: 600; font-variant-numeric: tabular-nums; }
+.qz-lg-xl td.is-qt { width: 26%; color: var(--qz-ink-3); }
+.qz-lg-xl td.is-num { font-variant-numeric: tabular-nums; }
+.qz-lg-xl td.is-dim { color: var(--qz-ink-4); white-space: nowrap; }
+.qz-lg-xl td.is-res { color: var(--qz-lg-res); font-weight: 600; }
+.qz-lg-xl td.is-verb { color: var(--qz-accent-ink); font-weight: 600; white-space: nowrap; }
+.qz-lg-xl td.is-unset { color: var(--qz-warn); font-weight: 600; }
+.qz-lg-xl td.is-ok { color: var(--qz-ink); font-weight: 600; }
+.qz-lg-xl tr.is-muted td.is-res, .qz-lg-xl tr.is-muted td.is-verb { color: var(--qz-ink-4); }
+/* B15: a dead row dims its sentence only; its tag keeps full contrast. */
+.qz-lg-xl td.is-when .qz-lg-rtag { white-space: nowrap; }
+.qz-lg-tmiss { color: var(--qz-crit); }
+.qz-lg-tgob {
+  border: 0; background: none; padding: 0; margin: 0; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; vertical-align: baseline;
+}
+.qz-lg-tgob:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 2px; border-radius: 2px; }
+/* the cell controls (mock .tbtn): quiet until hovered or open */
+.qz-lg-tbtn {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid transparent; background: none;
+  border-radius: var(--qz-radius-sm); padding: 2px 6px; margin: -3px -7px; font: inherit; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.qz-lg-tbtn:hover, .qz-lg-tbtn[aria-expanded="true"] { border-color: var(--qz-rule); background: var(--qz-paper); }
+.qz-lg-tbtn:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+.qz-lg-cv { font-size: 9px; color: var(--qz-ink-25); }
+.qz-lg-tbtn.is-does, .qz-lg-tdoes { font-weight: 600; font-size: 12.5px; white-space: nowrap; }
+.qz-lg-tbtn.is-decides, .qz-lg-tdoes.is-decides { color: var(--qz-accent-ink); }
+.qz-lg-tbtn.is-filter, .qz-lg-tdoes.is-filter { color: var(--qz-ok); }
+.qz-lg-tbtn.is-info, .qz-lg-tdoes.is-info { color: var(--qz-ink-4); font-weight: 500; }
+.qz-lg-tbtn.is-res, .qz-lg-tres { color: var(--qz-lg-res); font-weight: 600; }
+.qz-lg-tbtn.is-unset, .qz-lg-tres.is-unset, .qz-lg-tval.is-unset { color: var(--qz-warn); font-weight: 600; }
+.qz-lg-tbtn.is-dim, .qz-lg-tdim { color: var(--qz-ink-4); white-space: nowrap; }
+.qz-lg-dim2 { color: var(--qz-ink-25); }
+/* the Rules sheet's trash (mock .tdel): faint, crit on hover or focus */
+.qz-lg-xl th.is-tact, .qz-lg-xl td.is-tact { width: 34px; padding: 3px 6px 0 0; text-align: right; }
+.qz-lg-tdel {
+  display: inline-grid; place-items: center; width: 26px; height: 26px; border: 1px solid transparent;
+  border-radius: var(--qz-radius-sm); background: none; color: var(--qz-ink-25); padding: 0; cursor: pointer;
+}
+.qz-lg-xl tr:hover .qz-lg-tdel { color: var(--qz-ink-4); }
+.qz-lg-tdel:hover, .qz-lg-tdel:focus-visible {
+  color: var(--qz-crit); background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); outline: none;
+}
+.qz-lg-iox button:not(:disabled) { cursor: pointer; }
+.qz-lg-iox button[aria-busy="true"] { cursor: progress; }
+
+/* ══ Logic step · Table fixes (fix agent H) ══ */
+/* The Rules sheet's ↑/↓ (P1-7): the Edit rows' controls, revealed on hover
+   and keyboard focus, laid over the end of the When cell so the sheet keeps
+   the mock's column widths. The strip takes the row's ground so the text
+   under it never shows through. */
+.qz-lg-xl td.is-tact { position: relative; }
+.qz-lg-tmv {
+  position: absolute; right: 100%; top: 3px; height: 26px; align-items: center; padding: 0 2px 0 6px;
+  background: var(--qz-paper); opacity: 0; pointer-events: none;
+}
+.qz-lg-xl tr.is-go:hover .qz-lg-tmv, .qz-lg-xl tr.is-muted .qz-lg-tmv { background: var(--qz-lg-cell); }
+.qz-lg-xl tr:hover .qz-lg-tmv, .qz-lg-xl tr:focus-within .qz-lg-tmv { opacity: 1; pointer-events: auto; }
+.qz-lg-tmv .qz-lg-xone { width: 20px; height: 22px; opacity: 0.85; }
+.qz-lg-tmv .qz-lg-xone:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: -2px; }
+/* the answer text: the pane's field in a Table cell (mock ptEd + endCap) */
+.qz-lg-tatext .qz-lg-ptlab { color: var(--qz-ink-4); }
+.qz-lg-trole { display: inline; }
+/* A popover measures its trigger's WRAPPER span (qz-overlays), so a trigger
+   that pulls itself left with a negative margin opened its popover that
+   many px right of the mock's (mock openPop anchors the button itself). The
+   pull moves onto the wrapper; the button keeps its place on screen. */
+.qz-popover-anchor:has(> .qz-lg-stitle) { margin-left: -8px; }
+.qz-popover-anchor > .qz-lg-stitle { margin-left: 0; }
+.qz-popover-anchor:has(> .qz-lg-qtype) { margin: 5px 0 0 -7px; }
+.qz-popover-anchor > .qz-lg-qtype { margin: 0; }
+.qz-popover-anchor:has(> .qz-lg-tbtn) { margin: -3px -7px; }
+.qz-popover-anchor > .qz-lg-tbtn { margin: 0; }
+
+/* ══ Logic step · Add a question ══
+   The ONE shared dialog (Logic step + Questions step), built to the mock's
+   #aqm window in docs/design/logic-tab/rules-row/index.html at its 100%
+   sizes: #aqm .aqbox .aqh .aqbody .aqband .aqbh .aqbn .aqbt .aqbhint
+   .aqtgrid .aqt(.on) .aqtn .aqtd .aqfi .aqai .aqrow .aqgrip .aqkey .aqdel
+   .aqadd2 .aqnote .aqfoot .aqsum → .qz-lg-aq<same>. Shell = QzModal
+   (title h2 = .aqh h2, its × = .mx, footer slot = .aqfoot). Mock tokens map
+   as in the Logic step block (--ground → --qz-cream-2, --line2 →
+   --qz-ls-line2, --crit-wash/-line → --qz-ls-crit-wash/-line). */
+
+/* — #aqm: the scrim pads 16px, no blur; the toast strip stays clear (B34) — */
+.qz-modal-scrim:has(> .qz-lg-aqbox) {
+  padding: 16px;
+  padding-bottom: max(16px, calc(var(--qz-toast-reserve, 0px) + env(safe-area-inset-bottom, 0px)));
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+/* — .aqbox: 620 wide (QzModal width prop), max the scrim's height — */
+.qz-modal.qz-lg-aqbox {
+  padding: 0; gap: 0; overflow: hidden;
+  max-height: min(100%, calc(100vh - 32px - var(--qz-toast-reserve, 0px)));
+  border-radius: var(--qz-radius-lg); box-shadow: var(--qz-lg-pop);
+  font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.qz-lg-aqbox button { font-family: inherit; cursor: pointer; }
+body[data-qz] .qz-lg-aqbox button:focus-visible { outline: 2px solid var(--qz-accent); outline-offset: 1px; }
+body[data-qz] .qz-lg-aqbox :is(.qz-lg-aqt, .qz-lg-aqadd2, .qz-lg-btn):focus-visible { border-radius: var(--qz-radius); }
+/* — .aqh: "Add a question" 16px/700 with the × — */
+.qz-lg-aqbox .qz-modal-title {
+  font-size: 16px; font-weight: 700; letter-spacing: 0; line-height: 24px;
+  padding: 14px 48px 8px 22px; color: var(--qz-ink);
+}
+.qz-lg-aqbox .qz-modal-x {
+  top: 14px; right: 12px; width: 24px; height: 24px;
+  border: 1px solid transparent; border-radius: var(--qz-radius-sm); color: var(--qz-ink-25);
+}
+.qz-lg-aqbox .qz-modal-x svg { width: 11px; height: 11px; }
+.qz-lg-aqbox .qz-modal-x:hover { background: var(--qz-cream-2); border-color: var(--qz-rule); color: var(--qz-ink-25); }
+/* — .aqbody — */
+.qz-lg-aqbox .qz-modal-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  padding: 0 22px 14px; margin: 0; font-size: 14px; color: var(--qz-ink);
+}
+/* — .aqband: numbered sentence-case bands split by hairlines — */
+.qz-lg-aqband { padding: 12px 0 14px; border-top: 1px solid var(--qz-rule-2); min-width: 0; }
+.qz-lg-aqband:first-child { border-top: 0; padding-top: 6px; }
+.qz-lg-aqbh { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.qz-lg-aqbn {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-size: 11px; font-weight: 700;
+}
+.qz-lg-aqbt { font-size: 13px; font-weight: 700; }
+.qz-lg-aqbhint { margin-left: auto; font-size: 12px; color: var(--qz-ink-4); }
+/* — .aqtgrid: the four types across — */
+.qz-lg-aqtgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.qz-lg-aqt {
+  display: flex; flex-direction: column; gap: 3px; text-align: left;
+  border: 1px solid var(--qz-rule); background: var(--qz-paper); border-radius: var(--qz-radius);
+  padding: 9px 10px; font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.qz-lg-aqt:hover { border-color: var(--qz-ls-line2); }
+.qz-lg-aqt.is-on { border-color: var(--qz-accent); background: var(--qz-accent-wash); }
+.qz-lg-aqtn { font-size: 13px; font-weight: 700; color: var(--qz-ink); }
+.qz-lg-aqt.is-on .qz-lg-aqtn { color: var(--qz-accent-ink); }
+.qz-lg-aqtd { font-size: 11.5px; color: var(--qz-ink-4); line-height: 1.3; }
+@media (max-width: 520px) { .qz-lg-aqtgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* — .aqfi / .aqai: the question and answer inputs — */
+.qz-lg-aqfi, .qz-lg-aqai {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--qz-rule); border-radius: var(--qz-radius);
+  padding: 8px 10px; font-family: inherit; font-size: 14px; line-height: 1.45;
+  color: var(--qz-ink); background: var(--qz-paper);
+}
+.qz-lg-aqfi:focus, .qz-lg-aqai:focus,
+body[data-qz] .qz-lg-aqbox :is(.qz-lg-aqfi, .qz-lg-aqai):focus-visible {
+  outline: none; border-color: var(--qz-accent); box-shadow: 0 0 0 2px var(--qz-accent-line); border-radius: var(--qz-radius);
+}
+/* — .aqrow: grip · letter key · input · × — */
+.qz-lg-aqrow {
+  display: grid; grid-template-columns: 18px 14px minmax(0, 1fr) 26px;
+  gap: 8px; align-items: center; margin-bottom: 6px;
+}
+.qz-lg-aqgrip {
+  border: 0; background: none; padding: 0; color: var(--qz-ink-25);
+  font-size: 12px; letter-spacing: -2px; cursor: grab; touch-action: none; user-select: none;
+}
+.qz-lg-aqrow.is-dragging { opacity: 0.4; }
+.qz-lg-aqbox .qz-lg-aqrow.is-dragging .qz-lg-aqgrip { cursor: grabbing; }
+.qz-lg-aqrow.is-drop-before { box-shadow: inset 0 2px 0 var(--qz-accent); }
+.qz-lg-aqrow.is-drop-after { box-shadow: inset 0 -2px 0 var(--qz-accent); }
+.qz-lg-aqkey { font-size: 11px; color: var(--qz-ink-25); text-align: center; }
+.qz-lg-aqdel {
+  width: 26px; height: 26px; padding: 0; border: 1px solid transparent; background: none;
+  border-radius: var(--qz-radius-sm); color: var(--qz-ink-25); font-size: 14px; line-height: 1;
+}
+.qz-lg-aqdel:hover:not(:disabled) { color: var(--qz-crit); background: var(--qz-ls-crit-wash); border-color: var(--qz-ls-crit-line); }
+.qz-lg-aqbox .qz-lg-aqdel:disabled { opacity: 0.35; cursor: default; }
+/* — .aqadd2: the small dashed "+ Add answer", indented under the inputs — */
+.qz-lg-aqadd2 {
+  border: 1px dashed var(--qz-ls-line2); background: none; border-radius: var(--qz-radius);
+  padding: 6px 10px; margin: 2px 0 0 40px;
+  font-size: 12.5px; font-weight: 600; line-height: 1.45; color: var(--qz-ink-4);
+}
+.qz-lg-aqadd2:hover { border-color: var(--qz-accent); color: var(--qz-accent-ink); }
+.qz-lg-aqnote { margin: 8px 0 0; font-size: 12.5px; color: var(--qz-ink-4); }
+/* — .aqfoot: the ground band, "Adds Q6 with N answers" · Cancel · Add question — */
+.qz-lg-aqbox .qz-modal-footer { padding: 0; }
+.qz-lg-aqfoot {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px 12px 22px; background: var(--qz-cream-2); border-top: 1px solid var(--qz-rule);
+}
+.qz-lg-aqsum { font-size: 13px; color: var(--qz-ink-4); }
+.qz-lg-aqsum b { color: var(--qz-ink); }
+.qz-lg-aqsp { flex: 1; }
+.qz-lg-aqfoot .qz-lg-btn { padding: 8px 14px; font-size: 13.5px; }
+.qz-lg-aqfoot .qz-lg-btn:disabled {
+  border-color: var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-25); cursor: default;
+}

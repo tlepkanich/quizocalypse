@@ -27,12 +27,32 @@ export type FunnelContinueSpec = {
    *  MUST stay constant — a 14px ring joins it instead of the copy changing
    *  ("Opening builder…"-style label swaps resize the button mid-action). */
   loading?: boolean;
+  /** Logic step redesign (D3/D4): the look of a blocked CTA. "outline" =
+   *  paper fill, crit text, 1px crit inset ring (mock .cta.blocked) — the
+   *  Logic step only; the Questions step's gate keeps today's tint. */
+  blockedLook?: "outline";
+  /** Logic step redesign: a popover anchored to the CTA (the check
+   *  popover). When present the bar wraps the button in a CONTROLLED
+   *  QzPopover (right-aligned, focus-managed); the click toggles `open`
+   *  and `onClick` is not called. Memoize `content` with the override. */
+  popover?: {
+    content: ReactNode;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    width?: number;
+    ariaLabel?: string;
+  };
 };
 
 export type FunnelBarOverride = {
   saveChip?: ReactNode;
   healthPill?: ReactNode;
   continueSpec?: FunnelContinueSpec;
+  /** Awaited before Back and the stepper submit goto-stage, so an edit still
+   *  in the autosave debounce lands first (handoff "Continue and Back").
+   *  Resolve false to stay put (the save failed; the save chip says so).
+   *  Must be referentially stable. */
+  beforeNavigate?: () => Promise<boolean>;
 };
 
 export const FunnelBarContext = createContext<{
@@ -77,7 +97,14 @@ function SvIcon({ spin, children }: { spin?: boolean; children: ReactNode }) {
      Paused while AI edits
               isAiPaused — useQuizDraft suspended autosave so a debounced PUT
               cannot land a stale doc mid-AI-call. Accent-ink tone.
-   isSaving/savedAt stay in the signature so call sites are untouched. */
+   isSaving/savedAt stay in the signature so call sites are untouched.
+
+   Dated exception, owner 2026-09-18 (Logic step redesign D8): a committed
+   inline edit shows a small "Saving… → Saved" pill AT THE EDITED FIELD
+   (studio/logicTab/FieldSavePill.tsx, driven by the real save through
+   useQuizDraft.commitTracked, never a timer). Typing stays silent and there
+   is still NO ambient chip: this chip keeps rendering only the two states
+   above. The field pill is the one sanctioned "Saved" in the funnel. */
 export function FunnelSaveChip({
   isSaving,
   savedAt,

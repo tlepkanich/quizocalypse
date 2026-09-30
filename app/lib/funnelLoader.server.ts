@@ -198,6 +198,26 @@ export async function loadStep1FunnelData(
     productIds: g.productIds,
   }));
   const metafieldConditions = [...new Set(products.flatMap((p) => metafieldValuesOf(p.metafields)))].sort();
+  // Logic step redesign (D15) — the Add recommendations window's "In this
+  // quiz" marks, as "kind:key" in the catalogue's own keys: a smart
+  // collection reads as a collection and a tag row's sourceRef is compared
+  // as its Step-1 slug (rows an older rule window wrote with a raw tag still
+  // count). Matched by identity, never by name. Computed here because the
+  // slug normalizer is server-only (it shares a module with the AI client).
+  const catalogInQuizKeys = [
+    ...new Set(
+      categories
+        .filter((c) => c.sourceRef)
+        .map((c) => {
+          const kind = c.source === "smart_collection" ? "collection" : c.source;
+          const ref =
+            c.source === "tag"
+              ? normalizeTags([c.sourceRef as string], new Set())[0] ?? (c.sourceRef as string)
+              : (c.sourceRef as string);
+          return `${kind}:${ref}`;
+        }),
+    ),
+  ];
 
   // Current selections from the quiz's Category rows. The browser manages
   // product/tag/collection/group sources; legacy product_type/metafield/ai
@@ -471,6 +491,7 @@ export async function loadStep1FunnelData(
       groups: catalogGroups,
       metafieldConditions,
       currency,
+      inQuizKeys: catalogInQuizKeys,
     },
     suggestion,
     buckets,

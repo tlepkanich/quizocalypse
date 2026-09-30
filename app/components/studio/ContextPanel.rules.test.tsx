@@ -6,6 +6,7 @@ import type { QuizNode } from "../../lib/quizSchema";
 import type { BuilderCategory, BuilderCollection } from "../builder/stepProps";
 import type { IndexedProduct } from "../../lib/recommendationEngine";
 import { RulesTabBody } from "./ContextPanel";
+import { ROLE_BUTTON } from "./logicTab/logicCopy";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -96,7 +97,7 @@ describe("RulesTabBody (QRTZ-OB2)", () => {
     expect(el.textContent).toContain("No filter");
   });
 
-  it("non-deciding role reads 'Asked only' with no mapping rows", () => {
+  it("non-deciding role reads 'Info only' (D18) with no mapping rows", () => {
     const el = render(
       createElement(RulesTabBody, {
         node: questionNode("qualifier", [{}]),
@@ -105,7 +106,8 @@ describe("RulesTabBody (QRTZ-OB2)", () => {
         productIndex,
       }),
     );
-    expect(el.querySelector(".qz-obr-rolev")?.textContent).toBe("Asked only");
+    expect(el.querySelector(".qz-obr-rolev")?.textContent).toBe(ROLE_BUTTON.info);
+    expect(ROLE_BUTTON.info).toBe("Info only");
     expect(el.querySelectorAll(".qz-obr-row").length).toBe(0);
   });
 

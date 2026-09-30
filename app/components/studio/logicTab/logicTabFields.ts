@@ -5,6 +5,7 @@ import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BuilderCategory } from "../../builder/stepProps";
 import { setAnswerFilterValues, setQuestionRole } from "../../../lib/quizMutations";
 import { numericId } from "../../../lib/cartLink";
+import { ROLE_MENU, ROLE_MENU_FOOT } from "./logicCopy";
 
 type AnswerT = z.infer<typeof Answer>;
 
@@ -542,6 +543,8 @@ export function applyNarrowField(
   productIndex: readonly IndexedProduct[],
   field: string,
 ): AppliedNarrowField | null {
+  // Decider docs only (the dual-model split): a legacy doc is never written.
+  if (doc.logic_model !== "decider") return null;
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node || node.type !== "question") return null;
   const answers = node.data.answers;
@@ -573,32 +576,23 @@ export function narrowAppliedToast(
   const q = questionText.replace(/\s*\?\s*$/, "");
   const name = fieldSlotLabel(field);
   return unmatched > 0
-    ? `"${q}" now narrows by ${name} — map ${unmatched} answer${unmatched === 1 ? "" : "s"} on the Logic step`
-    : `"${q}" now narrows by ${name} — ${mapped} answer${mapped === 1 ? "" : "s"} mapped, check them`;
+    ? `"${q}" now narrows by ${name}. Map ${unmatched} answer${unmatched === 1 ? "" : "s"} on the Logic step`
+    : `"${q}" now narrows by ${name}. ${mapped} answer${mapped === 1 ? "" : "s"} mapped, check them`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// QRTZ-OB1 (GAPS §A item 7, owner call 2026-08-12) — the mock's Logic
-// vocabulary replaces the product's locked set. ONE source for every surface
-// (QuestionWindow spine, Logic-tab pills, Overview role column) so the role
-// names can never drift apart again. Mock sources (_src/shared.mjs):
-//   "Picks the result"  — QGROUPS role, line 316 + role popover line 446
-//   "Narrows"           — QGROUPS role, line 327 (attr on its own slot)
-//   "Asked only"        — the non-deciding badge, explainer line 1034
-// "Starting set" survives ONLY in the pool sense (the initial product set a
-// quiz narrows from — the mock's own explainer badge, shared.mjs ~1032);
-// it is no longer a question ROLE name.
+// QRTZ-OB1 (GAPS §A item 7, owner call 2026-08-12) — ONE source for the
+// role vocabulary on every surface (QuestionWindow spine, the role menu, the
+// Overview role column) so the names can never drift apart again.
+// Logic step redesign (D18, owner 2026-09-22): the words themselves now live
+// in logicCopy.ts ("Asked only" became "Info only"; the menu reads the mock's
+// JOBS). "Starting set" survives ONLY in the pool sense; it is not a role.
 // ════════════════════════════════════════════════════════════════════════════
 
-export const ROLE_JOBS = [
-  { k: "decides" as const, n: "Picks the result", hint: "each answer opens a group of products" },
-  { k: "filter" as const, n: "Narrows", hint: "each answer keeps only what matches" },
-  { k: "info" as const, n: "Asked only", hint: "asked, but never touches products" },
-];
+export const ROLE_JOBS = ROLE_MENU;
 
-/** Mock .pop-foot (shared.mjs line 451), verbatim — the one-decider rule. */
-export const ROLE_FOOT =
-  "One question picks the result. Every other question narrows on a single attribute.";
+/** The role menu's foot line (mock roleMenu .pfoot). */
+export const ROLE_FOOT = ROLE_MENU_FOOT;
 
 /** The answer's CURRENT stored values as one full-set payload — the base
  *  every chip-remove edit subtracts from (setAnswerFilterValues is a

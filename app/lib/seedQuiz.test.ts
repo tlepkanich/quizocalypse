@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
-import { buildSeedQuiz, seedIntroBestPractice, SEED_INTRO_SUBTEXT } from "./seedQuiz";
+import { buildSeedQuiz, seedIntroBestPractice, setIntroHidden, SEED_INTRO_SUBTEXT } from "./seedQuiz";
 
 describe("buildSeedQuiz", () => {
   it("produces a valid quiz with an intro + a starter question", () => {
@@ -150,6 +150,16 @@ describe("IntroData.hidden", () => {
     const parsed = fixture(2);
     const intro = parsed.nodes.find((n) => n.type === "intro");
     expect(intro && "hidden" in intro.data).toBe(false);
+  });
+
+  it("setIntroHidden hides, then un-hides back to the untouched shape", () => {
+    const doc = buildSeedQuiz("Test");
+    const hidden = setIntroHidden(doc, true);
+    const introOf = (d: Quiz) => d.nodes.find((n) => n.type === "intro");
+    expect(introOf(hidden)?.type === "intro" && introOf(hidden)?.data).toMatchObject({ hidden: true });
+    const shown = setIntroHidden(hidden, false);
+    expect(JSON.stringify(shown)).toBe(JSON.stringify(doc));
+    expect(setIntroHidden(doc, false)).toBe(doc);
   });
 
   it("round-trips hidden: true", () => {

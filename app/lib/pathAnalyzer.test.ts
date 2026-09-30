@@ -280,10 +280,11 @@ describe("rule diagnostics (V7/V8/V9)", () => {
         rule("r_low_all", [c1, c2]), // still conjunctive — still shadowed
       ],
     });
-    // r_low_all is flagged twice — by r_high AND by r_low_any (a match:any
-    // higher rule fires whenever every one of its conditions holds, so it
-    // shadows a conjunctive lower with a superset of its conditions).
-    expect(shadowedRules(doc).map((f) => f.ruleId)).toEqual(["r_low_all", "r_low_all"]);
+    // Logic step B12: the shopper-set walk reports ONE finding per shadowed
+    // rule (it used to emit one per pairwise subset hit — r_low_all twice),
+    // naming the single earlier rule that catches everyone first.
+    expect(shadowedRules(doc).map((f) => f.ruleId)).toEqual(["r_low_all"]);
+    expect(shadowedRules(doc)[0]!.message).toMatch(/^Rule 1 always fires first/);
   });
 
   it("V7: match:any rules are skipped — one dead group no longer kills the rule (§11)", () => {

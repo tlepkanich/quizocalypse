@@ -121,6 +121,28 @@ export function insertContentRelative(
   return spliceQuestion(doc, node, refId, where);
 }
 
+/** The last question reached from the intro by following only handle-less
+ *  (default) edges; null when the path has no question (or no intro). */
+function mainPathLastQuestion(doc: QuizDoc): string | null {
+  const intro = doc.nodes.find((n) => n.type === "intro");
+  if (!intro) return null;
+  const byId = new Map(doc.nodes.map((n) => [n.id, n] as const));
+  const seen = new Set<string>([intro.id]);
+  let last: string | null = null;
+  let cur = intro.id;
+  for (;;) {
+    const from = cur;
+    const out = doc.edges.find((e) => e.source === from && !e.source_handle);
+    const next = out ? byId.get(out.target) : undefined;
+    if (!next || seen.has(next.id)) break;
+    if (next.type === "result" || next.type === "end" || next.type === "branch") break;
+    seen.add(next.id);
+    if (next.type === "question") last = next.id;
+    cur = next.id;
+  }
+  return last;
+}
+
 // Question-Builder spec (Question Bank) — append a pre-built library question to the
 // END of the spine (after the last question, before the result), with fresh ids +
 // edge handles. Mappings start empty; the merchant maps in the right panel. Pure.
@@ -130,10 +152,25 @@ export function appendBankQuestion(
     text: string;
     question_type: Extract<QuizNodeDoc, { type: "question" }>["data"]["question_type"];
     answers: string[];
+    /** Logic step (handoff "Add a question", Five point): the 1–5 preset the
+     *  type controls read as "Five-point scale". Absent = today's node. */
+    scale_config?: { min: number; max: number };
   },
 ): QuizDoc {
   const { head, run } = straightThroughRun(doc);
-  const anchor = run.length ? run[run.length - 1]! : head;
+  // Logic step redesign (handoff "Where the new question lands"): on a
+  // decider doc the straight-through run stops at the first per-answer
+  // route, which used to land the new question in FRONT of that question.
+  // Decider docs anchor after the last question on the MAIN path (the
+  // handle-less edges from the intro); every per-answer route is kept.
+  // Legacy docs keep today's anchor (dual-model rule).
+  // P1-11: only when that question has a default out-edge to splice into.
+  // A question that routes every answer has none, so the new node would get
+  // no out-edge (a dead end); fall back to the straight-through anchor.
+  const mainLast = doc.logic_model === "decider" ? mainPathLastQuestion(doc) : null;
+  const mainAnchor =
+    mainLast && doc.edges.some((e) => e.source === mainLast && !e.source_handle) ? mainLast : null;
+  const anchor = mainAnchor ?? (run.length ? run[run.length - 1]! : head);
   const node: QuizNodeDoc = {
     id: uid("q"),
     type: "question",
@@ -143,6 +180,7 @@ export function appendBankQuestion(
       question_type: entry.question_type,
       required: true,
       show_preview_after: false,
+      ...(entry.scale_config ? { scale_config: { ...entry.scale_config } } : {}),
       answers: entry.answers.slice(0, 12).map((t) => ({
         id: uid("a"),
         text: t.slice(0, 60),
@@ -590,4 +628,138 @@ export function convertQuestionToMessage(doc: QuizDoc, nodeId: string): QuizDoc 
     ),
     edges,
   };
+}
+
+// ── Logic step redesign (Phase 1) — inline text + question shape ───────────
+// Product caps, NOT schema rules (existing docs may hold longer text; a
+// schema max would break their parse). The mutations enforce them. Each is
+// logic_model-gated (a legacy doc comes back as the same object) and returns
+// its input when it refuses or when nothing changes, so callers can test
+// `next === prev` and skip the commit + save pill.
+export const QUESTION_TEXT_MAX = 150;
+export const ANSWER_TEXT_MAX = 60;
+export const SCALE_LABEL_MAX = 40;
+
+/** Collapse whitespace runs, trim, clamp to `max` (then trim the cut edge). */
+function tidyText(text: string, max: number): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, max).trimEnd();
+}
+
+type QuestionDataDoc = Extract<QuizNodeDoc, { type: "question" }>["data"];
+
+/** Apply `fn` to one question node's data; `fn` returning its input (or the
+ *  node missing / not a question) returns the doc unchanged. */
+function patchQuestionData(
+  doc: QuizDoc,
+  nodeId: string,
+  fn: (data: QuestionDataDoc) => QuestionDataDoc,
+): QuizDoc {
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node || node.type !== "question") return doc;
+  const data = fn(node.data);
+  if (data === node.data) return doc;
+  return {
+    ...doc,
+    nodes: doc.nodes.map((n) =>
+      n.id === nodeId && n.type === "question" ? { ...n, data } : n,
+    ),
+  };
+}
+
+/** The question title: whitespace collapsed, trimmed, clamped to 150. An
+ *  empty or unchanged result returns the input doc (the caller restores the
+ *  field's focus-time text). */
+export function setQuestionText(doc: QuizDoc, nodeId: string, text: string): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const next = tidyText(text, QUESTION_TEXT_MAX);
+  if (!next) return doc;
+  return patchQuestionData(doc, nodeId, (data) =>
+    data.text === next ? data : { ...data, text: next },
+  );
+}
+
+/** One answer's text: same rules as setQuestionText, clamped to 60. */
+export function setAnswerText(
+  doc: QuizDoc,
+  nodeId: string,
+  answerId: string,
+  text: string,
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  const next = tidyText(text, ANSWER_TEXT_MAX);
+  if (!next) return doc;
+  return patchQuestionData(doc, nodeId, (data) => {
+    const answer = data.answers.find((a) => a.id === answerId);
+    if (!answer || answer.text === next) return data;
+    return {
+      ...data,
+      answers: data.answers.map((a) => (a.id === answerId ? { ...a, text: next } : a)),
+    };
+  });
+}
+
+/** Multi-select pick bounds. Integers clamped to 1 ≤ min ≤ max ≤ answer
+ *  count. Stored SPARSE: `min_selections` only when above 1 and
+ *  `max_selections` only when below the answer count (absent is the runtime
+ *  default: at least one pick, no cap), so an answer added later is never
+ *  silently capped. Non-multi-select questions and non-finite input refuse. */
+export function setSelectionBounds(
+  doc: QuizDoc,
+  nodeId: string,
+  min: number,
+  max: number,
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return doc;
+  return patchQuestionData(doc, nodeId, (data) => {
+    if (data.question_type !== "multi_select") return data;
+    const count = data.answers.length;
+    const lo = Math.max(1, Math.min(count, Math.round(min)));
+    const hi = Math.max(lo, Math.min(count, Math.round(max)));
+    const nextMin = lo > 1 ? lo : undefined;
+    const nextMax = hi < count ? hi : undefined;
+    if (data.min_selections === nextMin && data.max_selections === nextMax) return data;
+    const { min_selections: _min, max_selections: _max, ...rest } = data;
+    return {
+      ...rest,
+      ...(nextMin !== undefined ? { min_selections: nextMin } : {}),
+      ...(nextMax !== undefined ? { max_selections: nextMax } : {}),
+    };
+  });
+}
+
+/** Scale end labels (rating / slider) → scale_config.endpoint_label_min /
+ *  _max. `undefined` leaves that end alone; a string is collapsed, trimmed
+ *  and clamped to 40, and an empty one deletes the key. Other scale_config
+ *  keys are kept; a scale_config left empty is removed. */
+export function setScaleEndLabels(
+  doc: QuizDoc,
+  nodeId: string,
+  lo: string | undefined,
+  hi: string | undefined,
+): QuizDoc {
+  if (doc.logic_model !== "decider") return doc;
+  return patchQuestionData(doc, nodeId, (data) => {
+    if (data.question_type !== "rating" && data.question_type !== "slider") return data;
+    const cfg = { ...(data.scale_config ?? {}) };
+    const apply = (
+      key: "endpoint_label_min" | "endpoint_label_max",
+      raw: string | undefined,
+    ) => {
+      if (raw === undefined) return;
+      const v = tidyText(raw, SCALE_LABEL_MAX);
+      if (v) cfg[key] = v;
+      else delete cfg[key];
+    };
+    apply("endpoint_label_min", lo);
+    apply("endpoint_label_max", hi);
+    const before = data.scale_config ?? {};
+    if (
+      before.endpoint_label_min === cfg.endpoint_label_min &&
+      before.endpoint_label_max === cfg.endpoint_label_max
+    )
+      return data;
+    const { scale_config: _sc, ...rest } = data;
+    return Object.keys(cfg).length > 0 ? { ...rest, scale_config: cfg } : rest;
+  });
 }
