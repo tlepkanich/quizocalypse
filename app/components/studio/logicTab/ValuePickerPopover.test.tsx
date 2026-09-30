@@ -144,3 +144,37 @@ it("a stored Keeps everything opens ticked; the search hides the row and matches
   expect(document.querySelector("[data-vp-keeps]")).toBeNull();
   expect(valueBoxes()).toHaveLength(3);
 });
+
+it("staged picks follow the attribute, not its position, when the readout changes while open", () => {
+  const answer = Answer.parse({ id: "a", text: "A", edge_handle_id: "h", tags: [] });
+  const onApply = vi.fn();
+  const color = {
+    ...readout.attributes[0]!,
+    name: "Color",
+    primary: { kind: "tag_family" as const, key: "color" },
+    members: [{ kind: "tag_family" as const, key: "color" }],
+    values: [{ value: "red", count: 1 }],
+  };
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  const render = (r: AttributeReadout) =>
+    act(() =>
+      root!.render(
+        createElement(ValuePickerPopover, {
+          trigger: createElement("button", null, "Choose"),
+          answer,
+          siblingAnswers: [answer],
+          readout: r,
+          productIndex: [],
+          onApply,
+        }),
+      ),
+    );
+  render(readout);
+  click("Choose");
+  act(() => valueBoxes()[0]!.click()); // Material · wood
+  render({ ...readout, attributes: [color, ...readout.attributes] });
+  click("Done");
+  expect(onApply.mock.calls[0]![0]).toEqual({ tags: ["material:wood"] });
+});

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { DecisionRule, Quiz } from "../../../lib/quizSchema";
 import type { OrderedQuestion } from "../../../lib/questionOrder";
@@ -155,32 +155,30 @@ export function PasteRulesModal({
         className="qz-lm qz-lm-paste"
         role="dialog"
         aria-modal="true"
-        aria-label="Paste your recommendation rules"
+        aria-label={PASTE_COPY.title}
       >
         <header className="qz-lm-h">
-          <h2>Paste your recommendation rules</h2>
-          <button type="button" className="qz-lm-close" aria-label="Close" onClick={onClose}>
+          <h2>{PASTE_COPY.title}</h2>
+          <button type="button" className="qz-lm-close" aria-label={PASTE_COPY.close} onClick={onClose}>
             ×
           </button>
         </header>
 
         <div className="qz-lm-b">
           <p id="paste-rules-help" className="qz-lm-pintro">
-            Tell us who should see what. Use one rule per line in the format
-            below, with the answer and result names from your quiz. We’ll show
-            you what matches before you add anything.
+            {PASTE_COPY.intro}
           </p>
           <div className="qz-lm-pastegrid">
             {/* ── left: the box ── */}
             <div>
-              <div className="qz-lm-plabel">Your rules</div>
+              <div className="qz-lm-plabel">{PASTE_COPY.yourRules}</div>
               <div className="qz-lm-ptawrap">
                 <textarea
                   className="qz-lm-pta"
                   value={text}
                   rows={6}
                   onChange={(e) => setText(e.target.value)}
-                  aria-label="Rules, one per line"
+                  aria-label={PASTE_COPY.boxLabel}
                   aria-describedby="paste-rules-help"
                 />
                 {text.length === 0 ? (
@@ -188,33 +186,33 @@ export function PasteRulesModal({
                   // grammar's shape until something is typed.
                   <div className="qz-lm-ghost" aria-hidden>
                     <div className="qz-lm-gline">
-                      <span className="qz-lm-pk">when</span>{" "}
-                      <span className="qz-lm-pa">answer</span>{" "}
-                      <span className="qz-lm-pk">then</span>{" "}
-                      <span className="qz-lm-pv">what happens</span>{" "}
-                      <span className="qz-lm-pr">result</span>
+                      <span className="qz-lm-pk">{PASTE_COPY.when}</span>{" "}
+                      <span className="qz-lm-pa">{PASTE_COPY.answer}</span>{" "}
+                      <span className="qz-lm-pk">{PASTE_COPY.then}</span>{" "}
+                      <span className="qz-lm-pv">{PASTE_COPY.whatHappens}</span>{" "}
+                      <span className="qz-lm-pr">{PASTE_COPY.result}</span>
                     </div>
                     <div className="qz-lm-gline">
-                      <span className="qz-lm-pk">when</span>{" "}
-                      <span className="qz-lm-pa">answer</span>{" "}
-                      <span className="qz-lm-pk">and</span>{" "}
-                      <span className="qz-lm-pa">answer</span>{" "}
-                      <span className="qz-lm-pk">then</span>{" "}
-                      <span className="qz-lm-pv">what happens</span>{" "}
-                      <span className="qz-lm-pr">result</span>
+                      <span className="qz-lm-pk">{PASTE_COPY.when}</span>{" "}
+                      <span className="qz-lm-pa">{PASTE_COPY.answer}</span>{" "}
+                      <span className="qz-lm-pk">{PASTE_COPY.and}</span>{" "}
+                      <span className="qz-lm-pa">{PASTE_COPY.answer}</span>{" "}
+                      <span className="qz-lm-pk">{PASTE_COPY.then}</span>{" "}
+                      <span className="qz-lm-pv">{PASTE_COPY.whatHappens}</span>{" "}
+                      <span className="qz-lm-pr">{PASTE_COPY.result}</span>
                     </div>
                   </div>
                 ) : null}
               </div>
               <div className="qz-lm-pkey">
                 <span>
-                  <span className="qz-lm-pa">answer</span> what the shopper picked
+                  <span className="qz-lm-pa">{PASTE_COPY.answer}</span> {PASTE_COPY.keyAnswer}
                 </span>
                 <span>
-                  <span className="qz-lm-pv">what happens</span> show · pin · hide
+                  <span className="qz-lm-pv">{PASTE_COPY.whatHappens}</span> {PASTE_COPY.keyVerb}
                 </span>
                 <span>
-                  <span className="qz-lm-pr">result</span> from your recommendations
+                  <span className="qz-lm-pr">{PASTE_COPY.result}</span> {PASTE_COPY.keyResult}
                 </span>
               </div>
             </div>
@@ -222,61 +220,33 @@ export function PasteRulesModal({
             {/* ── right: the format (empty) / what we understood (typed) ── */}
             {!hasText ? (
               <div>
-                <div className="qz-lm-plabel">How to write a rule</div>
+                <div className="qz-lm-plabel">{PASTE_COPY.howTo}</div>
                 <div className="qz-lm-fmtcard">
-                  <div className="qz-lm-fmtline">One rule per line</div>
-                  <div className="qz-lm-exline">
-                    <span className="qz-lm-pk">when</span>{" "}
-                    <span className="qz-lm-pa">A necklace</span>{" "}
-                    <span className="qz-lm-pk">then</span>{" "}
-                    <span className="qz-lm-pv">pin</span>{" "}
-                    <span className="qz-lm-pr">Gift cards</span>
-                  </div>
-                  <div className="qz-lm-exline">
-                    <span className="qz-lm-pk">when</span>{" "}
-                    <span className="qz-lm-pa">A ring</span>{" "}
-                    <span className="qz-lm-pk">or</span>{" "}
-                    <span className="qz-lm-pa">A bracelet</span>{" "}
-                    <span className="qz-lm-pk">then</span>{" "}
-                    <span className="qz-lm-pv">pin</span>{" "}
-                    <span className="qz-lm-pr">Gift cards</span>
-                  </div>
-                  <div className="qz-lm-exline">
-                    <span className="qz-lm-pk">when</span>{" "}
-                    <span className="qz-lm-pa">Warm golds</span>{" "}
-                    <span className="qz-lm-pk">and</span>{" "}
-                    <span className="qz-lm-pa">A necklace</span>{" "}
-                    <span className="qz-lm-pk">then</span>{" "}
-                    <span className="qz-lm-pv">show</span>{" "}
-                    <span className="qz-lm-pr">Necklace</span>
-                  </div>
-                  <div className="qz-lm-exline">
-                    <span className="qz-lm-pk">when</span>{" "}
-                    <span className="qz-lm-pa">A necklace</span>{" "}
-                    <span className="qz-lm-pk">or</span>{" "}
-                    <span className="qz-lm-pa">A ring</span>{" "}
-                    <span className="qz-lm-pk">and</span>{" "}
-                    <span className="qz-lm-pa">Warm golds</span>{" "}
-                    <span className="qz-lm-pk">or</span>{" "}
-                    <span className="qz-lm-pa">Silver tones</span>{" "}
-                    <span className="qz-lm-pk">then</span>{" "}
-                    <span className="qz-lm-pv">pin</span>{" "}
-                    <span className="qz-lm-pr">Gift cards</span>
-                  </div>
+                  <div className="qz-lm-fmtline">{PASTE_COPY.onePerLine}</div>
+                  {PASTE_COPY.examples.map((ex, i) => (
+                    <div key={i} className="qz-lm-exline">
+                      {ex.map(([kind, word], j) => (
+                        <Fragment key={j}>
+                          {j > 0 ? " " : null}
+                          <span className={`qz-lm-${kind}`}>{word}</span>
+                        </Fragment>
+                      ))}
+                    </div>
+                  ))}
                 </div>
                 {seeds.length > 0 ? (
                   <div className="qz-lm-fmtcard">
-                    <div className="qz-lm-fmtline">Start with your quiz’s answers</div>
+                    <div className="qz-lm-fmtline">{PASTE_COPY.seedsTitle}</div>
                     {seeds.map((s) => (
                       <div key={s.line} className="qz-lm-fmtex">
-                        when{" "}
+                        {PASTE_COPY.when}{" "}
                         {s.answers.map((a, i) => (
                           <span key={i}>
-                            {i > 0 ? " and " : ""}
+                            {i > 0 ? ` ${PASTE_COPY.and} ` : ""}
                             <b>{a}</b>
                           </span>
                         ))}{" "}
-                        then <b>{s.verb}</b> {s.target}
+                        {PASTE_COPY.then} <b>{s.verb}</b> {s.target}
                       </div>
                     ))}
                     <button
@@ -284,23 +254,21 @@ export function PasteRulesModal({
                       className="qz-btn qz-lm-seedbtn"
                       onClick={() => setText(seeds.map((s) => s.line).join("\n"))}
                     >
-                      Try these examples
+                      {PASTE_COPY.tryExamples}
                     </button>
                   </div>
                 ) : null}
               </div>
             ) : (
               <div>
-                <div className="qz-lm-plabel">Review your rules</div>
+                <div className="qz-lm-plabel">{PASTE_COPY.review}</div>
                 <div
                   className={`qz-lm-psum ${badLines.length === 0 ? "is-ok" : "is-warn"}`}
                   aria-live="polite"
                 >
                   {badLines.length === 0 ? "✓ " : ""}
-                  <b>
-                    {okLines.length} of {lines.length}
-                  </b>{" "}
-                  {lines.length === 1 ? "line" : "lines"} matched your quiz.
+                  <b>{PASTE_COPY.matchedCount(okLines.length, lines.length)}</b>{" "}
+                  {PASTE_COPY.matchedTail(lines.length)}
                 </div>
                 <div className="qz-lm-presults">
                   {lines.map((l) =>
@@ -311,7 +279,7 @@ export function PasteRulesModal({
                         </span>
                         <span className="qz-lm-pb">
                           <span className="qz-lm-pl2">
-                            When{" "}
+                            {PASTE_COPY.whenCap}{" "}
                             {l.segments
                               .filter((s) => s.kind === "answer" || s.kind === "connector")
                               .map((s, i) =>
@@ -325,8 +293,7 @@ export function PasteRulesModal({
                             {l.segments.find((s) => s.kind === "target")?.text}
                           </span>
                           <span className="qz-lm-pe">
-                            Acts on {catById.get(l.targetId)?.productIds.length ?? 0} of{" "}
-                            {totalProducts} products
+                            {PASTE_COPY.actsOn(catById.get(l.targetId)?.productIds.length ?? 0, totalProducts)}
                           </span>
                         </span>
                       </div>
@@ -347,11 +314,7 @@ export function PasteRulesModal({
                     (case + spacing), never the partial-text matching it
                     doesn't do. */}
                 <div className="qz-lm-pguar">
-                  Answer and result names must match your quiz. Capitalisation
-                  and extra spaces don’t matter.{" "}
-                  <b>
-                    Unmatched lines won’t be added. Edit them here to try again.
-                  </b>
+                  {PASTE_COPY.guarantee} <b>{PASTE_COPY.guaranteeBold}</b>
                 </div>
               </div>
             )}
@@ -359,10 +322,10 @@ export function PasteRulesModal({
         </div>
 
         <footer className="qz-lm-f">
-          <span>Nothing is added until you confirm. You can edit rules later.</span>
+          <span>{PASTE_COPY.footer}</span>
           <span className="qz-lm-fright">
             <button type="button" className="qz-btn" onClick={onClose}>
-              Cancel
+              {PASTE_COPY.cancel}
             </button>
             <button
               type="button"
@@ -370,9 +333,7 @@ export function PasteRulesModal({
               disabled={okLines.length === 0}
               onClick={handleCreate}
             >
-              {!hasText
-                ? "Add rules"
-                : `Add ${okLines.length} ${okLines.length === 1 ? "rule" : "rules"}`}
+              {!hasText ? PASTE_COPY.addNone : PASTE_COPY.add(okLines.length)}
             </button>
           </span>
         </footer>

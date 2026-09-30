@@ -576,8 +576,8 @@ export function narrowAppliedToast(
   const q = questionText.replace(/\s*\?\s*$/, "");
   const name = fieldSlotLabel(field);
   return unmatched > 0
-    ? `"${q}" now narrows by ${name} — map ${unmatched} answer${unmatched === 1 ? "" : "s"} on the Logic step`
-    : `"${q}" now narrows by ${name} — ${mapped} answer${mapped === 1 ? "" : "s"} mapped, check them`;
+    ? `"${q}" now narrows by ${name}. Map ${unmatched} answer${unmatched === 1 ? "" : "s"} on the Logic step`
+    : `"${q}" now narrows by ${name}. ${mapped} answer${mapped === 1 ? "" : "s"} mapped, check them`;
 }
 
 // ════════════════════════════════════════════════════════════════════════════

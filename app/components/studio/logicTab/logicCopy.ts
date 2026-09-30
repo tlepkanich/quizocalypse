@@ -246,7 +246,7 @@ export const RULE_WINDOW_COPY = {
   saved: "Rule saved",
   addedPicked: "Added and picked for this rule",
   gone: "Undone. The rule you had open is gone, so its window closed",
-  goneOnSave: "That rule was removed, so nothing was saved.",
+  goneOnSave: "That rule was removed, so nothing was saved",
   goneOnDelete: "That rule was already removed",
   goneOnCopy: "That rule was removed, so there was nothing to copy",
   copied: (copyN: number, origN: number) => `Rule ${copyN} is a copy of rule ${origN} · you are editing the copy`,
@@ -295,9 +295,51 @@ export const ADD_RECS_COPY = {
 
 // ── Paste rules (agent E; D13) ──
 
+type PasteWord = readonly ["pk" | "pa" | "pv" | "pr", string];
+
 export const PASTE_COPY = {
   created: (n: number) =>
     `${n} rule${n === 1 ? "" : "s"} created. Rules run top to bottom, first match applies`,
+  title: "Paste your recommendation rules",
+  close: "Close",
+  intro:
+    "Tell us who should see what. Use one rule per line in the format below, with the answer and result names from your quiz. We’ll show you what matches before you add anything.",
+  yourRules: "Your rules",
+  boxLabel: "Rules, one per line",
+  when: "when",
+  whenCap: "When",
+  then: "then",
+  and: "and",
+  answer: "answer",
+  whatHappens: "what happens",
+  result: "result",
+  keyAnswer: "what the shopper picked",
+  keyVerb: "show · pin · hide",
+  keyResult: "from your recommendations",
+  howTo: "How to write a rule",
+  onePerLine: "One rule per line",
+  /** The format card's worked lines: [grammar part, word]. */
+  examples: [
+    [["pk", "when"], ["pa", "A necklace"], ["pk", "then"], ["pv", "pin"], ["pr", "Gift cards"]],
+    [["pk", "when"], ["pa", "A ring"], ["pk", "or"], ["pa", "A bracelet"], ["pk", "then"], ["pv", "pin"], ["pr", "Gift cards"]],
+    [["pk", "when"], ["pa", "Warm golds"], ["pk", "and"], ["pa", "A necklace"], ["pk", "then"], ["pv", "show"], ["pr", "Necklace"]],
+    [
+      ["pk", "when"], ["pa", "A necklace"], ["pk", "or"], ["pa", "A ring"], ["pk", "and"], ["pa", "Warm golds"],
+      ["pk", "or"], ["pa", "Silver tones"], ["pk", "then"], ["pv", "pin"], ["pr", "Gift cards"],
+    ],
+  ] as ReadonlyArray<ReadonlyArray<PasteWord>>,
+  seedsTitle: "Start with your quiz’s answers",
+  tryExamples: "Try these examples",
+  review: "Review your rules",
+  matchedCount: (ok: number, total: number) => `${ok} of ${total}`,
+  matchedTail: (total: number) => `${total === 1 ? "line" : "lines"} matched your quiz.`,
+  actsOn: (n: number, total: number) => `Acts on ${n} of ${total} products`,
+  guarantee: "Answer and result names must match your quiz. Capitalisation and extra spaces don’t matter.",
+  guaranteeBold: "Unmatched lines won’t be added. Edit them here to try again.",
+  footer: "Nothing is added until you confirm. You can edit rules later.",
+  cancel: "Cancel",
+  addNone: "Add rules",
+  add: (n: number) => `Add ${n} ${n === 1 ? "rule" : "rules"}`,
 };
 
 // ── Table view · Export · Import (agent F; mock sheets, tableHTML,
@@ -312,8 +354,10 @@ export const SHEET_COPY = {
   rulesCols: ["#", "What happens", "Recommendations", "When they answer"],
   answersCols: ["Q", "Question", "Type", "Answer", "What it does", "Shows / keeps", "Then"],
   recsCols: ["Recommendation", "Products", "Shown by rules", "Status"],
-  ruleIdCol: "Rule ID (don't edit)",
-  answerIdCol: "Answer ID (don't edit)",
+  /** Mock xcols. Import reads any header that starts "Rule ID" / "Answer
+   *  ID", so files exported with the older "(don't edit)" headers still import. */
+  ruleIdCol: "Rule ID",
+  answerIdCol: "Answer ID",
   rowActions: "Row actions",
   nothingYet: "Nothing yet",
   none: "(none)",
@@ -384,6 +428,8 @@ export const IMPORT_COPY = {
   tooBig: "That file is too big to be a quiz logic sheet",
   invalid: "Couldn't apply that file. Nothing changed",
   nothingChanged: "Nothing changed",
+  /** Handoff §10: an import Undo that no longer changes anything. */
+  undoStale: "Can't undo the import: the quiz changed after it",
   imported: (n: number) => `Imported ${n} change${n === 1 ? "" : "s"}`,
   skipped: (n: number) => `${n} skipped`,
   more: (n: number) => `+${n} more`,
@@ -430,8 +476,6 @@ export const IMPORT_COPY = {
   infoValue: (q: number) => `Q${q} is Info only, so it doesn't show or keep anything`,
   badThen: (q: number, v: string) => `Q${q}: “${v}” isn't somewhere this answer can go`,
   forwardOnly: (text: string, q: number) => `“${text}” on Q${q}: routes only go forward`,
-  /** Handoff §10: an import Undo that no longer changes anything. */
-  undoStale: "Can't undo the import: the quiz changed after it",
   // Rules sheet reasons (each follows "Rules row N: ").
   rowPrefix: (row: number) => `Rules row ${row}`,
   unknownRuleId: "this rule ID isn't in the quiz. Clear it to add the row as a new rule",
@@ -514,6 +558,7 @@ export const TRAY_COPY = {
 export const PICKER_COPY = {
   title: CHOOSE_A_RESULT,
   search: "Search recommendations",
+  kindLabel: "Kind",
   fresh: (n: number) => `No answer shows this yet · ${n} product${n === 1 ? "" : "s"}`,
   used: (n: number) => `Already on an answer · ${n} product${n === 1 ? "" : "s"}`,
   nothingMatches: "Nothing matches.",

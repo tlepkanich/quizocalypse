@@ -14,7 +14,6 @@ import { CreateRuleModal, type CreateRuleFlow } from "./CreateRuleModal";
 import { LogicQuestionWidget, type PaneFocusRequest } from "./LogicQuestionWidget";
 import { PasteRulesModal } from "./PasteRulesModal";
 import { AddQuestionDialog } from "../AddQuestionDialog";
-import { QuestionWindow } from "./QuestionWindow";
 import { narrowFieldOptions } from "./logicTabFields";
 import { LogicHeader, type LogicView } from "./LogicHeader";
 import { RulesList } from "./RulesList";
@@ -161,8 +160,6 @@ export function LogicTabCard({
   const [addOpen, setAddOpen] = useState(false);
   const [addRecsOpen, setAddRecsOpen] = useState(false);
   const [styleMenuOpen, setStyleMenuOpen] = useState(false);
-  // The question window stays mounted but inert (no door opens it now).
-  const [qwin, setQwin] = useState<{ nodeId: string; answerId: string | null } | null>(null);
   const docRef = useRef(doc);
   docRef.current = doc;
   const getLatestDoc = useCallback(() => docRef.current, []);
@@ -251,19 +248,16 @@ export function LogicTabCard({
 
   // ── doors ────────────────────────────────────────────────────────────────
   const openCreate = useCallback((targetIds?: string[]) => {
-    setQwin(null);
     setEditRuleId(null);
     setCreateTargets(targetIds && targetIds.length ? targetIds : null);
     setCreateOpen(true);
   }, []);
   const openEdit = useCallback((ruleId: string) => {
-    setQwin(null);
     setCreateTargets(null);
     setEditRuleId(ruleId);
     setCreateOpen(true);
   }, []);
   const openPaste = useCallback(() => {
-    setQwin(null);
     setCreateOpen(false);
     setPasteOpen(true);
   }, []);
@@ -315,7 +309,7 @@ export function LogicTabCard({
             ...(req.answerId ? { answerId: req.answerId } : {}),
           });
         pendingScroll.current = () =>
-          scrollTo(`.qz-lw-rail [data-node-id="${CSS.escape(req.id)}"]`);
+          scrollTo(`.qz-lg-rail [data-node-id="${CSS.escape(req.id)}"]`);
         break;
       case "rule":
         flash([req.id]);
@@ -336,7 +330,7 @@ export function LogicTabCard({
         } else if (req.questionId) {
           const qid = req.questionId;
           setSelectedId(qid);
-          pendingScroll.current = () => scrollTo(`.qz-lw-rail [data-node-id="${CSS.escape(qid)}"]`);
+          pendingScroll.current = () => scrollTo(`.qz-lg-rail [data-node-id="${CSS.escape(qid)}"]`);
         }
         break;
       case "style":
@@ -636,25 +630,6 @@ export function LogicTabCard({
           onClose={() => setAddRecsOpen(false)}
         />
       ) : null}
-      {commit && qwin
-        ? (() => {
-            const wq = questions.find((x) => x.node.id === qwin.nodeId);
-            return wq ? (
-              <QuestionWindow
-                key={`${qwin.nodeId}:${qwin.answerId ?? ""}`}
-                doc={doc}
-                q={wq}
-                questions={questions}
-                categories={allCategories}
-                collections={collections}
-                productIndex={productIndex}
-                initialAnswerId={qwin.answerId}
-                onClose={() => setQwin(null)}
-                commit={commit}
-              />
-            ) : null;
-          })()
-        : null}
     </div>
   );
 }

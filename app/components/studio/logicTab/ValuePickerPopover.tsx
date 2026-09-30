@@ -75,6 +75,19 @@ const TABS: Tab[] = ["all", "tag_family", "metafield", "variant_option", "produc
 
 /** The group heading (mock .vpg): "Tag · Material", "Metafield · Skin type",
  *  "Variant · Size", "Product type". */
+/** An attribute's identity: its primary source (kind + key). */
+function attrId(attr: CatalogAttribute): string {
+  return `${attr.primary.kind}:${attr.primary.key}`;
+}
+/** A staged pick: attribute identity + value ("\n" never occurs in either). */
+function pickKey(attr: CatalogAttribute, value: string): string {
+  return `${attrId(attr)}\n${value}`;
+}
+function splitPickKey(key: string): { id: string; value: string } {
+  const at = key.indexOf("\n");
+  return { id: key.slice(0, at), value: key.slice(at + 1) };
+}
+
 function groupLabel(attr: CatalogAttribute): string {
   const kind = attr.primary.kind;
   if (kind === "product_type") return VALUE_COPY.group.product_type;
@@ -117,12 +130,15 @@ export function ValuePickerPopover({
   const [tab, setTab] = useState<Tab>("all");
   // The › drill-in: the products carrying one value, in place (D19).
   const [drill, setDrill] = useState<{ attr: CatalogAttribute; value: string } | null>(null);
-  // Selection keyed `${attrIndex} ${value}` (the same value can exist
-  // under two attributes — "silver" as Material and as Color).
+  // Selection keyed by the attribute's IDENTITY and the value (the same
+  // value can exist under two attributes — "silver" as Material and as
+  // Color). Never by position: a readout rebuilt while the picker is open
+  // must not move a staged pick onto another attribute.
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [keepsAll, setKeepsAll] = useState(false);
 
   const attributes = readout.attributes;
+  const attrById = useMemo(() => new Map(attributes.map((a) => [attrId(a), a])), [attributes]);
 
   // Exact baked key casing for the write path (see the header note).
   const exactKeys = useMemo(() => {
@@ -145,11 +161,11 @@ export function ValuePickerPopover({
   useEffect(() => {
     if (!open) return;
     const next = new Set<string>();
-    attributes.forEach((attr, ai) => {
+    for (const attr of attributes) {
       for (const v of attr.values) {
-        if (answerHasAttrValue(answer, attr, v.value)) next.add(`${ai} ${v.value}`);
+        if (answerHasAttrValue(answer, attr, v.value)) next.add(pickKey(attr, v.value));
       }
-    });
+    }
     setPicked(next);
     setKeepsAll(answer.no_preference === true);
     setSearch("");
@@ -210,7 +226,7 @@ export function ValuePickerPopover({
     setKeepsAll(false);
     setPicked((prev) => {
       const next = new Set(prev);
-      const key = `${ai} ${value}`;
+      const key = pickKey(attributes[ai]!, value);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
@@ -222,7 +238,7 @@ export function ValuePickerPopover({
     setKeepsAll(false);
     setPicked((prev) => {
       const next = new Set(prev);
-      const keys = values.map((v) => `${ai} ${v.value}`);
+      const keys = values.map((v) => pickKey(attributes[ai]!, v.value));
       const allOn = keys.every((k) => next.has(k));
       for (const k of keys) {
         if (allOn) next.delete(k);
@@ -242,15 +258,13 @@ export function ValuePickerPopover({
   const union = useMemo(() => {
     const ids = new Set<string>();
     for (const key of picked) {
-      const sep = key.indexOf(" ");
-      const ai = Number(key.slice(0, sep));
-      const value = key.slice(sep + 1);
-      const attr = attributes[ai];
+      const { id, value } = splitPickKey(key);
+      const attr = attrById.get(id);
       if (!attr) continue;
-      for (const id of attributeValueProductIds(productIndex, attr, value)) ids.add(id);
+      for (const pid of attributeValueProductIds(productIndex, attr, value)) ids.add(pid);
     }
     return ids.size;
-  }, [picked, attributes, productIndex]);
+  }, [picked, attrById, productIndex]);
 
   const buildPayload = (): FilterValueSet => {
     if (keepsAll) return { tags: [], no_preference: true };
@@ -285,10 +299,8 @@ export function ValuePickerPopover({
     }
 
     for (const key of picked) {
-      const sep = key.indexOf(" ");
-      const ai = Number(key.slice(0, sep));
-      const value = key.slice(sep + 1);
-      const attr = attributes[ai];
+      const { id, value } = splitPickKey(key);
+      const attr = attrById.get(id);
       if (!attr) continue;
       for (const m of attr.members) {
         if (m.kind === "tag_family") {
@@ -395,7 +407,7 @@ export function ValuePickerPopover({
                 </p>
               ) : (
                 visibleGroups.map(({ ai, attr, values }) => {
-                  const allOn = values.every((v) => picked.has(`${ai} ${v.value}`));
+                  const allOn = values.every((v) => picked.has(pickKey(attr, v.value)));
                   return (
                     <div key={attr.name + String(ai)} role="group" aria-label={groupLabel(attr)}>
                       <div className="qz-lg-vpg">
@@ -409,7 +421,7 @@ export function ValuePickerPopover({
                         </button>
                       </div>
                       {values.map((v) => {
-                        const on = picked.has(`${ai} ${v.value}`);
+                        const on = picked.has(pickKey(attr, v.value));
                         return (
                           <div key={v.value} className="qz-lg-vprow">
                             <button

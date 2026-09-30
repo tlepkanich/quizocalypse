@@ -914,7 +914,7 @@ export function PicksPicker({
             ) : null}
             {kinds.length > 1 ? (
               <div className="qz-lg-vptools">
-                <div className="qz-lg-vptabs" role="group" aria-label="Kind">
+                <div className="qz-lg-vptabs" role="group" aria-label={PICKER_COPY.kindLabel}>
                   <button
                     type="button"
                     aria-pressed={kind === ""}

@@ -372,10 +372,10 @@ describe("QRTZ-H5 — applyNarrowField (the ONE apply seam behind the dialog)", 
 
   it("narrowAppliedToast keeps H2's exact copy on both branches", () => {
     expect(narrowAppliedToast("Which fit?", "mf:custom.gender", 1, 2)).toBe(
-      '"Which fit" now narrows by gender — map 2 answers on the Logic step',
+      '"Which fit" now narrows by gender. Map 2 answers on the Logic step',
     );
     expect(narrowAppliedToast("Which fit?", "tag:fit", 2, 0)).toBe(
-      '"Which fit" now narrows by fit — 2 answers mapped, check them',
+      '"Which fit" now narrows by fit. 2 answers mapped, check them',
     );
     expect(fieldSlotLabel("ptype")).toBe("Product type");
   });

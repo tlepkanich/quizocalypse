@@ -76,7 +76,7 @@ describe("serializing", () => {
     const sheets = logicSheets(doc(), ctxFor("attributes"));
     expect(sheets.map((s) => s.name)).toEqual(["Rules", "Answers"]);
     const rules = sheets[0]!;
-    expect(rules.fileCols).toEqual(["#", "What happens", "Recommendations", "When they answer", "Rule ID (don't edit)"]);
+    expect(rules.fileCols).toEqual(["#", "What happens", "Recommendations", "When they answer", "Rule ID"]);
     const files = (rules.rows as Array<{ file: Cell[] }>).map((r) => r.file);
     expect(files[0]).toEqual([1, "Show", "Dry fix", "Q1 = Dry AND Q2 = Yes", "r1"]);
     // Pin, names quoted when they hold a comma or a quote, all-of on a multi.
@@ -102,7 +102,7 @@ describe("serializing", () => {
   it("the Answers sheet: types, roles, shows / keeps, then, ids", () => {
     const sh = logicSheets(doc(), ctxFor("attributes"))[1]!;
     const files = (sh.rows as Array<{ file: Cell[] }>).map((r) => r.file);
-    expect(sh.fileCols.at(-1)).toBe("Answer ID (don't edit)");
+    expect(sh.fileCols.at(-1)).toBe("Answer ID");
     expect(files[0]).toEqual(["Q1", "Skin feel", "Single select", "Dry", "Picks results", "Dry fix", "Next question", "a1"]);
     expect(files[1]![5]).toBe('"Oily, balanced"');
     expect(files[3]!.slice(2, 6)).toEqual(["Single select", "Short", "Info only", ""]);
@@ -134,7 +134,7 @@ describe("serializing", () => {
     const { workbook, example } = exportWorkbook(doc({ rules: [] }), ctxFor("attributes"));
     expect(example).toBe(true);
     expect(sheet(workbook, "Rules").rows).toEqual([
-      ["#", "What happens", "Recommendations", "When they answer", "Rule ID (don't edit)"],
+      ["#", "What happens", "Recommendations", "When they answer", "Rule ID"],
       [1, "Show", "Dry fix", "Q1 = Dry", "EXAMPLE"],
     ]);
     expect(workbook.props?.[QUESTION_ORDER_PROP]).toBe("q1,q2,q3,q4");

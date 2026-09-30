@@ -144,7 +144,7 @@ export function ProductCountButton({
         ? [...productIndex]
         : (filterAnswerMatchingProducts(answer, productIndex) ?? []);
     return [];
-  }, [answer, role, catById, productIndex, decCat]);
+  }, [answer, role, productIndex, decCat]);
   const kind = popoverKind(role, answer, catById, decCat);
   // QRTZ-H3 (mock .pp-title) — the title is the TARGET's name where one
   // exists (decides); a narrows selection has no single name (no mock
