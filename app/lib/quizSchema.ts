@@ -1695,16 +1695,14 @@ export const BuildSession = z.object({
       doc: z.unknown().optional(),
     })
     .optional(),
-  // Logic-step chooser (logic-step handoff §2) — the merchant's picked logic
-  // style, set once on first entry to the Logic stage via the set-logic-style
-  // intent (build_session is server-owned; the JSON autosave never writes it).
-  //   "rules"      → Rules only: every outcome comes from decision_rules.
-  //   "attributes" → Attributes + Rules: one decides question + filter roles.
-  // Both are the SAME logic_model ("decider"); switching is lossless — answer
-  // filter values are kept on the doc and ignored, never stripped, so
-  // flipping back restores the mapping. OPTIONAL WITHOUT DEFAULT (the
-  // translations-field discipline): absent round-trips absent. Absent =
-  // chooser not yet answered → the Logic stage shows the style chooser.
+  // LEGACY MIGRATION SOURCE ONLY (Logic step redesign D1/D5). The logic style
+  // now lives on the quiz document (`Quiz.logic_style`, below) so it survives
+  // publish and the engine can run it. This session key was written by the
+  // retired set-logic-style intent; it is parsed forever and read ONLY by the
+  // screen resolver (`resolveLogicStyle`, app/lib/logicStyle.ts) as its second
+  // step, so a draft that picked a style before the doc field existed keeps
+  // opening on it. The engine, validation, report and publish NEVER read it
+  // (build_session is stripped at publish). OPTIONAL WITHOUT DEFAULT.
   logic_style: z.enum(["rules", "attributes"]).optional(),
 });
 export type BuildSession = z.infer<typeof BuildSession>;
@@ -1990,6 +1988,20 @@ export const Quiz = z.object({
   // field hazard). Stamped ONLY at draft creation (new funnels post-L2-10) or
   // by the explicit per-quiz upgrade wizard.
   logic_model: z.enum(["decider"]).optional(),
+  // LOGIC STYLE (Logic step redesign D1) — which method this DECIDER quiz uses
+  // to decide a result. Only read when logic_model is "decider".
+  //   "attributes" → Filter Results + Rules: the picking question gives the
+  //                  base, filter questions narrow it, rules act on top.
+  //   "rules"      → Rules only: the FIRST matching rule's targets ARE the
+  //                  result; question roles, answer mappings and answer
+  //                  filter values are kept on the doc and IGNORED (never
+  //                  stripped), so switching back restores them exactly.
+  // Absent means "attributes" — exactly what every existing decider doc does
+  // today. Engine/report/gate read it via engineLogicStyle(); the screen reads
+  // resolveLogicStyle() (app/lib/logicStyle.ts). Written ONLY by
+  // setLogicStyle (the title switch). Publish carries it as stored and never
+  // bakes an inferred value. .optional() and NEVER .default().
+  logic_style: z.enum(["rules", "attributes"]).optional(),
   // §4 — the quiz's AND-rules, priority = array order. Only read when
   // logic_model is "decider".
   decision_rules: z.array(DecisionRule).optional(),
