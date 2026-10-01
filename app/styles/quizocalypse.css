@@ -9865,6 +9865,11 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .qz-modal.hm3-pop .qz-modal-x { top: 14px; right: 14px; width: 28px; height: 28px; border-radius: 999px; color: var(--qz-ink-25); }
 .qz-modal.hm3-pop .qz-modal-x:hover { color: var(--qz-ink-3); }
+/* Pre-written helper line under the dialog's box (mock .helpline). */
+.hm3-helpline {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 12px 2px 0;
+  font-size: 13.5px; color: var(--qz-ink-4);
+}
 .hm3-example {
   display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 14px;
   padding: 14px 16px; border: 1px dashed var(--qz-rule); border-radius: 12px;
