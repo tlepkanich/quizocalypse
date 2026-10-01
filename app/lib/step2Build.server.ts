@@ -785,6 +785,7 @@ export async function buildQuizFromPicked(
       name: buildName,
       goalPrompt,
       questionCount: pinnedCount ?? picked.question_count,
+      ...(pinnedCount !== undefined ? { questionCountExact: true } : {}),
       tone: "friendly",
       flow: {
         welcome_message: false,

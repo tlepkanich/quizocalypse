@@ -113,6 +113,10 @@ export interface OnboardingBuildInput {
   // intro (data.hidden), which applyDeciderQuestionFlow keeps as the chain
   // head. Absent → byte-identical build.
   hideIntro?: boolean;
+  // HOME-3 (handoff §10.1) — questionCount is the merchant's pinned number,
+  // so the question build must hit it exactly (generateQuestionFlow's
+  // exactQuestionCount). Absent → the count stays a hint.
+  questionCountExact?: boolean;
   // FAST F2 — pre-resolved catalog inputs (the SAME product/collection/shop
   // rows the catalog step below queries), prefetched by the funnel's
   // templating job concurrently with template generation. ABSENT (the wizard /
@@ -379,6 +383,7 @@ export async function runAiOnboardingBuild(
       goalPrompt: goalContext,
       experienceType: xtype,
       questionCount: input.questionCount,
+      ...(input.questionCountExact ? { exactQuestionCount: input.questionCount } : {}),
       catalogSummary: indexed.summary,
       buckets: (decider ? buckets : smartBuckets).map((b) => ({
         id: b.id,
