@@ -1,8 +1,13 @@
 import { useMemo } from "react";
 import type { Quiz as QuizDoc } from "../../lib/quizSchema";
 import type { BuilderCategory } from "../builder/stepProps";
-import type { IndexedProduct } from "../../lib/recommendationEngine";
-import { settingsForTarget, targetProducts } from "../../lib/recommendDecider";
+import { deciderSafetyNet, type IndexedProduct } from "../../lib/recommendationEngine";
+import {
+  fallbackHeadlineFor,
+  settingsForTarget,
+  targetProducts,
+} from "../../lib/recommendDecider";
+import { CHROME_TOKENS } from "../runtime/chromeStrings";
 
 // rec-page-spec-V2 §11.1 — the client-side live preview for DECIDER docs.
 // Renders straight from in-memory settings through the REAL v2 engine
@@ -37,13 +42,18 @@ export function RecPageV2Preview({
       productIndex,
       targetProductIdsMap: { [target.id]: target.productIds },
     });
-    return { config, shape, products };
-  }, [doc.rec_page_settings, target, productIndex]);
+    // The runtime's fallback page: an empty target whose fallback chain
+    // finds products (same chain + gate as QuizRuntime/DeciderResultView).
+    const isFallback =
+      products.poolSize === 0 &&
+      (deciderSafetyNet(config, doc.global_fallback, productIndex)?.products.length ?? 0) > 0;
+    return { config, shape, products, isFallback };
+  }, [doc.rec_page_settings, doc.global_fallback, target, productIndex]);
 
   if (!target || !view) {
     return <p className="qz-dim">No result targets yet — pick recommendations in Step 1.</p>;
   }
-  const { config, shape, products } = view;
+  const { config, shape, products, isFallback } = view;
 
   const incentive =
     config.incentiveOn && config.incentiveCode ? (
@@ -86,10 +96,18 @@ export function RecPageV2Preview({
       </div>
 
       {config.incentivePos === "banner" ? incentive : null}
-      <h2 className="qz-rp2p-headline">{config.headline}</h2>
+      <h2 className="qz-rp2p-headline">
+        {isFallback
+          ? fallbackHeadlineFor(config, CHROME_TOKENS.decider_fallback_headline)
+          : config.headline}
+      </h2>
       {config.incentivePos === "below-headline" ? incentive : null}
 
-      {config.whyOn ? <div className="qz-rp2p-why">{config.whyCopy}</div> : null}
+      {isFallback ? (
+        <div className="qz-rp2p-why">{CHROME_TOKENS.decider_fallback_subline}</div>
+      ) : config.whyOn ? (
+        <div className="qz-rp2p-why">{config.whyCopy}</div>
+      ) : null}
 
       {products.poolSize === 0 ? (
         <div className="qz-rp2p-empty">
