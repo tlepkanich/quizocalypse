@@ -246,6 +246,8 @@ model Quiz {
   feedback QuizFeedback[]
   insightDismissals InsightDismissal[]
   rewards QuizReward[]
+  offerDiscounts QuizOfferDiscount[]
+  offerGrants QuizOfferGrant[]
   referralTokens ReferralToken[]
   referrals Referral[]
 
@@ -474,4 +476,61 @@ model AiUsage {
   calls        Int    @default(0)
 
   @@unique([shopId, day])
+}
+
+// Results handoff §12 — the per-shopper offer pipeline. ONE Shopify discount
+// per key (the quiz + a hash of every shared setting + the result's product
+// set for "what we recommend" + the hourly bucket for relative expiry); codes
+// are pooled under it via discountRedeemCodeBulkAdd (Built for Shopify 5.5.3)
+// and handed out atomically. A discount is never edited once codes are out:
+// a settings change is a new hash, so a new discount.
+model QuizOfferDiscount {
+  id                String    @id @default(cuid())
+  quizId            String
+  keyHash           String
+  // DiscountCodeNode gid; null only between the row reserve and the create.
+  shopifyDiscountId String?
+  endsAt            DateTime?
+  createdAt         DateTime  @default(now())
+  retiredAt         DateTime?
+
+  quiz  Quiz            @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  codes QuizOfferCode[]
+
+  @@unique([quizId, keyHash])
+  @@index([quizId, endsAt])
+}
+
+model QuizOfferCode {
+  id           String   @id @default(cuid())
+  discountId   String
+  code         String
+  // DiscountRedeemCode gid (for clean-up deletes); null for the create's
+  // own first code, which is always assigned.
+  redeemCodeId String?
+  status       String // available | assigned
+  createdAt    DateTime @default(now())
+
+  discount QuizOfferDiscount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  grant    QuizOfferGrant?
+
+  @@unique([discountId, code])
+  @@index([discountId, status])
+}
+
+// One issued code per quiz session (the idempotency lock); email-keyed for
+// "one use per customer" across codes, which Shopify cannot enforce.
+model QuizOfferGrant {
+  id        String   @id @default(cuid())
+  quizId    String
+  sessionId String
+  email     String?
+  codeId    String   @unique
+  createdAt DateTime @default(now())
+
+  quiz Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  code QuizOfferCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  @@unique([quizId, sessionId])
+  @@index([quizId, email])
 }

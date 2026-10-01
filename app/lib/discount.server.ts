@@ -9,14 +9,14 @@ import type { Quiz as QuizDoc, DiscountConfig } from "./quizSchema";
 // granted). Failures never block publish — they return a warning.
 // ───────────────────────────────────────────────────────────────────────────
 
-interface AdminGraphql {
+export interface AdminGraphql {
   graphql(
     query: string,
     options?: { variables?: Record<string, unknown> },
   ): Promise<Response>;
 }
 
-const DISCOUNT_CODE_BASIC_CREATE = `#graphql
+export const DISCOUNT_CODE_BASIC_CREATE = `#graphql
   mutation quizDiscountCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
     discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
       codeDiscountNode { id }
@@ -24,7 +24,7 @@ const DISCOUNT_CODE_BASIC_CREATE = `#graphql
     }
   }`;
 
-const DISCOUNT_CODE_FREE_SHIPPING_CREATE = `#graphql
+export const DISCOUNT_CODE_FREE_SHIPPING_CREATE = `#graphql
   mutation quizFreeShippingCreate($freeShippingCodeDiscount: DiscountCodeFreeShippingInput!) {
     discountCodeFreeShippingCreate(freeShippingCodeDiscount: $freeShippingCodeDiscount) {
       codeDiscountNode { id }

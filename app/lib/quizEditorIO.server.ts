@@ -12,7 +12,7 @@ import { BrandTokens } from "./designTokens";
 import { resolveCollectionOrders } from "./collectionOrder.server";
 import { refreshBucketMembership } from "./bucketPersist.server";
 import { qrDataUrl } from "./qrCode.server";
-import { ensureQuizDiscount } from "./discount.server";
+import { createCodeDiscount, ensureQuizDiscount } from "./discount.server";
 import { regenerateQuestion, generateQuestionFlow, editQuiz, enrichFromReviews, translateQuiz, generateDesignRestyle } from "./claude";
 import { applyDesignAiPatch, ensureReadableTokens } from "./designAiPatch";
 import { parseBrandIdentitySafe } from "./brandIdentity";
@@ -433,6 +433,31 @@ async function handleQuizEditorActionImpl(
           // warning and ship without the discount code.
           discountWarning =
             "Couldn't create the discount code (Shopify admin unavailable). Published without it — re-publish from the embedded app to add it.";
+        }
+      }
+
+      // Results handoff §12.2 step 7 — a decider quiz's SHARED code is one
+      // discount, created at publish with the code the merchant typed (never
+      // a random one). Re-publishing finds the code already taken, which is
+      // the healthy case. Per-shopper codes mint on demand (/offer); an
+      // existing discount creates nothing.
+      const dc = parsedDraft?.success ? parsedDraft.data.discount_config : null;
+      if (
+        parsedDraft?.success &&
+        parsedDraft.data.logic_model === "decider" &&
+        dc?.enabled &&
+        dc.configured === true &&
+        dc.code_mode === "static" &&
+        dc.static_code?.trim()
+      ) {
+        try {
+          const created = await createCodeDiscount(await getAdmin(), dc, dc.static_code.trim(), new Date().toISOString());
+          if (!created.ok && !/taken|unique|already/i.test(created.warning ?? "")) {
+            discountWarning = `Couldn't create the shared discount code: ${created.warning ?? "unknown error"}`;
+          }
+        } catch {
+          discountWarning =
+            "Couldn't create the shared discount code (Shopify admin unavailable). Published without it — re-publish from the embedded app to add it.";
         }
       }
 

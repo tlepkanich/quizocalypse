@@ -142,6 +142,24 @@ callers are fire-and-forget. `400` invalid payload (first 3 Zod issues
 echoed), `404` unknown quiz, `429` limited, `500` controlled JSON on DB
 failure (never an un-CORS'd framework error).
 
+## POST /offer — the shopper's discount code
+
+The results page asks for this session's code once the shopper has earned it:
+on results reveal, or on email submit when the email unlocks the offer. Only
+quizzes whose discount was saved in the Results step answer with a code. The
+code is never part of `/q/:id.json`.
+
+```json
+{ "quiz_id": "…", "session_id": "…(16+ chars)", "email": "optional@example.com" }
+```
+
+| Status | Body | Meaning |
+|---|---|---|
+| 200 | `{ "offer": { "code", "line", "value", "kind", "ends_at" } }` | Issued. Idempotent per session. `ends_at` is the discount's real end (ISO) or `null`. |
+| 200 | `{ "offer": null, "reason": "not_offered" \| "email_required" \| "exhausted" \| "no_shopify" \| "unavailable" }` | No code. |
+| 409 | `{ "offer": null, "reason": "session_incomplete" }` | `POST /sessions` has not landed yet; retry. |
+| 400 / 429 / 502 | `{ "error" }` or `{ "offer": null, "reason": "unavailable" }` | Bad payload / rate limit (15 per minute per IP) / Shopify failed. |
+
 ## POST /sessions — save a completed session
 
 ```json

@@ -312,6 +312,8 @@ export function QuizRuntime(props: QuizRuntimeProps) {
   // LOGIC v2 §7 — the decider flow's capture → loading gates (same reset
   // discipline as recap/reveal: a jump-back + new path replays them).
   const [captureDone, setCaptureDone] = useState(false);
+  // The email that unlocks the offer (handoff §12), once a capture saved.
+  const [offerEmail, setOfferEmail] = useState<string | undefined>(undefined);
   const [loadingDone, setLoadingDone] = useState(false);
   // L2-12b — the runtime AI rec-copy race. `beatsDone` = the interstitial's
   // animation finished; `aiSettled` = the AI fetch resolved/failed/timed out
@@ -1638,10 +1640,40 @@ export function QuizRuntime(props: QuizRuntimeProps) {
               products,
             };
           })();
+          // Results handoff §12 — the per-shopper offer: only a discount
+          // saved in the Results editor (configured) and switched on. The
+          // unlock holds the code until the email is submitted — at the gate,
+          // or (skipped gate / on-page placement) in the locked card.
+          const offerOn = doc.discount_config.enabled && doc.discount_config.configured === true;
+          const offerUnlock = offerOn && cfg.captureUnlocksOffer === true && cfg.captureEmail !== false;
+          const inlineCaptureForm = (
+            <InlineDeciderCapture
+              config={cfg}
+              styles={styles}
+              quizId={quizId}
+              sessionId={sessionIdRef.current}
+              shopDomain={shopDomain}
+              storeName={shopName}
+              onCaptured={(capturedEmail) => {
+                analyticsRef.current?.track("email_captured", {});
+                setOfferEmail(capturedEmail);
+              }}
+            />
+          );
           content = (
             <DeciderResultView
               decider={explained.decider}
-              inlineCapture={captureMode(cfg) === "inline" ? <InlineDeciderCapture config={cfg} styles={styles} quizId={quizId} sessionId={sessionIdRef.current} shopDomain={shopDomain} storeName={shopName} onCaptured={() => analyticsRef.current?.track("email_captured", {})} /> : undefined}
+              inlineCapture={captureMode(cfg) === "inline" && !offerUnlock ? inlineCaptureForm : undefined}
+              offer={
+                offerOn
+                  ? {
+                      discount: doc.discount_config,
+                      unlock: offerUnlock,
+                      email: offerEmail,
+                      lockedForm: inlineCaptureForm,
+                    }
+                  : undefined
+              }
               fallback={fallback}
               quizId={quizId}
               sessionId={sessionIdRef.current}
@@ -1735,7 +1767,10 @@ export function QuizRuntime(props: QuizRuntimeProps) {
                   }
                   // Results handoff §4 — the decider capture never fired
                   // email_captured; only the legacy paths did.
-                  if (saved && contact?.email) analyticsRef.current?.track("email_captured", {});
+                  if (saved && contact?.email) {
+                    analyticsRef.current?.track("email_captured", {});
+                    setOfferEmail(contact.email);
+                  }
                   setCaptureDone(true);
                 }}
               />

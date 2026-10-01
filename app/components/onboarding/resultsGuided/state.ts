@@ -233,10 +233,8 @@ export function forcePerShopperCode(doc: Quiz): Quiz {
 
 /* ── WIRED MAP — the owner's no-dead-ends rule ──────────────────────────────
    A control whose live reader has not landed carries a quiet "not connected
-   yet" tag (handoff §2 release rule). The decider results page reads nothing
-   from discount_config today, and publish no longer mints a shared code for
-   decider quizzes (handoff §4 defect 2): every discount control waits on the
-   per-shopper pipeline (handoff §12). */
+   yet" tag (handoff §2 release rule). The discount and the unlock are read
+   by the per-shopper offer pipeline (/offer, handoff §12). */
 export const WIRED: Record<string, boolean> = {
   headline: true,
   whyCopy: true,
@@ -245,8 +243,8 @@ export const WIRED: Record<string, boolean> = {
   showDesc: true,
   descOverrides: true,
   showAddAll: true,
-  discount: false, // the offer bar + per-shopper mint (handoff §12)
-  unlock: false, // the locked offer card (handoff §7 + §12)
+  discount: true, // the offer bar + per-shopper mint (/offer)
+  unlock: true, // the locked offer card on the results page
   placement_before: true,
   placement_none: true,
   placement_inline: true,

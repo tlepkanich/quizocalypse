@@ -17,7 +17,7 @@ export function InlineDeciderCapture({
   sessionId: string;
   shopDomain: string;
   storeName?: string;
-  onCaptured?: () => void;
+  onCaptured?: (email: string) => void;
 }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState(false);
@@ -40,7 +40,7 @@ export function InlineDeciderCapture({
         storeName={storeName}
         inline
         onDone={(contact, saved) => {
-          if (saved && contact?.email) onCaptured?.();
+          if (saved && contact?.email) onCaptured?.(contact.email);
           setDone(Boolean(saved));
           setError(!saved);
         }}

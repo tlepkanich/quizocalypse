@@ -30,6 +30,8 @@ import { ProductCard } from "./ProductCard";
 import { postQuizSession } from "./postQuizSession";
 import { apiUrl } from "../../../lib/apiBase";
 import { ConsentNotice, noticeText, policyHref, SMS_CHECKBOX, SMS_NOTICE } from "./ConsentNotice";
+import { OfferBar, OfferLockStrip, useOffer } from "./OfferBar";
+import type { DiscountConfig } from "../../../lib/quizSchema";
 import {
   FixedConsentChecks,
   FixedLegalText,
@@ -574,6 +576,7 @@ export function DeciderResultView({
   extras,
   onReset,
   inlineCapture,
+  offer,
 }: {
   decider: NonNullable<ExplainedRecommendation["decider"]>;
   fallback: DeciderFallback | null;
@@ -603,6 +606,12 @@ export function DeciderResultView({
   extras?: { heading: string; copy?: string; products: RecommendedProduct[] };
   onReset: () => void;
   inlineCapture?: React.ReactNode;
+  // Results handoff §12 — the per-shopper offer. Present only for a discount
+  // saved in the Results editor (discount_config.configured) and switched on;
+  // absent → nothing renders and nothing is fetched (every existing quiz).
+  // `unlock` holds the code until `email` is known; `lockedForm` is the
+  // capture form shown under the lock strip meanwhile.
+  offer?: { discount: DiscountConfig; unlock: boolean; email?: string; lockedForm?: React.ReactNode };
 }) {
   const artDirection = useContext(RuntimeArtDirectionContext);
   const tc = useChrome();
@@ -661,8 +670,25 @@ export function DeciderResultView({
   // §9.3 — display + auto-apply an EXISTING merchant-created code. Auto-apply
   // rides the cart permalink's discount param; manual codes display only.
   const incentiveActive = Boolean(cfg.incentiveOn && cfg.incentiveCode);
+  const offerLocked = Boolean(offer?.unlock && !offer.email);
+  const offerState = useOffer({
+    enabled: Boolean(offer),
+    ready: Boolean(offer) && !offerLocked,
+    preview: isPreviewMode,
+    quizId,
+    sessionId,
+    email: offer?.email,
+    discount: offer?.discount,
+  });
+  const issuedOffer = offerState.status === "issued" ? offerState.offer : null;
+  // The issued code rides the cart permalink (?discount=CODE); the preview's
+  // masked sample never does.
   const discountCode =
-    incentiveActive && cfg.incentiveAutoApply ? cfg.incentiveCode : undefined;
+    issuedOffer && !isPreviewMode
+      ? issuedOffer.code
+      : incentiveActive && cfg.incentiveAutoApply
+        ? cfg.incentiveCode
+        : undefined;
   const incentiveChip = incentiveActive ? (
     <div
       style={{
@@ -817,6 +843,13 @@ export function DeciderResultView({
         </p>
       ) : null}
       {cfg.incentivePos === "below-headline" ? incentiveChip : null}
+      {issuedOffer ? <OfferBar offer={issuedOffer} /> : null}
+      {offer && offerLocked ? (
+        <div data-qz-offer="unlock" style={{ marginTop: 16, textAlign: "left" }}>
+          <OfferLockStrip discount={offer.discount} />
+          {offer.lockedForm}
+        </div>
+      ) : null}
       {decider.allOutOfStock ? (
         <p style={{ marginTop: 12, fontSize: 13, color: "var(--qz-color-muted)" }}>
           {tc("all_out_of_stock")}
