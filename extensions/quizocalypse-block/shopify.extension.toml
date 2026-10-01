@@ -3,7 +3,7 @@
 # app blocks. The block renders an iframe loading our published quiz runtime
 # from /q/:id on the App URL the merchant configures.
 
-api_version = "2025-01"
+api_version = "2026-04"
 
 [[extensions]]
 name = "Wiskr Quiz"

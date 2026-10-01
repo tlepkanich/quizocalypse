@@ -55,7 +55,7 @@ describe("normalizeShopDomain", () => {
 describe("adminClientFromToken", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("POSTs to the 2025-01 Admin GraphQL endpoint with the token header", async () => {
+  it("POSTs to the 2026-04 Admin GraphQL endpoint with the token header", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ data: { shop: { name: "Acme" } } })));
@@ -65,7 +65,7 @@ describe("adminClientFromToken", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0]!;
-    expect(url).toBe("https://acme.myshopify.com/admin/api/2025-01/graphql.json");
+    expect(url).toBe("https://acme.myshopify.com/admin/api/2026-04/graphql.json");
     expect(init?.method).toBe("POST");
     const headers = init?.headers as Record<string, string>;
     expect(headers["X-Shopify-Access-Token"]).toBe("shpat_secret");

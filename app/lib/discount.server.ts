@@ -51,7 +51,37 @@ function commonDiscountFields(cfg: DiscountConfig): Record<string, unknown> {
   return fields;
 }
 
+// Results handoff §8/§12 — the editor's fields, each sent ONLY when the doc
+// sets it, so a legacy publish-time discount sends exactly what it always did.
+// Every key maps to one documented Admin field (2026-04).
+function editorFields(cfg: DiscountConfig, opts: { shipping: boolean }): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  if (cfg.combines) {
+    fields.combinesWith = {
+      productDiscounts: cfg.combines.product === true,
+      orderDiscounts: cfg.combines.order === true,
+      ...(opts.shipping ? {} : { shippingDiscounts: cfg.combines.shipping === true }),
+    };
+  }
+  if (cfg.purchase) {
+    // Top-level on the free-shipping input (it has no customerGets).
+    const purchase = {
+      appliesOnOneTimePurchase: cfg.purchase !== "sub",
+      appliesOnSubscription: cfg.purchase !== "onetime",
+    };
+    if (opts.shipping) Object.assign(fields, purchase);
+    else fields.__purchase = purchase;
+    // Shopify rejects a limit above 1 on a discount that skips subscriptions.
+    if (cfg.purchase !== "onetime" && cfg.recurring_limit !== undefined) {
+      fields.recurringCycleLimit = cfg.recurring_limit;
+    }
+  }
+  return fields;
+}
+
 // customerGets.items scope (spec §4 "Applies to"). Defaults to the whole cart.
+// "recommended" is resolved to product ids by the per-shopper mint before
+// this runs (handoff §12); unresolved, it falls back to the whole cart.
 function itemsScope(cfg: DiscountConfig): Record<string, unknown> {
   if (cfg.applies_to === "collections" && cfg.applies_collection_ids.length > 0) {
     return { collections: { add: cfg.applies_collection_ids } };
@@ -76,14 +106,17 @@ export function buildDiscountInput(
   const value =
     cfg.kind === "percentage"
       ? { percentage: Math.max(0, Math.min(1, cfg.value / 100)) }
-      : { discountAmount: { amount: String(cfg.value), appliesOnEachItem: false } };
+      : { discountAmount: { amount: String(cfg.value), appliesOnEachItem: cfg.applies_on_each_item === true } };
+  const { __purchase, ...extra } = editorFields(cfg, { shipping: false });
   return {
     title: cfg.title || "Quiz reward",
     code,
     startsAt: startsAtISO,
-    customerSelection: { all: true },
-    customerGets: { value, items: itemsScope(cfg) },
+    // 2025-10+: `context` replaces the deprecated customerSelection.
+    context: { all: "ALL" },
+    customerGets: { value, items: itemsScope(cfg), ...((__purchase as object | undefined) ?? {}) },
     ...commonDiscountFields(cfg),
+    ...extra,
   };
 }
 
@@ -100,9 +133,13 @@ export function buildFreeShippingInput(
     title: cfg.title || "Quiz reward",
     code,
     startsAt: startsAtISO,
-    customerSelection: { all: true },
-    destination: { all: true },
+    context: { all: "ALL" },
+    destination: cfg.shipping_countries?.length
+      ? { countries: { add: cfg.shipping_countries } }
+      : { all: true },
+    ...(cfg.max_shipping_price !== undefined ? { maximumShippingPrice: cfg.max_shipping_price } : {}),
     ...commonDiscountFields(cfg),
+    ...editorFields(cfg, { shipping: true }),
   };
 }
 

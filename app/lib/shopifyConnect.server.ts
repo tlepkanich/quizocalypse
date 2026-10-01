@@ -23,7 +23,7 @@ async function shopifyUnauthenticated() {
 // syncCatalog only ever calls admin.graphql(query, {variables}).json().
 // ────────────────────────────────────────────────────────────────────────────
 
-const SHOPIFY_ADMIN_API_VERSION = "2025-01"; // matches app/shopify.server.ts (ApiVersion.January25)
+const SHOPIFY_ADMIN_API_VERSION = "2026-04"; // matches app/shopify.server.ts (ApiVersion.April26)
 
 /**
  * Normalize merchant input to a canonical `<store>.myshopify.com` host, or null
