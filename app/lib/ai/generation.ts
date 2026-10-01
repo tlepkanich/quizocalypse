@@ -589,6 +589,12 @@ export async function generateQuestionFlow(
           // FIX-1 — deterministic anti-slop pass on the AI-authored copy only.
           text: stripEmoji(q.text),
           question_type: q.question_type,
+          // Logic-step §5 role + E3 chapter/reassurance copy: parsed and
+          // prompted for since those programs, but this mapping used to drop
+          // them, so built quizzes never received any. Absent stays absent.
+          ...(q.role ? { role: q.role } : {}),
+          ...(q.section_label?.trim() ? { section_label: stripEmoji(q.section_label) } : {}),
+          ...(q.helper_text?.trim() ? { helper_text: stripEmoji(q.helper_text) } : {}),
           ...(q.required !== undefined ? { required: q.required } : {}),
           ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
           ...(q.education_card_before ? { education_card_before: q.education_card_before } : {}),
