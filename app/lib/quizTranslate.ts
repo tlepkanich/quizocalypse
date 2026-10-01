@@ -27,6 +27,8 @@ import { CHROME_TOKENS } from "../components/runtime/chromeStrings";
 //   block.<nodeId>.<blockId>.<field>        UNBOUND literal layout blocks
 //   chrome.<token>                           runtime interface strings
 //   launcher.label                           floating launcher label
+//   recpage.fallbackHeadline                 decider fallback-page h2 (only
+//                                            when the merchant set one)
 //
 // NOT extracted: branch/integration labels (invisible nodes), ask_ai
 // system_prompt (merchant instructions), legacy results_pages copy (nothing
@@ -107,6 +109,9 @@ export function extractTranslatableStrings(doc: QuizDoc): TranslatableString[] {
   }
 
   push(out, "launcher.label", (doc.launcher_config as { label?: unknown })?.label);
+  // Owner 2026-09-30 — the merchant's fallback headline. Absent/blank → no
+  // key (the chrome default `decider_fallback_headline` is translated below).
+  push(out, "recpage.fallbackHeadline", doc.rec_page_settings?.global.fallbackHeadline);
 
   // The runtime's interface strings — translated alongside the doc so a
   // locale's map is complete from its first generation.
@@ -220,6 +225,15 @@ export function applyTranslations(
     (doc.launcher_config as { label?: unknown })?.label,
   );
 
+  // Owner 2026-09-30 — the fallback headline swaps in only when the doc
+  // carries one AND the locale translated it; every other doc passes through
+  // without a rec_page_settings change (same object reference).
+  const fallbackHeadlineSource = doc.rec_page_settings?.global.fallbackHeadline;
+  const fallbackHeadline =
+    doc.rec_page_settings && fallbackHeadlineSource?.trim()
+      ? pick("recpage.fallbackHeadline", fallbackHeadlineSource)
+      : undefined;
+
   // QRTZ-F2 — re-label the publish-baked Chapters (QRTZ-O5) through the SAME
   // overlay the question nodes' section_label gets. A chapter's label is, by
   // construction (quizPublish.deriveChapters), the trimmed section_label of
@@ -245,6 +259,14 @@ export function applyTranslations(
     nodes,
     node_layouts,
     ...(chapters ? { chapters } : {}),
+    ...(fallbackHeadline !== undefined && doc.rec_page_settings
+      ? {
+          rec_page_settings: {
+            ...doc.rec_page_settings,
+            global: { ...doc.rec_page_settings.global, fallbackHeadline },
+          },
+        }
+      : {}),
     ...(launcherLabel !== undefined
       ? { launcher_config: { ...doc.launcher_config, label: launcherLabel } }
       : {}),

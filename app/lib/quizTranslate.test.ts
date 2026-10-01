@@ -306,3 +306,58 @@ describe("parseLocaleParam (HII-6 — public ?locale= boundary)", () => {
     }
   });
 });
+
+// Owner 2026-09-30 — the decider fallback page's merchant headline is
+// translatable under `recpage.fallbackHeadline`; docs without one gain no key
+// and pass through applyTranslations without a rec_page_settings change.
+describe("recpage.fallbackHeadline", () => {
+  const withFallback = (fallbackHeadline?: string) =>
+    Quiz.parse({
+      ...doc(),
+      logic_model: "decider",
+      rec_page_settings: {
+        global: { headline: "Ride on", ...(fallbackHeadline !== undefined ? { fallbackHeadline } : {}) },
+        overrides: {},
+      },
+    });
+
+  it("is extracted only when the merchant set non-blank text", () => {
+    const keys = (d: Quiz) => new Map(extractTranslatableStrings(d).map((s) => [s.key, s.text]));
+    expect(keys(withFallback("Staff favourites")).get("recpage.fallbackHeadline")).toBe(
+      "Staff favourites",
+    );
+    expect(keys(withFallback()).has("recpage.fallbackHeadline")).toBe(false);
+    expect(keys(withFallback("  ")).has("recpage.fallbackHeadline")).toBe(false);
+    expect(keys(doc()).has("recpage.fallbackHeadline")).toBe(false);
+    // The default headline + the line are chrome — translated for every doc.
+    expect(keys(doc()).get("chrome.decider_fallback_headline")).toBe("Our most-loved products");
+    expect(keys(doc()).get("chrome.decider_fallback_subline")).toBe(
+      "We couldn't find an exact match for your answers, so here are some favourites.",
+    );
+    expect(keys(doc()).has("chrome.decider_fallback_heading")).toBe(false);
+  });
+
+  it("applies the translation and touches nothing else in rec_page_settings", () => {
+    const out = applyTranslations(withFallback("Staff favourites"), {
+      "recpage.fallbackHeadline": "Les favoris de l'équipe",
+    });
+    expect(out.rec_page_settings).toEqual({
+      global: { headline: "Ride on", fallbackHeadline: "Les favoris de l'équipe" },
+      overrides: {},
+    });
+    expect(() => Quiz.parse(out)).not.toThrow();
+  });
+
+  it("keeps the English headline when the locale has no key, and never invents the field", () => {
+    const set = withFallback("Staff favourites");
+    expect(applyTranslations(set, {}).rec_page_settings).toBe(set.rec_page_settings);
+    const unset = withFallback();
+    const out = applyTranslations(unset, { "recpage.fallbackHeadline": "Favoris" });
+    expect(out.rec_page_settings).toBe(unset.rec_page_settings);
+    expect("fallbackHeadline" in (out.rec_page_settings?.global ?? {})).toBe(false);
+    const legacy = doc();
+    expect("rec_page_settings" in applyTranslations(legacy, { "recpage.fallbackHeadline": "x" })).toBe(
+      "rec_page_settings" in legacy,
+    );
+  });
+});

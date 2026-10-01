@@ -185,6 +185,19 @@ export function resolveRecPageGlobal(
   return { ...REC_PAGE_DEFAULTS, ...(settings?.global ?? {}) };
 }
 
+/** The decider fallback page's h2 (owner 2026-09-30): the merchant's
+ *  GLOBAL `fallbackHeadline` when it has text, else `defaultHeadline` (the
+ *  caller passes the locale-aware chrome token, so the default stays
+ *  translatable). Never the reveal headline, a per-target headline override
+ *  or a persona name: the fallback page shows favourites, not the match those
+ *  would name. */
+export function fallbackHeadlineFor(
+  config: Pick<RecPageGlobalT, "fallbackHeadline">,
+  defaultHeadline: string,
+): string {
+  return config.fallbackHeadline?.trim() || defaultHeadline;
+}
+
 /** The effective config for ONE target: global + its sparse override
  *  (override-wins; absent override fields inherit global — §2.2/§3.2). */
 export function settingsForTarget(
