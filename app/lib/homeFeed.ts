@@ -21,6 +21,8 @@ export interface HomeWaitItem {
   href: string;
   /** Setup items only: 0-based index of the step the draft is parked on. */
   stepIndex?: number;
+  /** Emails only: the teal chip under the title ("128 waiting"). */
+  chip?: string;
 }
 
 export interface HomeQueueQuiz {
@@ -83,7 +85,8 @@ export const APP_HOME_LINKS: HomeLinks = {
 
 export function buildHomeQueue(input: {
   quizzes: HomeQueueQuiz[]; // most recently edited first
-  emailsWithoutDestination: boolean;
+  /** Captured emails with no destination wired (0 = nothing waiting). */
+  emailsWaiting: number;
   links: HomeLinks;
 }): HomeWaitItem[] {
   const { links } = input;
@@ -118,12 +121,14 @@ export function buildHomeQueue(input: {
       href: links.embed(unvisited.id),
     });
   }
-  if (input.emailsWithoutDestination) {
+  if (input.emailsWaiting > 0) {
     items.push({
       kind: "emails",
       key: "emails",
       title: "Send your captured emails somewhere",
       href: links.integrations,
+      // The teal signal row's chip, stacked under the title (§7.5).
+      chip: `${input.emailsWaiting.toLocaleString("en-US")} waiting`,
     });
   }
   return items;

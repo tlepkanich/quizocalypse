@@ -31,7 +31,7 @@ describe("buildHomeQueue", () => {
         quiz({ id: "draft", name: "Draft" }),
         quiz({ id: "setup", name: "Setup", inSetup: true, stepIndex: 2 }),
       ],
-      emailsWithoutDestination: true,
+      emailsWaiting: 128,
       links,
     });
     expect(items.map((i) => i.kind)).toEqual(["setup", "publish", "store", "emails"]);
@@ -42,7 +42,7 @@ describe("buildHomeQueue", () => {
   it("marks a stalled setup", () => {
     const [item] = buildHomeQueue({
       quizzes: [quiz({ inSetup: true, stalled: true })],
-      emailsWithoutDestination: false,
+      emailsWaiting: 0,
       links,
     });
     expect(item).toMatchObject({ kind: "stalled", title: "Setup stalled on “Serum Finder”" });
@@ -55,7 +55,7 @@ describe("buildHomeQueue", () => {
         quiz({ id: "draft" }),
         quiz({ id: "setup", inSetup: true }),
       ],
-      emailsWithoutDestination: true,
+      emailsWaiting: 128,
     };
     const app = buildHomeQueue({ ...input, links: APP_HOME_LINKS });
     expect(app.map((i) => i.href)).toEqual([
@@ -71,7 +71,7 @@ describe("buildHomeQueue", () => {
   it("skips a live quiz that already has starts", () => {
     const items = buildHomeQueue({
       quizzes: [quiz({ status: "published", starts: 4 })],
-      emailsWithoutDestination: false,
+      emailsWaiting: 0,
       links,
     });
     expect(items).toEqual([]);
@@ -81,7 +81,7 @@ describe("buildHomeQueue", () => {
 describe("splitHomeQueue", () => {
   const items = buildHomeQueue({
     quizzes: [quiz({ id: "d" })],
-    emailsWithoutDestination: true,
+    emailsWaiting: 128,
       links,
   });
 
@@ -98,7 +98,7 @@ describe("splitHomeQueue", () => {
   });
 
   it("never leads with emails", () => {
-    const emailsOnly = buildHomeQueue({ quizzes: [], emailsWithoutDestination: true, links });
+    const emailsOnly = buildHomeQueue({ quizzes: [], emailsWaiting: 128, links });
     expect(splitHomeQueue(emailsOnly, null)).toEqual({ next: null, also: emailsOnly });
   });
 });
@@ -156,5 +156,12 @@ describe("editedLabel", () => {
   it("uses a short month otherwise", () => {
     expect(editedLabel(new Date(Date.UTC(2026, 8, 12)), now)).toBe("Edited Sep 12");
     expect(editedLabel(new Date(Date.UTC(2025, 0, 3)), now)).toBe("Edited Jan 3, 2025");
+  });
+});
+
+describe("the emails signal row", () => {
+  it("carries the waiting count as its chip", () => {
+    const [item] = buildHomeQueue({ quizzes: [], emailsWaiting: 1280, links: STUDIO_HOME_LINKS });
+    expect(item).toMatchObject({ kind: "emails", chip: "1,280 waiting" });
   });
 });
