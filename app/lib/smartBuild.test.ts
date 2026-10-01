@@ -606,7 +606,7 @@ describe("applyDeciderQuestionFlow — review-hardened edges", () => {
     expect(validateQuiz(out)).toEqual([]); // V1 satisfied — never a silent publish failure
   });
 
-  it("respects settings the caller threaded onto the seed (never overwrites merchant config)", () => {
+  it("respects settings the caller threaded onto the seed (merges, never overwrites)", () => {
     const seed = Quiz.parse({
       ...buildSeedQuiz("Decider"),
       logic_model: "decider",
@@ -625,7 +625,9 @@ describe("applyDeciderQuestionFlow — review-hardened edges", () => {
       ],
     };
     const out = applyDeciderQuestionFlow(seed, generated as never, deciderBuckets, FB);
-    expect(out.rec_page_settings?.global).toEqual({ capturePhone: true });
+    // Results handoff §3 — new drafts carry settings from creation, so the
+    // fallback seed MERGES in (the caller's keys win) instead of being skipped.
+    expect(out.rec_page_settings?.global).toEqual({ emptyFallbackCol: FB, capturePhone: true });
   });
 
   // Logic-step handoff §5 — the model can mark narrowing questions; "narrows"
@@ -705,7 +707,7 @@ describe("applyManualDeciderSkeleton (SR — blank/failed-goal decider drafts)",
     expect(edge?.source).toBe(lastQuestion?.id);
   });
 
-  it("seeds sparse rec_page_settings only when absent (never clobbers a merchant config)", () => {
+  it("merges the fallback seed into rec_page_settings (never clobbers a merchant config)", () => {
     const seed = Quiz.parse(buildSeedQuiz("Manual"));
     const fresh = applyManualDeciderSkeleton(seed, FB);
     expect(fresh.rec_page_settings).toEqual({ global: { emptyFallbackCol: FB }, overrides: {} });
@@ -715,7 +717,13 @@ describe("applyManualDeciderSkeleton (SR — blank/failed-goal decider drafts)",
       rec_page_settings: { global: { capturePhone: true }, overrides: {} },
     });
     const out = applyManualDeciderSkeleton(configured, FB);
-    expect(out.rec_page_settings?.global).toEqual({ capturePhone: true });
+    expect(out.rec_page_settings?.global).toEqual({ emptyFallbackCol: FB, capturePhone: true });
+    // The caller's own fallback always wins.
+    const own = Quiz.parse({
+      ...buildSeedQuiz("Manual"),
+      rec_page_settings: { global: { emptyFallbackCol: "gid://mine" }, overrides: {} },
+    });
+    expect(applyManualDeciderSkeleton(own, FB).rec_page_settings?.global).toEqual({ emptyFallbackCol: "gid://mine" });
   });
 
   it("is a stamp-only no-op on a doc that already has a result node (idempotent)", () => {

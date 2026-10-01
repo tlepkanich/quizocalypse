@@ -53,14 +53,26 @@ export const CapturePayload = z.object({
   marketing_consent: z.boolean().optional(),
   // WIS-025: record what was displayed and explicitly checked, separately
   // from marketing consent. A notice is disclosure, never a checked opt-in.
+  // Results handoff §9 — the fixed-wording form (consentVersion) also records
+  // the wording version, where it was asked, the two links as shown and the
+  // marketing box's own text: what a consent dispute has to prove (GDPR
+  // art. 7(1)). Extended, never replaced — older bundles keep posting the
+  // terms/sms shape. The phone NUMBER is never part of the evidence (§14).
   consent: z.object({
+    version: z.string().max(40).optional(),
+    placement: z.enum(["gate", "inline"]).optional(),
+    links: z.object({ terms: z.string().max(2000), privacy: z.string().max(2000) }).strict().optional(),
+    marketing: z.object({ checked: z.boolean(), text: z.string().max(500) }).strict().optional(),
     terms: z.object({
-      mode: z.enum(["checkbox", "notice"]), checked: z.boolean(), text: z.string(),
+      mode: z.enum(["checkbox", "notice"]), checked: z.boolean(), text: z.string().max(2000),
     }).strict().optional(),
     sms: z.object({
       mode: z.enum(["checkbox", "notice"]), checked: z.boolean(), text: z.string().max(500),
     }).strict().optional(),
-  }).strict().refine(value => Boolean(value.terms || value.sms), "Consent evidence is empty").optional(),
+  }).strict().refine(
+    value => Boolean(value.terms || value.sms || value.marketing),
+    "Consent evidence is empty",
+  ).optional(),
 });
 
 // §L L2 — post-result feedback. rating: thumbs (1 up / 0 down) or stars (1–5).

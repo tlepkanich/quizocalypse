@@ -14,8 +14,9 @@ import { unauthenticated } from "../shopify.server";
 // pick the value server-side (never client-trusted), create a SINGLE-USE,
 // EXPIRING Shopify code via the shop's offline admin session, store it (one per
 // session — E1), and return the code. Idempotent: the QuizReward row is the lock
-// (its code is deterministic by session, so a retry returns the same reward
-// without minting a second discount). CORS-open, rate-limited, Zod at boundary.
+// (it stores the random code, so a retry returns the same reward without
+// minting a second discount). Mints only for a real, COMPLETED QuizSession and
+// never a zero-value code. CORS-open, rate-limited, Zod at boundary.
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
@@ -32,6 +33,12 @@ const RewardRequest = z.object({
 });
 
 export const loader = async () => new Response(null, { status: 204, headers: CORS });
+
+const REPAIR_WINDOW_MS = 10 * 60_000;
+// A row younger than this may still have its original mint in flight: a
+// repair create racing it would make the original see "already exists",
+// roll back its row, and strand a live code with no row.
+const REPAIR_MIN_AGE_MS = 60_000;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -93,8 +100,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // STORED code+value: a "code already exists" userError means the discount
     // is live (the common case); ok means we just backfilled it. Skipped for
     // expired rewards (nothing to honor) and standalone shops (never minted).
+    // Only inside the crash window: a replay of an older row would otherwise
+    // spend an Admin API create on every page load (results handoff §4 d4).
     const live = existing.expiresAt === null || existing.expiresAt.getTime() > Date.now();
-    if (live && shopifyCapable) {
+    const age = Date.now() - existing.createdAt.getTime();
+    const inCrashWindow = age >= REPAIR_MIN_AGE_MS && age < REPAIR_WINDOW_MS;
+    if (live && inCrashWindow && shopifyCapable) {
       try {
         const { admin } = await unauthenticated.admin(shopDomain);
         const storedType = existing.rewardType as "percentage" | "fixed" | "free_shipping";
@@ -119,6 +130,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ reward: null, reason: "no_shopify" });
   }
 
+  // Results handoff §4 defect 4 — a code is earned by finishing the quiz. The
+  // runtime posts /sessions on completion, before the reveal button exists.
+  const session = await prisma.quizSession.findUnique({
+    where: { quizId_sessionId: { quizId: quiz.id, sessionId: session_id } },
+    select: { completedAt: true, outcomeId: true, answerIds: true },
+  });
+  // /sessions is public, so this raises the bar rather than proving a real
+  // shopper: a completed session must also carry an outcome and answers.
+  if (!session?.completedAt || !session.outcomeId || session.answerIds.length === 0) {
+    return json({ reward: null, reason: "session_incomplete" }, 409);
+  }
+
+  // A reward with no value would mint a 0%-off code (rewardPicker falls back
+  // to 0) — a live discount that takes nothing off. Refuse instead.
+  if (reward.type !== "free_shipping" && !((reward.value ?? 0) > 0 || (reward.rangeMax ?? 0) > 0)) {
+    return json({ reward: null, reason: "no_value" });
+  }
+
   // §M3 usage cap — a per-quiz ceiling on TOTAL codes minted (real discount $).
   // The per-session QuizReward row is the exact per-shopper lock; this bounds the
   // total across shoppers. Counted AFTER the idempotency short-circuit, so a
@@ -140,7 +169,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   // Audit M4 — seed the value pick with the crypto-random CODE, not the
   // client-chosen session_id (which was offline-grindable to always land
   // rangeMax). The reserved row stores the value, so retries stay stable.
-  const value = pickRewardValue({ value: reward.value, rangeMax: reward.rangeMax, odds: reward.odds }, code);
+  const picked = pickRewardValue({ value: reward.value, rangeMax: reward.rangeMax, odds: reward.odds }, code);
+  // A mystery range starting at 0 can land on 0 — never mint a 0%-off code.
+  const value = reward.type === "free_shipping" ? picked : Math.max(1, picked);
   const cfg = rewardToDiscountConfig(reward, value, expiresAtISO);
 
   // Reserve the row FIRST (the unique index is the per-session lock) so a

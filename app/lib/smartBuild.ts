@@ -480,9 +480,15 @@ export function applyDeciderQuestionFlow(
     // the box. The ?? keeps settings the caller threaded onto the seed (the
     // orchestrator carries the draft's Step-4 config through its re-seed) or
     // that survive a direct re-run — merchant config is never overwritten.
-    rec_page_settings: doc.rec_page_settings ?? {
-      global: { emptyFallbackCol: fallbackCollectionId },
-      overrides: {},
+    // Results handoff §3 — new drafts now CARRY rec_page_settings from
+    // creation, so a bare `??` would skip this seed. Merge instead: the
+    // fallback fills in only when the caller's config has none.
+    rec_page_settings: {
+      global: {
+        emptyFallbackCol: fallbackCollectionId,
+        ...(doc.rec_page_settings?.global ?? {}),
+      },
+      overrides: doc.rec_page_settings?.overrides ?? {},
     },
   };
 }
@@ -518,9 +524,15 @@ export function applyManualDeciderSkeleton(
       ...doc.edges,
       { id: "sb_e_result", source: lastQuestion?.id ?? "intro", target: "sb_result" },
     ],
-    rec_page_settings: doc.rec_page_settings ?? {
-      global: { emptyFallbackCol: fallbackCollectionId },
-      overrides: {},
+    // Results handoff §3 — new drafts now CARRY rec_page_settings from
+    // creation, so a bare `??` would skip this seed. Merge instead: the
+    // fallback fills in only when the caller's config has none.
+    rec_page_settings: {
+      global: {
+        emptyFallbackCol: fallbackCollectionId,
+        ...(doc.rec_page_settings?.global ?? {}),
+      },
+      overrides: doc.rec_page_settings?.overrides ?? {},
     },
   };
 }

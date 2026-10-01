@@ -328,12 +328,20 @@ export function HomeScreens({
 
   // ONE brief shared by every goal box on the page (dialog, card, row): the
   // goal, count and switch survive the dialog's close (§3).
-  const [brief, setBriefState] = useState<GoalBrief>(EMPTY_GOAL_BRIEF);
+  // Pre-written first (owner, 2026-09-30 — amends handoff §4.3, which shipped
+  // Example only): the dialog opens with the first catalog goal already in
+  // the box, selected. Clearing it brings back the "For example" block.
+  const firstGoal = data.showDialog ? data.starters[0]?.goal : undefined;
+  const [brief, setBriefState] = useState<GoalBrief>(
+    firstGoal ? { ...EMPTY_GOAL_BRIEF, goal: firstGoal } : EMPTY_GOAL_BRIEF,
+  );
   const setBrief = (next: Partial<GoalBrief>) => setBriefState((b) => ({ ...b, ...next }));
   const onCreate = () => create(brief);
 
   const [dialogOpen, setDialogOpen] = useState(data.showDialog);
-  const [example, setExample] = useState(0);
+  // One index into the catalog goals, shared by "try another" in both helpers.
+  const [suggestion, setSuggestion] = useState(0);
+  const [helper, setHelper] = useState<"prefill" | "example">(firstGoal ? "prefill" : "example");
   const [dismissedKey, setDismissedKey] = useState(data.dismissedKey);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const dialogGoalRef = useRef<HTMLTextAreaElement>(null);
@@ -347,6 +355,22 @@ export function HomeScreens({
     markedRef.current = true;
     homeFetcher.submit({ intent: "dialog-shown" }, { method: "post" });
   }, [data.showDialog, homeFetcher]);
+
+  // Focus AND select the goal, so the first keystroke replaces a written goal.
+  const selectGoal = (ref: React.RefObject<HTMLTextAreaElement>) =>
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.select();
+    });
+
+  // QzModal focuses the goal once its portal mounts; select it after that.
+  useEffect(() => {
+    if (!dialogOpen || helper !== "prefill") return;
+    const t = window.setTimeout(() => dialogGoalRef.current?.select(), 60);
+    return () => window.clearTimeout(t);
+    // Only on open — later edits must not re-select.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialogOpen]);
 
   const closeDialog = () => {
     setDialogOpen(false);
@@ -370,7 +394,9 @@ export function HomeScreens({
 
   if (!data.hasQuizzes) {
     const examples = data.starters;
-    const exampleGoal = examples.length > 0 ? examples[example % examples.length]!.goal : null;
+    const exampleGoal = examples.length > 0 ? examples[suggestion % examples.length]!.goal : null;
+    const nextGoal = examples.length > 0 ? examples[(suggestion + 1) % examples.length]!.goal : null;
+    const showPrefill = helper === "prefill" && brief.goal.trim() !== "";
     return (
       <div className="hm3 is-first">
         {/* Only a surface with extras stacks the column; studio passes none. */}
@@ -385,10 +411,7 @@ export function HomeScreens({
             onStarter={(s) => {
               setBrief({ goal: s.goal });
               // Selected, so the next keystroke replaces it (§4.2).
-              requestAnimationFrame(() => {
-                pageGoalRef.current?.focus();
-                pageGoalRef.current?.select();
-              });
+              selectGoal(pageGoalRef);
             }}
           >
             {dialogOpen ? <PassiveBox goal={brief.goal} /> : box("hm3-first", "page", pageGoalRef)}
@@ -405,7 +428,38 @@ export function HomeScreens({
           title="Describe what you're trying to build, and I'll start it for you."
         >
           {box("hm3-pop", "dialog", dialogGoalRef)}
-          {exampleGoal ? (
+          {showPrefill ? (
+            <div className="hm3-helpline">
+              <span>Written from your catalog. Edit it, or</span>
+              {examples.length > 1 && nextGoal ? (
+                <>
+                  <button
+                    type="button"
+                    className="hm3-linkq"
+                    onClick={() => {
+                      setSuggestion((n) => n + 1);
+                      setBrief({ goal: nextGoal });
+                      selectGoal(dialogGoalRef);
+                    }}
+                  >
+                    try another
+                  </button>
+                  <span aria-hidden="true">·</span>
+                </>
+              ) : null}
+              <button
+                type="button"
+                className="hm3-linkq"
+                onClick={() => {
+                  setHelper("example");
+                  setBrief({ goal: "" });
+                  dialogGoalRef.current?.focus();
+                }}
+              >
+                clear it
+              </button>
+            </div>
+          ) : exampleGoal ? (
             <div className="hm3-example">
               <p>
                 <b>For example:</b> {exampleGoal}
@@ -424,7 +478,7 @@ export function HomeScreens({
                 {examples.length > 1 ? (
                   <>
                     <span aria-hidden="true">·</span>
-                    <button type="button" className="hm3-linkq" onClick={() => setExample((n) => n + 1)}>
+                    <button type="button" className="hm3-linkq" onClick={() => setSuggestion((n) => n + 1)}>
                       try another
                     </button>
                   </>
@@ -545,11 +599,20 @@ export function HomeScreens({
                 </div>
                 <div>
                   {also.map((a) => (
-                    <div key={a.key} className="hm3-row">
+                    // The emails row is the teal signal (§7.5): teal tile, the
+                    // chip stacked under the title, a teal action.
+                    <div key={a.key} className={a.kind === "emails" ? "hm3-row is-signal" : "hm3-row"}>
                       <span className="hm3-tile" aria-hidden="true">
                         <GoalIc>{WAIT[a.kind].icon}</GoalIc>
                       </span>
-                      <b className="hm3-rowtitle">{a.title}</b>
+                      {a.chip ? (
+                        <span className="hm3-rowmain">
+                          <b className="hm3-rowtitle">{a.title}</b>
+                          <span className="hm3-tag is-signal">{a.chip}</span>
+                        </span>
+                      ) : (
+                        <b className="hm3-rowtitle">{a.title}</b>
+                      )}
                       <Link className="hm3-rowact" to={a.href}>
                         {a.key === dismissedKey ? WAIT[a.kind].demoted : WAIT[a.kind].row}{" "}
                         <GoalIc>{ICON.chev}</GoalIc>

@@ -1,5 +1,5 @@
 // §L L3 / §M3/M6 — server-side reward VALUE selection. Deterministic by seed
-// (the sessionId) so a shopper gets ONE stable reward (anti-abuse, E1) and the
+// (the random code — see /reward) so a retry lands the same value, and the
 // value is NEVER client-trusted (§L3 "the value is decided server-side"). For a
 // mystery range, "equal" odds = uniform; "weighted" biases toward the low
 // (merchant-favorable) end. Pure + client-safe (also used by the settings

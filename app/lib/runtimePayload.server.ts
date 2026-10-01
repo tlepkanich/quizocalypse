@@ -47,6 +47,7 @@ export async function buildRuntimePayload(id: string, request: Request) {
   const publishedRaw = quiz.publishedJson as {
     product_index?: IndexedProduct[];
     shop_domain?: string;
+    shop_name?: string;
     answer_weights?: Record<string, number>;
     platform?: "shopify" | "standalone";
     target_product_ids_map?: Record<string, string[]>;
@@ -118,6 +119,10 @@ export async function buildRuntimePayload(id: string, request: Request) {
       // ENDPOINT re-checks the live column regardless (this value can lag the
       // 60s CDN window and a hand-rolled POST bypasses it).
       aiCopyEnabled: quiz.shop?.aiRecCopyEnabled ?? true,
+      // Results handoff §9 — the fixed consent wording's store name. Present
+      // only when publish baked it (decider docs), so every other payload is
+      // unchanged.
+      ...(publishedRaw.shop_name ? { shopName: publishedRaw.shop_name } : {}),
     },
     heroPreload,
   };

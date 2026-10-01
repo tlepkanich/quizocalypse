@@ -214,3 +214,19 @@ export async function ensureQuizDiscount(
     return { doc, code: null, warning: `Discount creation failed: ${msg}` };
   }
 }
+
+/**
+ * Results handoff §4 defect 2 — a duplicated quiz must not inherit the
+ * original's minted Shopify code: both quizzes would hand out (and count
+ * usage against) one live discount. Drops only `discount_config.code`, so the
+ * copy mints its own on its first publish. Anything unexpected passes through.
+ */
+export function withoutDiscountCode(draftJson: unknown): unknown {
+  if (!draftJson || typeof draftJson !== "object") return draftJson;
+  const doc = draftJson as { discount_config?: unknown };
+  const dc = doc.discount_config;
+  if (!dc || typeof dc !== "object" || !("code" in dc)) return draftJson;
+  const { code: _code, ...rest } = dc as Record<string, unknown>;
+  void _code;
+  return { ...doc, discount_config: rest };
+}

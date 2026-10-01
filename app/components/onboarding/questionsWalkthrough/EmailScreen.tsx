@@ -1,38 +1,33 @@
 import { useRef, useState } from "react";
 import type { Quiz, RecPageGlobal } from "../../../lib/quizSchema";
 import { setRecPageGlobal } from "../../../lib/quizMutations";
-import { resolveGuided } from "../resultsGuided/state";
-import { resolveRecPageGlobal } from "../../../lib/recommendDecider";
+import { placementPatch, stampConsent, type Placement } from "../../../lib/captureMode";
 import {
-  termsCopy,
-  noticeText,
-  SMS_CHECKBOX,
-  SMS_NOTICE,
-} from "../../runtime/views/ConsentNotice";
+  DEFAULT_PRIVACY_LABEL,
+  DEFAULT_TERMS_LABEL,
+  TERMS_BOX,
+  TERMS_LINE,
+  smsBoxLabel,
+  wordingText,
+} from "../../../lib/consentWording";
+import { resolveGuided } from "../resultsGuided/state";
 import { QzModal } from "../../qz-overlays";
+
+// Results handoff §10 — this step and the Results step edit the SAME keys
+// through the same helpers (placementPatch, stampConsent), so what is chosen
+// here is already set when the merchant reaches Results. Terms can be a line
+// or a checkbox but never off; SMS always carries its own checkbox; the
+// wording is fixed (consentWording.ts).
 export function emailSummary(doc: Quiz): string {
   const c = resolveGuided(doc);
   const placement =
-    c.capturePlacement === "before"
-      ? c.captureEmail
-        ? "Before results"
-        : "Not collecting"
-      : c.capturePlacement === "none"
-        ? "Not collecting"
-        : c.capturePlacement === "inline"
-          ? "On the results page"
-          : "Discount capture";
+    c.where === "before" ? "Before results" : c.where === "inline" ? "On the results page" : "Not collecting";
+  if (c.where === "none") return placement;
   return [
     placement,
-    c.captureEmail && c.capturePlacement === "before"
-      ? c.captureRequired
-        ? "required"
-        : "optional"
-      : null,
-    c.captureTermsOn ? `terms ${c.captureTermsMode ?? "checkbox"}` : null,
-    c.capturePhone
-      ? `SMS ${c.smsConsentMode ?? "no consent configured"}`
-      : null,
+    c.where === "before" ? (c.captureRequired ? "required" : "optional") : null,
+    `terms ${c.captureTermsMode === "checkbox" ? "checkbox" : "notice"}`,
+    c.capturePhone ? "SMS" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -45,63 +40,37 @@ export function EmailScreen({
   commit: (doc: Quiz) => void;
 }) {
   const cfg = resolveGuided(doc);
-  const runtimeCfg = resolveRecPageGlobal(doc.rec_page_settings);
   const [confirmOff, setConfirmOff] = useState(false);
   const cancel = useRef<HTMLButtonElement>(null);
-  const termsMode = useRef(cfg.captureTermsMode ?? "checkbox");
-  const smsMode = useRef(cfg.smsConsentMode ?? "checkbox");
-  const off = cfg.capturePlacement === "none" || !cfg.captureEmail;
-  const before = cfg.capturePlacement === "before" && cfg.captureEmail;
-  const patch = (p: Partial<RecPageGlobal>) => commit(setRecPageGlobal(doc, p));
-  const setPlacement = (placement: "before" | "inline" | "none") =>
-    patch({
-      capturePlacement: placement,
-      captureEmail: placement !== "none",
-      captureInlineOn: placement === "inline" ? true : undefined,
-    });
-  const modes = (kind: "terms" | "sms") => {
-    const mode =
-      kind === "terms"
-        ? (cfg.captureTermsMode ?? "checkbox")
-        : (cfg.smsConsentMode ?? "checkbox");
-    return (
-      <div className="qz-walk-mode">
-        <div
-          className="qz-segmented"
-          role="group"
-          aria-label={`${kind === "terms" ? "Terms" : "SMS"} consent mode`}
-        >
-          {(["checkbox", "notice"] as const).map((v) => (
-            <button
-              type="button"
-              key={v}
-              aria-pressed={mode === v}
-              onClick={() => {
-                if (kind === "terms") {
-                  termsMode.current = v;
-                  patch({ captureTermsMode: v });
-                } else {
-                  smsMode.current = v;
-                  patch({ smsConsentMode: v });
-                }
-              }}
-            >
-              {v === "checkbox" ? "Checkbox" : "Notice only"}
-            </button>
-          ))}
-        </div>
-        <p>
-          {mode === "checkbox" ? "Beside a checkbox: " : "Under the button: "}
-          {kind === "terms"
-            ? mode === "notice"
-              ? noticeText(runtimeCfg)
-              : termsCopy(runtimeCfg)
-            : cfg.smsConsentText ||
-              (mode === "notice" ? SMS_NOTICE : SMS_CHECKBOX)}
-        </p>
-      </div>
-    );
+  const off = cfg.where === "none";
+  const before = cfg.where === "before";
+  const patch = (p: Partial<RecPageGlobal>) => commit(setRecPageGlobal(doc, stampConsent(p)));
+  const setPlacement = (placement: Placement) => patch(placementPatch(placement));
+  const labels = {
+    terms: cfg.termsLabel?.trim() || DEFAULT_TERMS_LABEL,
+    privacy: cfg.privacyLabel?.trim() || DEFAULT_PRIVACY_LABEL,
   };
+  const termsMode = cfg.captureTermsMode === "checkbox" ? "checkbox" : "notice";
+  const termsModes = (
+    <div className="qz-walk-mode">
+      <div className="qz-segmented" role="group" aria-label="Terms consent mode">
+        {(["checkbox", "notice"] as const).map((v) => (
+          <button
+            type="button"
+            key={v}
+            aria-pressed={termsMode === v}
+            onClick={() => patch({ captureTermsMode: v })}
+          >
+            {v === "checkbox" ? "Checkbox" : "Notice only"}
+          </button>
+        ))}
+      </div>
+      <p>
+        {termsMode === "checkbox" ? "Beside a checkbox: " : "Under the email field: "}
+        {wordingText(termsMode === "checkbox" ? TERMS_BOX : TERMS_LINE, labels)}
+      </p>
+    </div>
+  );
   return (
     <>
       <h2 className="qz-walk-email-title">Email capture</h2>
@@ -121,16 +90,14 @@ export function EmailScreen({
           </button>
           <button
             type="button"
-            aria-pressed={
-              cfg.capturePlacement === "inline" && cfg.captureInlineOn === true
-            }
+            aria-pressed={cfg.where === "inline"}
             onClick={() => setPlacement("inline")}
           >
             On the results page
           </button>
           <button
             type="button"
-            aria-pressed={cfg.capturePlacement === "none"}
+            aria-pressed={cfg.where === "none"}
             onClick={() =>
               cfg.capturePhone ? setConfirmOff(true) : setPlacement("none")
             }
@@ -143,15 +110,8 @@ export function EmailScreen({
             Choosing “Don’t collect” also removes the SMS collection setting.
           </p>
         )}
-        {cfg.capturePlacement === "inline" ||
-        cfg.capturePlacement === "discount" ? (
-          <p className="qz-walk-description">
-            Email is set to{" "}
-            {cfg.capturePlacement === "inline"
-              ? "inline capture"
-              : "discount capture"}{" "}
-            on the Results step.
-          </p>
+        {cfg.where === "inline" ? (
+          <p className="qz-walk-description">Email is set to inline capture on the Results step.</p>
         ) : null}
       </section>
       <fieldset className="qz-walk-settings" disabled={off}>
@@ -168,38 +128,25 @@ export function EmailScreen({
             {!before && <small>Only when asked before results</small>}
           </span>
         </label>
-        <label className="qz-walk-toggle">
-          <input
-            type="checkbox"
-            checked={cfg.captureTermsOn}
-            onChange={(e) =>
-              patch({
-                captureTermsOn: e.target.checked,
-                ...(e.target.checked
-                  ? { captureTermsMode: termsMode.current }
-                  : {}),
-              })
-            }
-          />
+        {/* The privacy notice cannot be switched off while an email is
+            collected (GDPR art. 13 / CCPA): terms is a line or a box. */}
+        <div className="qz-walk-toggle is-static">
           <span>Terms and conditions</span>
-        </label>
-        {cfg.captureTermsOn && modes("terms")}
+        </div>
+        {termsModes}
         <label className="qz-walk-toggle">
           <input
             type="checkbox"
             checked={cfg.capturePhone}
-            onChange={(e) =>
-              patch({
-                capturePhone: e.target.checked,
-                ...(e.target.checked
-                  ? { smsConsentMode: smsMode.current }
-                  : {}),
-              })
-            }
+            onChange={(e) => patch({ capturePhone: e.target.checked ? true : undefined })}
           />
-          <span>Collect a phone number for SMS</span>
+          <span>
+            Collect a phone number for SMS
+            {cfg.capturePhone && (
+              <small>Shoppers get their own unticked box: “{smsBoxLabel(undefined)}”</small>
+            )}
+          </span>
         </label>
-        {cfg.capturePhone && modes("sms")}
         <label className="qz-walk-toggle">
           <input
             type="checkbox"

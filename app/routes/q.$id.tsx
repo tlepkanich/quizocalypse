@@ -97,6 +97,7 @@ export default function StorefrontRuntime() {
       locale={data.locale}
       buddySessionId={data.buddySessionId}
       aiCopyEnabled={data.aiCopyEnabled}
+      shopName={"shopName" in data ? data.shopName : undefined}
     />
   );
 }

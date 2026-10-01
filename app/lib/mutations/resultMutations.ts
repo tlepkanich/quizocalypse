@@ -175,6 +175,8 @@ export function setRecPageGlobal(doc: QuizDoc, patch: RecPageGlobalPatch): QuizD
   if (global.captureEmail === false) {
     delete global.captureName;
     delete global.capturePhone;
+    // Results handoff §7 — no email, nothing to unlock the offer with.
+    delete global.captureUnlocksOffer;
   }
   // New consent-only fields never outlive their collection switch.
   // Preserve pre-existing terms wording for older documents.

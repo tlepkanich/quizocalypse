@@ -1,74 +1,102 @@
 import type { Quiz, RecPageGlobal, DiscountConfig } from "../../../lib/quizSchema";
-import { resolveRecPageGlobal, type ResolvedRecPageConfig } from "../../../lib/recommendDecider";
+import {
+  GUIDED_LOADING_STEPS,
+  resolveRecPageGlobal,
+  type ResolvedRecPageConfig,
+} from "../../../lib/recommendDecider";
 import { setRecPageGlobal } from "../../../lib/quizMutations";
+import { placementPatch, readPlacement, stampConsent, type Placement } from "../../../lib/captureMode";
+import {
+  DEFAULT_PRIVACY_LABEL,
+  DEFAULT_PRIVACY_PATH,
+  DEFAULT_TERMS_LABEL,
+  DEFAULT_TERMS_PATH,
+} from "../../../lib/consentWording";
 
-/* Results-guided handoff (master.md) — the guided flow's read/write seam.
-   Reads resolve the mock's ship defaults at READ time (the schema stays
-   .optional() everywhere); writes go through setRecPageGlobal's sparse-patch
-   discipline or a whole-key discount_config replace. */
+/* Results-guided handoff (docs/design/results-guided/DEV-HANDOFF.md) — the
+   guided flow's read/write seam. Reads resolve defaults at READ time (the
+   schema stays .optional() everywhere); writes go through setRecPageGlobal's
+   sparse-patch discipline or a whole-key discount_config replace. */
 
-// ── read-time defaults for the guided-only fields (mock §4) ─────────────────
-// rg-wiring (2026-08-18): the defaults now MATCH the shipped runtime's
-// absent-field behavior (capture is mandatory, no consent row, a default
-// loading interstitial plays, no verified tag, no extras shelf). The sparse
-// patch clears default-valued keys, so "default in the UI" and "absent in
-// the doc" must mean the same live behavior — before this, the UI showed
-// best-practice defaults the runtime never rendered.
+// ── read-time defaults for the guided-only fields ───────────────────────────
+// A builder default MUST equal what the live quiz does when the key is
+// absent: patchGuided clears default-equal keys. Where new quizzes should
+// start elsewhere (consent on, descriptions off), the value is written
+// explicitly at draft creation (funnelDraft.server.ts), never by moving a
+// default here.
 export const GUIDED_DEFAULTS = {
   perRow: 2,
-  showVerified: false,
-  capturePlacement: "before" as NonNullable<RecPageGlobal["capturePlacement"]>,
   captureRequired: true,
   captureCta: "Show my results",
   captureSkipLabel: "No thanks, just show my results",
   consentOn: false,
-  consentCopy: "Email me offers and updates. Unsubscribe anytime.",
-  termsLabel: "Terms & Conditions",
-  termsUrl: "/policies/terms-of-service",
-  privacyLabel: "Privacy Policy",
-  privacyUrl: "/policies/privacy-policy",
+  // Empty = the live form's default text (defaultMarketingCopy).
+  consentCopy: "",
+  termsLabel: DEFAULT_TERMS_LABEL,
+  termsUrl: DEFAULT_TERMS_PATH,
+  privacyLabel: DEFAULT_PRIVACY_LABEL,
+  privacyUrl: DEFAULT_PRIVACY_PATH,
   loadingOn: true,
   loadingMs: 1600,
   loadingNamed: true,
-  loadingSteps: ["Reading your answers", "Scoring products", "Picking your best matches"],
+  loadingSteps: [...GUIDED_LOADING_STEPS],
   extrasOn: false,
-  // QRTZ-S6 (mock .q-alt-head) — read-time default only; a doc that stored
-  // its own heading keeps it.
+  // The live quiz's read-time heading; the builder writes its own heading the
+  // first time products are picked (EXTRAS_FIRST_PICK).
   extrasHeading: "Also worth a look",
-  extrasCopy: "Popular with riders like you.",
+  extrasCopy: "",
   extrasCount: 3,
   extrasProductIds: [] as string[],
 };
 
-// Placement copy presets (mock GATE_COPY) — applied while the merchant hasn't
-// written their own; their copy is never overwritten once touched.
-export const GATE_COPY: Record<string, { headline: string; copy: string; cta: string }> = {
+// Handoff §4 defect 1(b) — the live quiz has no link defaults of its own for
+// the old form, so these are ALWAYS stored, never sparse-cleared.
+// captureCta too: the builder shows "Show my results" but the live quiz falls
+// back to "Continue" when the key is absent.
+const ALWAYS_STORED = new Set(["termsLabel", "termsUrl", "privacyLabel", "privacyUrl", "captureCta"]);
+
+/** Written the first time the shelf gets products (handoff §6). */
+export const EXTRAS_FIRST_PICK = {
+  extrasHeading: "You might also like",
+  extrasCopy: "Popular with shoppers like you.",
+};
+
+// Placement copy presets — applied while the merchant hasn't written their
+// own (build_session.results_guided.copy_touched); the builder writes them
+// explicitly, so the live quiz's own fallbacks stay untouched.
+export const GATE_COPY: Record<Placement | "unlock", { headline: string; copy: string; cta: string }> = {
   before: {
     headline: "Your matches are ready",
     copy: "Tell us where to send them and we’ll unlock your results.",
     cta: "Show my results",
   },
   inline: {
-    headline: "Save your details",
-    copy: "Share your contact details with the store.",
-    cta: "Save my details",
+    headline: "Want these emailed to you?",
+    copy: "We’ll send this match list to your inbox.",
+    cta: "Email me my matches",
   },
-  discount: {
+  unlock: {
     headline: "Submit your email to unlock the discount",
     copy: "We’ll send the code straight over. Yours to use on any match below.",
     cta: "Unlock my discount",
   },
+  none: { headline: "", copy: "", cta: "" },
 };
 
 export const REVEAL_MAX_MS = 3000; // past this the wait reads as broken, not effort
+/** The live interstitial clamps to 1.5 s or more (DeciderViews). */
+export const LOADING_MIN_MS = 1500;
+export const LOADING_MAX_MS = 5000;
+export const LOADING_STEP_MS = 500;
 
-export type GuidedConfig = ResolvedRecPageConfig & typeof GUIDED_DEFAULTS;
+export type GuidedConfig = ResolvedRecPageConfig &
+  typeof GUIDED_DEFAULTS & { where: Placement; unlock: boolean };
 
 /** The whole guided config, defaults resolved. */
 export function resolveGuided(doc: Quiz): GuidedConfig {
   const base = resolveRecPageGlobal(doc.rec_page_settings);
   const g = (doc.rec_page_settings?.global ?? {}) as RecPageGlobal;
-  const merged: GuidedConfig = { ...GUIDED_DEFAULTS, ...base } as GuidedConfig;
+  const merged = { ...GUIDED_DEFAULTS, ...base } as GuidedConfig;
   // .optional() fields need explicit presence checks (undefined must not
   // clobber the ship default the way a spread of the raw global would).
   for (const k of Object.keys(GUIDED_DEFAULTS) as (keyof typeof GUIDED_DEFAULTS)[]) {
@@ -78,24 +106,34 @@ export function resolveGuided(doc: Quiz): GuidedConfig {
   // Explicit older loading configurations used a two-second fallback;
   // wholly absent loading settings still use the original 1.6-second beats.
   if (g.loadingMs === undefined && (g.loadingOn === true || g.loadingNamed !== undefined || (g.loadingSteps?.length ?? 0) > 0)) merged.loadingMs = 2000;
+  const placement = readPlacement(g);
+  merged.where = placement.where;
+  merged.unlock = placement.unlock;
   return merged;
 }
 
-/** Sparse global patch (mock: value equal to its default clears the key).
- *  capturePlacement also keeps the runtime's wired `captureEmail` gate in
- *  sync: "before" and "inline" → true, "none" and "discount" → false.
- *  Inline additionally opts into the new on-results form. */
-export function patchGuided(doc: Quiz, patch: Partial<RecPageGlobal>): Quiz {
-  const full: Partial<RecPageGlobal> = { ...patch };
-  if (patch.capturePlacement !== undefined) {
-    full.captureEmail = ["before", "inline"].includes(patch.capturePlacement) ? undefined : false;
-    full.captureInlineOn = patch.capturePlacement === "inline" ? true : undefined;
-    // undefined → the read-time default (ON) renders; explicit false = off.
-  }
+/** Sparse global patch: a value equal to its default clears the key (except
+ *  the policy links, always stored). A placement change writes its three
+ *  keys together; any consent key stamps the fixed-wording version. */
+export function patchGuided(
+  doc: Quiz,
+  patch: Partial<RecPageGlobal> & { where?: Placement },
+): Quiz {
+  const { where: whereIn, ...rest } = patch;
+  // A raw capturePlacement patch is routed through the same writer, so the
+  // three placement keys always move together. "discount" is never written.
+  const raw = rest.capturePlacement;
+  const where = whereIn ?? (raw && raw !== "discount" ? raw : undefined);
+  if (raw !== undefined) delete rest.capturePlacement;
+  const full: Partial<RecPageGlobal> = stampConsent({
+    ...rest,
+    ...(where !== undefined ? placementPatch(where) : {}),
+  });
   const sparse: Record<string, unknown> = {};
   const defaults = { ...GUIDED_DEFAULTS } as Record<string, unknown>;
   for (const [k, v] of Object.entries(full)) {
-    sparse[k] = k === "loadingMs" ? v : deepEqual(v, defaults[k]) ? undefined : v;
+    const keep = k === "loadingMs" || ALWAYS_STORED.has(k);
+    sparse[k] = keep ? v : deepEqual(v, defaults[k]) ? undefined : v;
   }
   return setRecPageGlobal(doc, sparse as Partial<RecPageGlobal>);
 }
@@ -107,24 +145,42 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
+/** Snap a loading duration onto the 0.5 s grid inside the live clamp. */
+export function snapLoadingMs(ms: number): number {
+  const snapped = Math.round(ms / LOADING_STEP_MS) * LOADING_STEP_MS;
+  return Math.min(LOADING_MAX_MS, Math.max(LOADING_MIN_MS, snapped));
+}
+
+// ── builder-only state, persisted in build_session (stripped at publish) ────
+export type GuidedSession = NonNullable<NonNullable<Quiz["build_session"]>["results_guided"]>;
+
+export function readSession(doc: Quiz): GuidedSession {
+  return doc.build_session?.results_guided ?? {};
+}
+
+export function writeSession(doc: Quiz, next: Partial<GuidedSession>): Quiz {
+  const session = doc.build_session;
+  if (!session) return doc;
+  return {
+    ...doc,
+    build_session: { ...session, results_guided: { ...(session.results_guided ?? {}), ...next } },
+  };
+}
+
 // ── discount ────────────────────────────────────────────────────────────────
+// Read-time defaults for the editor. Only keys a Shopify field (or the app's
+// own mint) reads live here; the retired guided keys (auto_apply,
+// eligibility, segment, scope, exclude_sale, deliver_*) still parse forever
+// but are never written again (handoff §8 "Cut from main's editor").
 export const DISCOUNT_DEFAULTS = {
   code_mode: "dynamic" as NonNullable<DiscountConfig["code_mode"]>,
   code_prefix: "QUIZ-",
   static_code: "",
   existing_code: "",
-  auto_apply: true,
-  eligibility: "all" as NonNullable<DiscountConfig["eligibility"]>,
-  segment: "VIP",
   expiry_mode: "hours" as NonNullable<DiscountConfig["expiry_mode"]>,
   expiry_hours: 24,
-  scope: "all" as NonNullable<DiscountConfig["scope"]>,
-  exclude_sale: true,
   purchase: "onetime" as NonNullable<DiscountConfig["purchase"]>,
   recurring_limit: 1,
-  deliver_on_page: true,
-  deliver_klaviyo: false,
-  deliver_rivo: false,
 };
 
 export type GuidedDiscount = DiscountConfig & typeof DISCOUNT_DEFAULTS;
@@ -139,55 +195,66 @@ export function resolveDiscount(doc: Quiz): GuidedDiscount {
   return merged;
 }
 
-export function writeDiscount(doc: Quiz, next: Partial<DiscountConfig>): Quiz {
-  return { ...doc, discount_config: { ...(doc.discount_config ?? {}), ...next } as Quiz["discount_config"] };
+/** Handoff §7 — "a discount exists": the editor's first Save stamps
+ *  `configured`; quizzes that used the retired presets only have `enabled`. */
+export function discountExists(doc: Quiz): boolean {
+  const d = doc.discount_config;
+  return d?.configured === true || d?.enabled === true;
 }
 
-/** The offer's display label ("10% off" / "$10 off" / "Free shipping"). */
-export function offerLabel(d: GuidedDiscount): string {
-  return d.kind === "free_shipping" ? "Free shipping" : d.kind === "amount" ? `$${d.value} off` : `${d.value}% off`;
+/**
+ * Replace the stored discount with the editor's result. Handoff §4: MERGE
+ * FIRST, THEN STRIP — keys equal to their read-time default are removed from
+ * the merged object, so resetting a field to its default really clears the
+ * stored value (the old strip-before-merge let a stored shared code survive a
+ * switch back to per-shopper). Keys are deleted, never set to undefined:
+ * resolveDiscount spreads an explicit undefined over the default.
+ */
+export function writeDiscount(doc: Quiz, next: Partial<DiscountConfig>): Quiz {
+  const merged: Record<string, unknown> = { ...(doc.discount_config ?? {}), ...next };
+  for (const [k, v] of Object.entries(DISCOUNT_DEFAULTS)) {
+    if (merged[k] === v) delete merged[k];
+  }
+  for (const [k, v] of Object.entries(merged)) if (v === undefined) delete merged[k];
+  return { ...doc, discount_config: merged as Quiz["discount_config"] };
 }
-/** The code as the merchant will see it (dynamic mode shows a sample mint). */
-export function offerCode(d: GuidedDiscount): string {
-  if (d.code_mode === "existing") return d.existing_code || "SPRING10";
-  if (d.code_mode === "static") return d.static_code || `${d.code_prefix}SPRING`;
-  return d.code ?? `${d.code_prefix}7F3K2Q`;
+
+/** Handoff §7 — a shared or existing code must never sit behind the email
+ *  ask (the published quiz is public). Unlock forces per-shopper codes. */
+export function forcePerShopperCode(doc: Quiz): Quiz {
+  const d = doc.discount_config;
+  if (!d || d.code_mode === undefined || d.code_mode === "dynamic") return doc;
+  const next = writeDiscount(doc, { code_mode: "dynamic" });
+  const { static_code: _s, existing_code: _e, ...rest } = next.discount_config as Record<string, unknown>;
+  void _s;
+  void _e;
+  return { ...next, discount_config: rest as Quiz["discount_config"] };
 }
-export const combinesUnset = (d: GuidedDiscount): boolean =>
-  !d.combines || ["product", "order", "shipping"].some((k) => d.combines?.[k as "product"] === undefined);
 
 /* ── WIRED MAP — the owner's no-dead-ends rule ──────────────────────────────
-   Every guided setting persists to the doc, but not all of them are consumed
-   by the published runtime / main builder yet. Anything false here renders a
-   quiet "not connected yet" tag beside its control so it gets wired rather
-   than silently dropped. Update this map as the runtime seams land. */
-// rg-wiring (2026-08-18): the client-runtime seams landed — an explicit
-// non-default value now renders on the published page. Still false: the
-// settings that need SERVER work (discount placement needs on-submit
-// code mint; advanced discount needs eligibility/expiry enforcement and
-// Klaviyo/Rivo delivery integrations).
+   A control whose live reader has not landed carries a quiet "not connected
+   yet" tag (handoff §2 release rule). The decider results page reads nothing
+   from discount_config today, and publish no longer mints a shared code for
+   decider quizzes (handoff §4 defect 2): every discount control waits on the
+   per-shopper pipeline (handoff §12). */
 export const WIRED: Record<string, boolean> = {
   headline: true,
   whyCopy: true,
   layout: true,
-  gridMax: true,
-  perRow: true, // explicit value pins the grid columns; default keeps the responsive rule
-  showStars: true,
-  showVerified: true,
   showAtc: true,
   showDesc: true,
   descOverrides: true,
   showAddAll: true,
-  discount_basic: true, // enabled/kind/value/limits → publish-time code (quizPublish)
-  discount_advanced: false, // code_mode/eligibility/expiry-hours/scope/combines/purchase/deliver
-  placement_before: true, // captureEmail gate screen
+  discount: false, // the offer bar + per-shopper mint (handoff §12)
+  unlock: false, // the locked offer card (handoff §7 + §12)
+  placement_before: true,
   placement_none: true,
   placement_inline: true,
-  placement_discount: false, // needs the server-side mint on submit (discount.server seam exists)
   captureRequired: true,
   captureWording: true,
   captureCtaSkip: true,
-  consent: true, // marketing-consent row + split links + /captures marketing_consent
+  consent: true, // the fixed-wording form (consentVersion)
   loading: true,
   extras: true,
+  fallbackOn: true,
 };

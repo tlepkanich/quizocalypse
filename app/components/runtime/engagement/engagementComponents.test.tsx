@@ -99,6 +99,42 @@ describe("§L runtime widgets hide gracefully (ethics — never fabricate)", () 
     }
   });
 
+  // Results handoff §4 defect 4 — a builder-preview click minted a REAL
+  // Shopify discount. Preview reveals a sample and never fetches.
+  it("RewardReveal (preview) reveals a sample code without fetching; FeedbackWidget (preview) posts nothing", async () => {
+    const orig = globalThis.fetch;
+    let calls = 0;
+    (globalThis as Record<string, unknown>).fetch = async () => {
+      calls += 1;
+      return new Response("{}");
+    };
+    try {
+      const el = mount(
+        createElement(RewardReveal, {
+          config: { ...r.reward, emailGated: false, value: 15 },
+          quizId: "q",
+          sessionId: "s",
+          preview: true,
+        }),
+      );
+      const btn = el.querySelector("button.qz-reward-btn") as HTMLButtonElement;
+      await act(async () => {
+        btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        await Promise.resolve();
+      });
+      expect(el.textContent).toContain("EXAMPLE-CODE");
+      expect(el.textContent).toContain("15% off");
+      act(() => root?.unmount());
+      host?.remove();
+      const fb = mount(createElement(FeedbackWidget, { config: r.feedback, quizId: "q", sessionId: "s", preview: true }));
+      act(() => (fb.querySelector("button") as HTMLButtonElement).click());
+      expect(fb.textContent).toContain("Thanks");
+      expect(calls).toBe(0);
+    } finally {
+      (globalThis as Record<string, unknown>).fetch = orig;
+    }
+  });
+
   it("RewardReveal exhausted state uses a sensible default when no fallbackText is set", async () => {
     const orig = globalThis.fetch;
     (globalThis as Record<string, unknown>).fetch = async () =>

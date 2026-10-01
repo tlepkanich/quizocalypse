@@ -6,6 +6,8 @@ import type { Shop } from "@prisma/client";
 import prisma from "../db.server";
 import { Quiz, BuildSession } from "./quizSchema";
 import { buildSeedQuiz } from "./seedQuiz";
+import { creationRecPageGlobal } from "./captureMode";
+import { setRecPageGlobal } from "./quizMutations";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { brandSeedTokens } from "./brandSeed";
 
@@ -74,12 +76,17 @@ async function seedStep1Draft(shopId: string): Promise<string> {
   // (the stamp is never applied retroactively; in-flight pre-flip drafts
   // resume as legacy with today's exact behavior — every consumer keys off
   // the stamp, never off deploy time).
-  const doc = Quiz.parse({
-    ...buildSeedQuiz("New quiz"),
-    ...(brandTokens ? { design_tokens: brandTokens } : {}),
-    logic_model: "decider",
-    build_session: { stage: "grouping" },
-  });
+  // Results handoff §3 — the Results step's starting values for new quizzes,
+  // written explicitly (the read-time defaults stay what published quizzes do).
+  const doc = setRecPageGlobal(
+    Quiz.parse({
+      ...buildSeedQuiz("New quiz"),
+      ...(brandTokens ? { design_tokens: brandTokens } : {}),
+      logic_model: "decider",
+      build_session: { stage: "grouping" },
+    }),
+    creationRecPageGlobal(),
+  );
   const created = await prisma.quiz.create({
     data: {
       shopId,
@@ -239,7 +246,11 @@ export async function writeContent(
     // Same default the request-start read used (loadFunnelDraft).
     const session: BuildSession = current.data.build_session ?? BuildSession.parse({});
     if (isStaleSave(session.autosave, save)) return "stale";
-    const nextSession: BuildSession = save ? { ...session, autosave: save } : session;
+    // Results handoff §15 — the guided Results step's builder-only state is
+    // the one client-written build_session key (it never touches the stage).
+    const client = doc.build_session?.results_guided;
+    const withGuided: BuildSession = client ? { ...session, results_guided: client } : session;
+    const nextSession: BuildSession = save ? { ...withGuided, autosave: save } : withGuided;
     await tx.quiz.update({
       where: { id: quizId },
       data: { draftJson: Quiz.parse({ ...doc, build_session: nextSession }) as never },

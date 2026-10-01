@@ -8,12 +8,16 @@ export function InlineDeciderCapture({
   quizId,
   sessionId,
   shopDomain,
+  storeName,
+  onCaptured,
 }: {
   config: ResolvedRecPageConfig;
   styles: ReturnType<typeof stylesFor>;
   quizId: string;
   sessionId: string;
   shopDomain: string;
+  storeName?: string;
+  onCaptured?: () => void;
 }) {
   const [done, setDone] = useState(false);
   const [error, setError] = useState(false);
@@ -33,8 +37,10 @@ export function InlineDeciderCapture({
         quizId={quizId}
         sessionId={sessionId}
         shopDomain={shopDomain}
+        storeName={storeName}
         inline
-        onDone={(_contact, saved) => {
+        onDone={(contact, saved) => {
+          if (saved && contact?.email) onCaptured?.();
           setDone(Boolean(saved));
           setError(!saved);
         }}

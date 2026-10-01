@@ -22,11 +22,15 @@ export function RewardReveal({
   quizId,
   sessionId,
   presetEmail,
+  preview,
 }: {
   config: ResolvedEngagement["reward"];
   quizId: string;
   sessionId: string;
   presetEmail?: string;
+  // Results handoff §4 defect 4 — the builder preview must never POST /reward:
+  // every claim there minted a real Shopify discount. Preview reveals a sample.
+  preview?: boolean;
 }) {
   const emailGated = config.emailGated !== false;
   const [state, setState] = useState<"idle" | "loading" | "revealed" | "hidden" | "exhausted">("idle");
@@ -36,6 +40,11 @@ export function RewardReveal({
   const emailValid = /^\S+@\S+\.\S+$/.test(email);
 
   const claim = async () => {
+    if (preview) {
+      setReward({ code: "EXAMPLE-CODE", type: config.type, value: config.value ?? config.rangeMax });
+      setState("revealed");
+      return;
+    }
     setState("loading");
     setErr(null);
     try {
@@ -48,6 +57,10 @@ export function RewardReveal({
       if (data.reward) {
         setReward(data.reward);
         setState("revealed");
+      } else if (data.reason === "session_incomplete") {
+        // The completion POST can still be in flight — let the shopper retry.
+        setState("idle");
+        setErr("Couldn't load your reward — please try again.");
       } else if (data.error === "email required") {
         setState("idle");
         setErr("Enter your email to unlock your reward.");

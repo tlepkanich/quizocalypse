@@ -232,18 +232,24 @@ describe("Questions walkthrough", () => {
       );
     }
     mount(<Harness />);
-    const terms = Array.from(document.querySelectorAll("label"))
-      .find((l) => l.textContent === "Terms and conditions")
-      ?.querySelector("input");
-    act(() => terms?.click());
+    // Results handoff §10 — terms has no off switch: the Checkbox / Notice
+    // pair writes the mode, holds terms on, and stamps the fixed wording.
+    click("Checkbox");
     expect(commits.at(-1)?.rec_page_settings?.global).toEqual({
       captureTermsOn: true,
       captureTermsMode: "checkbox",
+      consentVersion: "2026-09-17",
     });
+    expect(document.body.textContent).toContain(
+      "I agree to the Terms & Conditions and acknowledge the Privacy Policy.",
+    );
     const phone = Array.from(document.querySelectorAll("label"))
-      .find((l) => l.textContent === "Collect a phone number for SMS")
+      .find((l) => l.textContent?.startsWith("Collect a phone number for SMS"))
       ?.querySelector("input");
     act(() => phone?.click());
+    // SMS always carries its own checkbox — no "Notice only" pair.
+    expect(commits.at(-1)?.rec_page_settings?.global.smsConsentMode).toBe("checkbox");
+    expect(document.querySelectorAll('[aria-label="SMS consent mode"]')).toHaveLength(0);
     const count = commits.length;
     click("Don’t collect");
     expect(commits).toHaveLength(count);

@@ -51,7 +51,53 @@ export function stripPublicDoc<T extends Record<string, unknown>>(
   const { review_enrichment_sources: _r, translations: _t, ...rest } = doc;
   void _r;
   void _t;
-  return rest;
+  return redactPublicSecrets(rest);
+}
+
+// Results handoff §4 defects 0 + 2 — secrets that live in the published doc
+// because a SERVER route reads them back from the DB (never from the client):
+//  - integration actions' Klaviyo `api_key` and webhook `secret`
+//    (q.$id.integration.tsx loads publishedJson itself);
+//  - discount codes nothing on the public page reads: `static_code` /
+//    `existing_code` (no reader anywhere) on every doc, and `code` on decider
+//    docs (the decider results page never reads it — legacy pages DO render
+//    it as their banner, so legacy docs keep it).
+// Only keys that are present are removed, and every other key keeps its
+// position, so a doc with none of them serializes byte-identically (the
+// c02ccaec98a0fe9e pin has none).
+const DISCOUNT_CODE_KEYS_ALL = ["static_code", "existing_code"] as const;
+const DISCOUNT_CODE_KEYS_DECIDER = ["code", ...DISCOUNT_CODE_KEYS_ALL] as const;
+const INTEGRATION_SECRET_KEYS = ["api_key", "secret"] as const;
+
+function withoutKeys<T>(value: T, keys: readonly string[]): T {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (!keys.some((k) => k in record)) return value;
+  const kept: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(record)) if (!keys.includes(k)) kept[k] = v;
+  return kept as T;
+}
+
+function redactIntegrationNode(node: unknown): unknown {
+  const n = node as { type?: unknown; data?: { actions?: unknown } } | null;
+  if (!n || n.type !== "integration" || !Array.isArray(n.data?.actions)) return node;
+  const actions = n.data.actions.map((a) => withoutKeys(a, INTEGRATION_SECRET_KEYS));
+  return { ...n, data: { ...n.data, actions } };
+}
+
+export function redactPublicSecrets<T extends Record<string, unknown>>(doc: T): T {
+  let out: Record<string, unknown> = doc;
+  if (Array.isArray(doc.nodes)) {
+    const nodes = doc.nodes.map(redactIntegrationNode);
+    if (nodes.some((n, i) => n !== (doc.nodes as unknown[])[i])) out = { ...out, nodes };
+  }
+  if (doc.discount_config && typeof doc.discount_config === "object") {
+    const keys =
+      doc.logic_model === "decider" ? DISCOUNT_CODE_KEYS_DECIDER : DISCOUNT_CODE_KEYS_ALL;
+    const dc = withoutKeys(doc.discount_config, keys);
+    if (dc !== doc.discount_config) out = { ...out, discount_config: dc };
+  }
+  return out as T;
 }
 
 export function stripPublicJsonPayload(
@@ -59,6 +105,70 @@ export function stripPublicJsonPayload(
 ): Record<string, unknown> {
   if (!payload || typeof payload !== "object") return {};
   return stripPublicDoc(payload as Record<string, unknown>);
+}
+
+// Results handoff §4 defect 3 — catalog sync pulls EVERY product metafield
+// (any namespace: cost, supplier notes, other apps' data), and the index is
+// public. Bake only the keys something on the shopper side reads:
+//  - review stars (recommendDecider.productRating) and the `__rank_*` sort
+//    keys both engines read by convention;
+//  - every key the doc itself names: `metafield_key` (match strategies and
+//    targets), answers' `metafield_filters[].key`, and "mf:<key>" narrow
+//    fields.
+const ALWAYS_READ_METAFIELDS = [
+  "reviews.rating",
+  "reviews.rating_count",
+  "rating",
+  "rating_count",
+  "__rank_bestseller",
+  "__rank_rating",
+] as const;
+
+export function usedMetafieldKeys(doc: unknown): Set<string> {
+  const used = new Set<string>(ALWAYS_READ_METAFIELDS);
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    if (typeof record.metafield_key === "string" && record.metafield_key) {
+      used.add(record.metafield_key);
+    }
+    if (typeof record.narrow_field === "string" && record.narrow_field.startsWith("mf:")) {
+      used.add(record.narrow_field.slice(3));
+    }
+    if (Array.isArray(record.metafield_filters)) {
+      for (const f of record.metafield_filters) {
+        const key = (f as { key?: unknown } | null)?.key;
+        if (typeof key === "string" && key) used.add(key);
+      }
+    }
+    Object.values(record).forEach(visit);
+  };
+  visit(doc);
+  return used;
+}
+
+function pickUsedMetafields(
+  metafields: Record<string, string>,
+  used: ReadonlySet<string>,
+): Record<string, string> {
+  const kept: Record<string, string> = {};
+  for (const [key, value] of Object.entries(metafields)) if (used.has(key)) kept[key] = value;
+  return kept;
+}
+
+// NOT brandGuidelines.name: that names a voice preset ("Authoritative &
+// trustworthy"), never the store.
+function resolveBakedShopName(
+  fetched: string | null | undefined,
+  previousPublished: unknown,
+): string | undefined {
+  const previous = (previousPublished as { shop_name?: unknown } | null)?.shop_name;
+  const candidates = [fetched, typeof previous === "string" ? previous : undefined];
+  return candidates.map((c) => c?.trim()).find((c) => Boolean(c));
 }
 
 export interface PublishedQuiz extends QuizDoc {
@@ -69,6 +179,9 @@ export interface PublishedQuiz extends QuizDoc {
   // construct PDP URLs (https://<shop>/products/<handle>) without an
   // extra DB lookup.
   shop_domain: string;
+  // Results handoff §9 — the store's display name for the fixed consent
+  // wording. Decider docs only; absent when no name could be resolved.
+  shop_name?: string;
   // Spin-off: "shopify" (Shopify cart + PDP) | "standalone" (the merchant's own
   // product URLs, "Shop now"). Absent on pre-existing quizzes → runtime reads it
   // as "shopify", so nothing changes for installed Shopify shops.
@@ -401,6 +514,10 @@ export async function publishQuiz(
     collectionOrder?: (
       targets: Array<{ targetId: string; collectionRef: string }>,
     ) => Promise<Record<string, string[]> | null>;
+    // Results handoff §9 — the store's display name for the fixed consent
+    // wording, resolved by the (server-only) caller. Absent → the name baked
+    // by the previous publish; neither → no shop_name (wording says "us").
+    shopName?: string | null;
   },
 ): Promise<PublishResult> {
   const quiz = await prisma.quiz.findFirst({
@@ -583,6 +700,7 @@ export async function publishQuiz(
     where: { shopId: args.shopId },
   });
 
+  const usedMetafields = usedMetafieldKeys(doc);
   const productIndex: IndexedProduct[] = products
     .filter((p) =>
       explicitProductIds.has(p.productId) || includeProductIds.has(p.productId)
@@ -608,7 +726,7 @@ export async function publishQuiz(
         ) ?? variants[0];
       // Flatten metafields into a simple key→string map for v3 ranking +
       // the metafield match strategy (shared derivation — productIndexing.ts).
-      const metafields = flattenMetafields(p.metafields);
+      const metafields = pickUsedMetafields(flattenMetafields(p.metafields), usedMetafields);
       // G5 widening — narrowing sources baked from already-synced data.
       const variantOptions = variantOptionsOf(p.variants);
       // Variant list for the result-card selector — title is the Shopify
@@ -681,6 +799,11 @@ export async function publishQuiz(
     where: { id: args.shopId },
     select: { brandTokens: true, shopDomain: true, brandGuidelines: true, source: true },
   });
+  // Decider docs only — every legacy publish stays byte-identical.
+  const bakedShopName =
+    doc.logic_model === "decider"
+      ? resolveBakedShopName(opts?.shopName, quiz.publishedJson)
+      : undefined;
   const shopParsed = BrandTokens.safeParse(shop?.brandTokens ?? {});
   const shopTokens: DesignTokensT | null = shopParsed.success
     ? shopParsed.data
@@ -850,6 +973,7 @@ export async function publishQuiz(
     shop_domain: shop?.shopDomain ?? "",
     platform: shop?.source === "standalone" ? "standalone" : "shopify",
     ...(bakedCurrency ? { currency: bakedCurrency } : {}),
+    ...(bakedShopName ? { shop_name: bakedShopName } : {}),
     ...(answerWeights ? { answer_weights: answerWeights } : {}),
     // LOGIC v2 — the baked target data (decider docs only; absent on every
     // legacy publish → byte-identical, pinned by the H3 harness).

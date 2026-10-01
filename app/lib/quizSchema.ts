@@ -1275,7 +1275,9 @@ export const DiscountConfig = z.object({
   value: z.number().min(0).default(10),
   // Rec-Page spec §4 "Applies to". For products/collections, the matching id
   // list scopes customerGets.items; "all" applies to the whole cart.
-  applies_to: z.enum(["all", "collections", "products"]).default("all"),
+  // "recommended" (results handoff §8) = the products a shopper's result
+  // recommends; resolved per result by the per-shopper mint (handoff §12).
+  applies_to: z.enum(["all", "collections", "products", "recommended"]).default("all"),
   applies_collection_ids: z.array(z.string()).default([]),
   applies_product_ids: z.array(z.string()).default([]),
   // Approximates "first purchase only" — Shopify caps the code at one use per
@@ -1322,7 +1324,22 @@ export const DiscountConfig = z.object({
     })
     .optional(),
   purchase: z.enum(["onetime", "sub", "both"]).optional(),
-  recurring_limit: z.number().int().min(1).optional(),
+  // 0 = every payment (Shopify recurringCycleLimit 0).
+  recurring_limit: z.number().int().min(0).optional(),
+  // ── Results handoff §8/§15 — each key maps to ONE Shopify Admin field.
+  // "A discount exists" (handoff §7): stamped on the editor's first Save and
+  // never stripped. discount_config always parses to defaults, so without it
+  // the builder could not tell a configured discount from none.
+  configured: z.boolean().optional(),
+  // customerGets.value.discountAmount.appliesOnEachItem (fixed amount off
+  // products only). Absent = false, what the server sends today.
+  applies_on_each_item: z.boolean().optional(),
+  // Free shipping: maximumShippingPrice (a bare Decimal).
+  max_shipping_price: z.number().min(0).optional(),
+  // Free shipping: destination.countries (ISO codes). Absent = all countries.
+  shipping_countries: z.array(z.string()).optional(),
+  // The Shopify discount id behind existing_code (read with discountNode).
+  existing_discount_id: z.string().optional(),
   deliver_on_page: z.boolean().optional(),
   deliver_klaviyo: z.boolean().optional(),
   deliver_rivo: z.boolean().optional(),
@@ -1709,6 +1726,21 @@ export const BuildSession = z.object({
   // opening on it. The engine, validation, report and publish NEVER read it
   // (build_session is stripped at publish). OPTIONAL WITHOUT DEFAULT.
   logic_style: z.enum(["rules", "attributes"]).optional(),
+  // Results handoff §15 — the guided Results step's builder-only state, lost
+  // on reload while it lived in React. The ONE build_session key the JSON
+  // autosave carries (funnelIntents.server.ts); stripped at publish with the
+  // rest of build_session. OPTIONAL WITHOUT DEFAULT.
+  results_guided: z
+    .object({
+      // Which steps / sub-tabs the merchant has passed with the forward
+      // button (plus "__ovw" once the Overview is reached).
+      seen: z.record(z.string(), z.boolean()).optional(),
+      // "Set up later" under the unlock switch.
+      unlock_deferred: z.boolean().optional(),
+      // The merchant edited the Page Copy — placement presets stop applying.
+      copy_touched: z.boolean().optional(),
+    })
+    .optional(),
   // Logic step P2-11 — the newest autosave applied to this draft: the
   // editing session's id and its commit sequence. Written ONLY by the
   // funnel's autosave PUT (writeContent, under the row lock) so a PUT that
@@ -1911,6 +1943,18 @@ export const RecPageGlobal = z.object({
   termsUrl: z.string().optional(),
   privacyLabel: z.string().optional(),
   privacyUrl: z.string().optional(),
+  // Results handoff §9 — the fixed-wording consent form. Present (the
+  // wording version the builder last wrote, e.g. "2026-09-17") → the live
+  // form renders app/lib/consentWording.ts's sentences, in the handoff's
+  // order; captureTermsText/smsConsentText are then ignored (still parsed).
+  // Absent → today's form, DOM-identical.
+  consentVersion: z.string().optional(),
+  // Results handoff §7 — "Require the email to unlock it": the discount is
+  // shown only after the email is submitted. Needs a per-shopper code
+  // (discount_config.code_mode "dynamic"). setRecPageGlobal clears it when
+  // captureEmail is false. Supersedes capturePlacement "discount", which
+  // still parses and reads as inline + unlock.
+  captureUnlocksOffer: z.boolean().optional(),
   // Loading screen (§4 step 4 · Loading tab) — off by default at read time.
   loadingOn: z.boolean().optional(),
   loadingMs: z.number().int().min(1000).max(5000).optional(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDiscountInput, buildFreeShippingInput } from "./discount.server";
+import { buildDiscountInput, buildFreeShippingInput, withoutDiscountCode } from "./discount.server";
 import { DiscountConfig } from "./quizSchema";
 
 const ISO = "2026-06-01T00:00:00.000Z";
@@ -92,5 +92,18 @@ describe("buildFreeShippingInput", () => {
     expect(input.usageLimit).toBe(10);
     // free shipping has no customerGets.value/items
     expect(input.customerGets).toBeUndefined();
+  });
+});
+
+describe("withoutDiscountCode (Duplicate — results handoff §4 defect 2)", () => {
+  it("drops only discount_config.code", () => {
+    const draft = { quiz_id: "q", discount_config: { enabled: true, code: "QUIZ-AB12CD", value: 10 } };
+    expect(withoutDiscountCode(draft)).toEqual({ quiz_id: "q", discount_config: { enabled: true, value: 10 } });
+    expect(draft.discount_config.code).toBe("QUIZ-AB12CD");
+  });
+  it("passes through a draft with no code, or no object at all", () => {
+    const draft = { quiz_id: "q", discount_config: { enabled: false } };
+    expect(withoutDiscountCode(draft)).toBe(draft);
+    expect(withoutDiscountCode(null)).toBeNull();
   });
 });

@@ -1,545 +1,549 @@
 import { useState, type ReactNode } from "react";
 import type { Quiz, DiscountConfig } from "../../../lib/quizSchema";
+import type { IndexedProduct } from "../../../lib/recommendationEngine";
+import type { BuilderCollection } from "../../builder/stepProps";
+import { offerCodeDisplay, offerType } from "../../../lib/offerCopy";
 import { QzModal } from "../../qz-overlays";
+import { resolveDiscount, writeDiscount, type GuidedDiscount } from "./state";
 import {
-  resolveDiscount,
-  writeDiscount,
-  DISCOUNT_DEFAULTS,
-  type GuidedDiscount,
-} from "./state";
+  RETIRED_DISCOUNT_KEYS,
+  readbackRows,
+  saveBlocker,
+  withCodeMode,
+  withOfferType,
+} from "./discountRules";
 
-/* Results-guided handoff §4 step 3 — the full discount editor: a BASICS pane
-   (the 5 things 95% of merchants set) and an ADVANCED group (code source,
-   rules & limits, per-class combinations, delivery & purchase type), with the
-   live plain-English summary rail reading back what is being built plus the
-   warnings that bite in production. §9: when the email UNLOCKS the offer, the
-   code mode is FORCED to per-shopper dynamic — the published doc is public,
-   so a static/existing code cannot gate anything; those options are refused
-   outright, not warned about. */
+/* Results handoff §8 — the discount editor. The rule: every control writes
+   ONE documented Shopify Admin GraphQL field; a control that cannot be
+   mapped is cut, not explained. One 680px column: Basics, then Advanced in
+   Shopify's own section order with Shopify's own labels, then the read-back
+   of what this creates in Shopify, then Save — disabled, with the reason,
+   while the discount would be rejected or useless. While the email unlocks
+   the offer, only a per-shopper code is allowed (the published quiz is
+   public; a shared code behind the ask is one curl away). */
 
-function Row3({ children }: { children: ReactNode }) {
-  return <div className="qz-rg-row3">{children}</div>;
+function Seg<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: Array<[T, string, boolean?]>;
+  onChange: (v: T) => void;
+  label: string;
+}) {
+  return (
+    <div className="qz-segmented qz-rg-seg" role="group" aria-label={label}>
+      {options.map(([v, text, disabled]) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={value === v}
+          disabled={disabled}
+          onClick={() => onChange(v)}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
 }
+
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="qz-rg-dgroup">
+      <h4 className="qz-rg-grpdiv">{title}</h4>
+      {children}
+    </section>
+  );
+}
+
+const num = (v: string) => (v.trim() === "" ? undefined : Math.max(0, Number(v) || 0));
 
 export function DiscountEditor({
   doc,
   lockedToDynamic,
+  collections,
+  productIndex,
   onCommit,
-  onSaved,
   onClose,
 }: {
   doc: Quiz;
-  /** True while the unlock placement is active (§9 — dynamic only). */
+  /** True while the email unlocks the offer — per-shopper codes only. */
   lockedToDynamic: boolean;
+  collections: BuilderCollection[];
+  productIndex: IndexedProduct[];
   onCommit: (doc: Quiz) => void;
-  /** Fired after a successful save (the ask step's set-up flow returns). */
-  onSaved?: () => void;
   onClose: () => void;
 }) {
   const initial = resolveDiscount(doc);
-  const [d, setD] = useState<GuidedDiscount>({
-    ...initial,
-    code_mode: lockedToDynamic ? "dynamic" : initial.code_mode,
-    combines: initial.combines ?? { product: false, order: false, shipping: false },
-  });
-  const [grp, setGrp] = useState<"basic" | "adv">("basic");
-  const patch = (p: Partial<GuidedDiscount>) => setD((x) => ({ ...x, ...p }));
+  const start: GuidedDiscount = lockedToDynamic ? withCodeMode(initial, "dynamic") : initial;
+  const [d, setD] = useState<GuidedDiscount>(start);
+  const [dirty, setDirty] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const set = (next: GuidedDiscount) => {
+    setD(next);
+    setDirty(true);
+  };
+  const patch = (p: Partial<GuidedDiscount>) => set({ ...d, ...p });
 
-  const code =
-    d.code_mode === "existing"
-      ? d.existing_code || "SPRING10"
-      : d.code_mode === "static"
-        ? d.static_code || `${d.code_prefix}SPRING`
-        : `${d.code_prefix}7F3K2Q`;
-  const valueLabel =
-    d.kind === "free_shipping" ? "Free shipping" : d.kind === "amount" ? `$${d.value} off` : `${d.value}% off`;
+  const t = offerType(d);
+  const blocker = saveBlocker(d);
+  const pickedLabel =
+    d.applies_to === "collections"
+      ? collections.filter((c) => d.applies_collection_ids.includes(c.collectionId)).map((c) => c.title).join(", ")
+      : undefined;
+  const rows = readbackRows(d, { now: new Date(), pickedLabel });
 
-  // ── the live plain-English summary + production warnings (mock summarise) ──
-  const combines = d.combines ?? {};
-  const yes = (["product", "order", "shipping"] as const).filter((k) => combines[k] === true);
-  const who =
-    d.eligibility === "first"
-      ? "first-time buyers only"
-      : d.eligibility === "segment"
-        ? `the “${d.segment}” segment only`
-        : "everyone";
-  const exp =
-    d.expiry_mode === "hours"
-      ? `expires ${d.expiry_hours}h after the quiz`
-      : d.expiry_mode === "date"
-        ? d.ends_at
-          ? `expires ${d.ends_at.slice(0, 10)}`
-          : "expires on a set date"
-        : "never expires";
-  const warnings: Array<["err" | "warn" | "ok", string]> = [];
-  if (d.value < 1 && d.kind !== "free_shipping")
-    warnings.push(["err", "0% / $0 breaks checkout. Use at least 1% or $0.01."]);
-  if (lockedToDynamic)
-    warnings.push([
-      "ok",
-      "Locked to unique-per-shopper. The email ask unlocks this offer, and only a code minted on submit can actually be withheld.",
-    ]);
-  if (d.code_mode === "dynamic")
-    warnings.push(["warn", "One Shopify discount object per quiz-taker. Watch the limit at volume."]);
-  if (d.code_mode === "static") warnings.push(["warn", "A shared code will leak to coupon sites."]);
-  if (d.eligibility === "segment")
-    warnings.push(["err", "Segment targeting needs email capture on. An anonymous shopper has no segment."]);
+  const save = () => {
+    if (blocker) return;
+    const next: Record<string, unknown> = {
+      ...d,
+      enabled: true,
+      configured: true,
+      title: d.title?.trim() || "Quiz reward",
+    };
+    // Stop writing the retired keys (writeDiscount drops undefined ones);
+    // the schema keeps parsing them forever.
+    for (const k of RETIRED_DISCOUNT_KEYS) next[k] = undefined;
+    onCommit(writeDiscount(doc, next as Partial<DiscountConfig>));
+    onClose();
+  };
+  const requestClose = () => (dirty ? setConfirmClose(true) : onClose());
+
+  const toggleIn = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   return (
     <QzModal
       open
-      onClose={onClose}
+      onClose={requestClose}
       size="lg"
-      width={880}
+      width={680}
       title="Discount"
       footer={
-        <>
-          <button type="button" className="qz-btn qz-btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="qz-btn qz-btn-accent"
-            onClick={() => {
-              const next: Partial<DiscountConfig> = {
-                ...d,
-                enabled: true,
-                value: Math.max(d.kind === "free_shipping" ? 0 : 1, d.value),
-                code_mode: lockedToDynamic ? "dynamic" : d.code_mode,
-              };
-              // sparse: drop keys equal to the read-time defaults
-              for (const [k, v] of Object.entries(DISCOUNT_DEFAULTS)) {
-                if ((next as Record<string, unknown>)[k] === v)
-                  delete (next as Record<string, unknown>)[k];
-              }
-              onCommit(writeDiscount(doc, next));
-              onSaved?.();
-              onClose();
-            }}
-          >
-            Save discount
-          </button>
-        </>
+        confirmClose ? (
+          <>
+            <span className="qz-rg-saveblock">Discard your changes?</span>
+            <button type="button" className="qz-btn qz-btn-ghost" onClick={() => setConfirmClose(false)}>
+              Keep editing
+            </button>
+            <button type="button" className="qz-btn qz-btn-danger" onClick={onClose}>
+              Discard
+            </button>
+          </>
+        ) : (
+          <>
+            {blocker ? <span className="qz-rg-saveblock">{blocker}</span> : null}
+            <button type="button" className="qz-btn qz-btn-ghost" onClick={requestClose}>
+              Cancel
+            </button>
+            <button type="button" className="qz-btn qz-btn-accent" disabled={Boolean(blocker)} onClick={save}>
+              Save discount
+            </button>
+          </>
+        )
       }
     >
-      <div className="qz-rg-editor">
-        <div className="qz-rg-editorm">
-          <div className="qz-rg-mtabs">
-            <button
-              type="button"
-              className={`qz-rg-mtab${grp === "basic" ? " is-on" : ""}`}
-              onClick={() => setGrp("basic")}
-            >
-              Basics
-            </button>
-            <button
-              type="button"
-              className={`qz-rg-mtab${grp === "adv" ? " is-on" : ""}`}
-              onClick={() => setGrp("adv")}
-            >
-              Advanced
-            </button>
-          </div>
-
-          {grp === "basic" ? (
-            <>
-              <p className="qz-rg-grpnote">
-                Set the type and amount. Everything else has a sensible default in Advanced.
-              </p>
-              <div className="qz-rg-grid2">
-                <div>
-                  <div className="qz-rg-fl">Type</div>
-                  <select
-                    className="qz-select"
-                    value={d.kind}
-                    aria-label="Discount type"
-                    onChange={(e) => patch({ kind: e.target.value as GuidedDiscount["kind"] })}
-                  >
-                    <option value="percentage">Variable (% off)</option>
-                    <option value="amount">Flat ($ off)</option>
-                    <option value="free_shipping">Free shipping</option>
-                  </select>
-                </div>
-                {d.kind !== "free_shipping" ? (
-                  <div>
-                    <div className="qz-rg-fl">
-                      {d.kind === "amount" ? "Amount off ($)" : "Percent off (%)"}
-                    </div>
-                    <input
-                      className="qz-input"
-                      type="number"
-                      min={1}
-                      value={d.value}
-                      aria-label="Discount value"
-                      onChange={(e) => patch({ value: Math.max(0, +e.target.value || 0) })}
-                    />
-                  </div>
-                ) : (
-                  <div />
-                )}
-              </div>
-              <div className="qz-rg-grid2" style={{ marginTop: 12 }}>
-                <div>
-                  <div className="qz-rg-fl">Minimum cart value</div>
-                  <input
-                    className="qz-input"
-                    type="number"
-                    value={d.minimum_subtotal ?? ""}
-                    placeholder="None"
-                    aria-label="Minimum cart value"
-                    onChange={(e) =>
-                      patch({ minimum_subtotal: +e.target.value > 0 ? +e.target.value : undefined })
-                    }
-                  />
-                </div>
-                <div>
-                  <div className="qz-rg-fl">Expires</div>
-                  <div className="qz-rg-exprow">
-                    <input
-                      className="qz-input"
-                      type="number"
-                      min={1}
-                      value={d.expiry_hours}
-                      aria-label="Expiry hours"
-                      onChange={(e) =>
-                        patch({ expiry_mode: "hours", expiry_hours: Math.max(1, +e.target.value || 24) })
-                      }
-                    />
-                    <span className="qz-rg-exunit">hrs after quiz</span>
-                  </div>
-                </div>
-              </div>
-              <label className="qz-rg-ck">
-                <input
-                  type="checkbox"
-                  checked={combines.product === true}
-                  onChange={(e) => {
-                    const c = e.target.checked;
-                    patch({ combines: { product: c, order: c, shipping: c } });
-                  }}
+      <div className="qz-rg-deditor">
+        {/* ── Basics ─────────────────────────────────────────────────────── */}
+        <Group title="Basics">
+          <div className="qz-rg-fl">Discount type</div>
+          <Seg
+            label="Discount type"
+            value={t}
+            onChange={(v) => set(withOfferType(d, v))}
+            options={[
+              ["order", "Amount off orders"],
+              ["products", "Amount off products"],
+              ["shipping", "Free shipping"],
+            ]}
+          />
+          {t !== "shipping" ? (
+            <div className="qz-rg-grid2" style={{ marginTop: 12 }}>
+              <div>
+                <div className="qz-rg-fl">Value</div>
+                <Seg
+                  label="Value type"
+                  value={d.kind === "amount" ? "amount" : "percentage"}
+                  onChange={(v) => patch({ kind: v })}
+                  options={[
+                    ["percentage", "Percentage"],
+                    ["amount", "Fixed amount"],
+                  ]}
                 />
-                <span>
-                  Can stack with other discounts
-                  <em>
-                    Off = applies alone (Shopify's safe default). On = combines with product &amp;
-                    order codes.
-                  </em>
-                </span>
-              </label>
-              <div className="qz-rg-codeline">
-                Code <b>{code}</b>
-                {d.code_mode === "dynamic" ? " · unique per shopper" : ""} ·{" "}
-                <button type="button" className="qz-rg-advlink" onClick={() => setGrp("adv")}>
-                  edit in Advanced →
-                </button>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="qz-rg-grpdiv">Code</div>
-              <div className="qz-rg-fl">Where the code comes from</div>
-              <Row3>
-                <button
-                  type="button"
-                  className={`qz-rg-opt${d.code_mode === "dynamic" ? " is-on" : ""}`}
-                  onClick={() => patch({ code_mode: "dynamic" })}
-                >
-                  <b>Unique per shopper</b>
-                  <span>Can't leak. Full attribution. One Shopify object per taker.</span>
-                </button>
-                <button
-                  type="button"
-                  className={`qz-rg-opt${d.code_mode === "static" ? " is-on" : ""}${lockedToDynamic ? " is-nope" : ""}`}
-                  onClick={() => {
-                    if (!lockedToDynamic) patch({ code_mode: "static" });
-                  }}
-                >
-                  <b>One shared code</b>
-                  <span>
-                    {lockedToDynamic
-                      ? "Unavailable while the email unlocks the offer. One shared string can’t be locked."
-                      : "Simple. Will end up on coupon sites."}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className={`qz-rg-opt${d.code_mode === "existing" ? " is-on" : ""}${lockedToDynamic ? " is-nope" : ""}`}
-                  onClick={() => {
-                    if (!lockedToDynamic) patch({ code_mode: "existing" });
-                  }}
-                >
-                  <b>Use an existing</b>
-                  <span>
-                    {lockedToDynamic
-                      ? "Unavailable while the email unlocks the offer. The code already exists and can leak."
-                      : "Pick a discount you already made."}
-                  </span>
-                </button>
-              </Row3>
-              <div className="qz-rg-grid2" style={{ marginTop: 10 }}>
-                {d.code_mode !== "existing" ? (
-                  <div>
-                    <div className="qz-rg-fl">Code prefix</div>
-                    <input
-                      className="qz-input"
-                      value={d.code_prefix}
-                      aria-label="Code prefix"
-                      onChange={(e) => patch({ code_prefix: e.target.value || "QUIZ-" })}
-                    />
-                    <div className="qz-rg-cap">
-                      Every quiz discount starts with this, so you can filter them all in Shopify
-                      admin.
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <div className="qz-rg-fl">Existing Shopify discount code</div>
-                    <input
-                      className="qz-input"
-                      value={d.existing_code}
-                      placeholder="SPRING10"
-                      aria-label="Existing discount code"
-                      onChange={(e) => patch({ existing_code: e.target.value })}
-                    />
-                  </div>
-                )}
-                {d.code_mode === "static" ? (
-                  <div>
-                    <div className="qz-rg-fl">Code</div>
-                    <input
-                      className="qz-input"
-                      value={d.static_code || `${d.code_prefix}SPRING`}
-                      aria-label="Shared code"
-                      onChange={(e) => patch({ static_code: e.target.value })}
-                    />
-                  </div>
-                ) : (
-                  <div />
-                )}
-              </div>
-              <label className="qz-rg-ck" style={{ marginTop: 14 }}>
-                <input
-                  type="checkbox"
-                  checked={d.auto_apply}
-                  onChange={(e) => patch({ auto_apply: e.target.checked })}
-                />
-                <span>
-                  Auto-apply at checkout
-                  <em>
-                    Uses the /discount/CODE link to seed the cart. It does not change the price
-                    shown on the product page.
-                  </em>
-                </span>
-              </label>
-
-              <div className="qz-rg-grpdiv">Rules &amp; limits</div>
-              <div className="qz-rg-fl">Who can use it</div>
-              <Row3>
-                {(
-                  [
-                    ["all", "Everyone", ""],
-                    ["first", "First-time buyers", "Never discounts a repeat customer."],
-                    ["segment", "A customer segment", ""],
-                  ] as const
-                ).map(([v, b, s]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    className={`qz-rg-opt${d.eligibility === v ? " is-on" : ""}`}
-                    onClick={() => patch({ eligibility: v })}
-                  >
-                    <b>{b}</b>
-                    {s ? <span>{s}</span> : null}
-                  </button>
-                ))}
-              </Row3>
-              {d.eligibility === "segment" ? (
-                <div style={{ margin: "8px 0 14px" }}>
-                  <input
-                    className="qz-input"
-                    value={d.segment}
-                    placeholder="Segment name"
-                    aria-label="Segment name"
-                    onChange={(e) => patch({ segment: e.target.value })}
-                  />
-                  <div className="qz-rg-cap">
-                    Needs email capture. An anonymous shopper has no segment.
-                  </div>
-                </div>
-              ) : null}
-              <div className="qz-rg-fl" style={{ marginTop: 12 }}>
-                Usage limits
-              </div>
-              <div className="qz-rg-grid2">
+              <div>
+                <div className="qz-rg-fl">{d.kind === "amount" ? "Amount off ($)" : "Percent off (%)"}</div>
                 <input
                   className="qz-input"
                   type="number"
-                  value={d.usage_limit ?? ""}
-                  placeholder="Total uses (blank = unlimited)"
-                  aria-label="Total usage limit"
-                  onChange={(e) =>
-                    patch({ usage_limit: +e.target.value > 0 ? +e.target.value : undefined })
-                  }
+                  min={0}
+                  value={d.value}
+                  aria-label="Discount value"
+                  onChange={(e) => patch({ value: Math.max(0, Number(e.target.value) || 0) })}
                 />
-                <label className="qz-rg-ck" style={{ margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={d.once_per_customer}
-                    onChange={(e) => patch({ once_per_customer: e.target.checked })}
-                  />
-                  <span>One use per customer</span>
-                </label>
               </div>
-              <div className="qz-rg-fl" style={{ marginTop: 16 }}>
-                What it applies to
-              </div>
-              <Row3>
-                {(
-                  [
-                    ["all", "All matches"],
-                    ["top", "Top pick only"],
-                    ["collections", "Specific collections"],
-                  ] as const
-                ).map(([v, b]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    className={`qz-rg-opt${d.scope === v ? " is-on" : ""}`}
-                    onClick={() => patch({ scope: v })}
-                  >
-                    <b>{b}</b>
-                  </button>
-                ))}
-              </Row3>
+            </div>
+          ) : null}
+          {t === "products" && d.kind === "amount" ? (
+            <label className="qz-rg-ck">
+              <input
+                type="checkbox"
+                checked={d.applies_on_each_item !== true}
+                onChange={(e) => patch({ applies_on_each_item: e.target.checked ? undefined : true })}
+              />
+              <span>Only apply discount once per order</span>
+            </label>
+          ) : null}
+          {t === "shipping" ? (
+            <div className="qz-rg-fld">
               <label className="qz-rg-ck">
                 <input
                   type="checkbox"
-                  checked={d.exclude_sale}
-                  onChange={(e) => patch({ exclude_sale: e.target.checked })}
+                  checked={d.max_shipping_price !== undefined}
+                  onChange={(e) => patch({ max_shipping_price: e.target.checked ? 10 : undefined })}
                 />
-                <span>
-                  Exclude items already on sale
-                  <em>Protects margin. Shopify won't do this for you.</em>
-                </span>
+                <span>Exclude shipping rates over a certain amount</span>
               </label>
-
-              <div className="qz-rg-grpdiv">Combinations, per class</div>
-              <div className="qz-rg-noteerr">
-                ⚠ <b>Shopify never combines discounts by default.</b> You must say yes or no to
-                each class — otherwise, when a shopper has another code, Shopify silently applies
-                whichever is better and your quiz discount may just vanish.
-              </div>
-              {(
-                [
-                  ["product", "Other product discounts", "Off specific items. e.g. a sale code."],
-                  ["order", "Order discounts", "Off the cart subtotal. e.g. WELCOME10."],
-                  ["shipping", "Shipping discounts", "Free / discounted delivery."],
-                ] as const
-              ).map(([k, n, s]) => (
-                <div key={k} className="qz-rg-yn">
-                  <span className="qz-rg-ynt">
-                    {n}
-                    <em>{s}</em>
-                  </span>
-                  <span className="qz-rg-ynbtns">
-                    <button
-                      type="button"
-                      className={`qz-rg-ynb${combines[k] === true ? " is-on" : ""}`}
-                      onClick={() => patch({ combines: { ...combines, [k]: true } })}
-                    >
-                      Combines
-                    </button>
-                    <button
-                      type="button"
-                      className={`qz-rg-ynb is-no${combines[k] === false ? " is-on" : ""}`}
-                      onClick={() => patch({ combines: { ...combines, [k]: false } })}
-                    >
-                      Doesn't
-                    </button>
-                  </span>
-                </div>
-              ))}
-
-              <div className="qz-rg-grpdiv">Delivery &amp; purchase type</div>
-              <div className="qz-rg-notewarn">
-                ⚑ <b>You can finish this later.</b> The code shows on the results page by default —
-                that works on its own. Email delivery and loyalty-point integrations are flagged as
-                a to-do until their connections land.
-              </div>
-              <Row3>
-                {(
-                  [
-                    ["onetime", "One-time only"],
-                    ["sub", "Subscriptions only"],
-                    ["both", "Both"],
-                  ] as const
-                ).map(([v, b]) => (
-                  <button
-                    key={v}
-                    type="button"
-                    className={`qz-rg-opt${d.purchase === v ? " is-on" : ""}`}
-                    onClick={() => patch({ purchase: v })}
-                  >
-                    <b>{b}</b>
-                  </button>
-                ))}
-              </Row3>
-              {d.purchase !== "onetime" ? (
-                <div style={{ marginTop: 8 }}>
-                  <div className="qz-rg-fl">Applies to how many subscription orders</div>
-                  <input
-                    className="qz-input"
-                    type="number"
-                    min={1}
-                    value={d.recurring_limit}
-                    aria-label="Recurring order limit"
-                    onChange={(e) => patch({ recurring_limit: Math.max(1, +e.target.value || 1) })}
-                  />
-                  <div className="qz-rg-cap">
-                    Recharge and Ordergroove bill renewals themselves — orders past the first need a
-                    matching discount inside that app.
-                  </div>
-                </div>
+              {d.max_shipping_price !== undefined ? (
+                <input
+                  className="qz-input"
+                  type="number"
+                  min={0}
+                  value={d.max_shipping_price}
+                  aria-label="Maximum shipping rate"
+                  onChange={(e) => patch({ max_shipping_price: num(e.target.value) ?? 0 })}
+                />
               ) : null}
-            </>
-          )}
-        </div>
-
-        {/* live summary rail — what you're building, read back */}
-        <aside className="qz-rg-sumrail">
-          <div className="qz-rg-sumh">What you're building</div>
-          <div className="qz-rg-sumsent">
-            <b>{valueLabel}</b>{" "}
-            {d.scope === "top"
-              ? "the top pick only"
-              : d.scope === "collections"
-                ? "selected collections"
-                : "the recommended products"}
-            . {d.code_mode === "dynamic" ? "A unique code per shopper" : d.code_mode === "static" ? "One shared code" : "An existing Shopify discount"}
-            . <span className="qz-rg-sumcode">{code}</span>
-            {d.auto_apply ? ", auto-applied at checkout" : ""}. Available to <b>{who}</b>, {exp}.{" "}
-            {d.minimum_subtotal ? `Minimum spend $${d.minimum_subtotal}. ` : ""}
-            {d.once_per_customer ? "One use per customer. " : ""}
-            {d.exclude_sale ? "Excludes sale items. " : ""}
-            {yes.length ? (
-              <>
-                Combines with <b>{yes.join(" + ")}</b> discounts.
-              </>
-            ) : (
-              <b>Combines with nothing.</b>
-            )}
-          </div>
-          {warnings.length ? (
-            <div className="qz-rg-sumwarn">
-              {warnings.map(([k, t], i) => (
-                <div key={i} className={`qz-rg-sw2 is-${k}`}>
-                  <span>{k === "err" ? "⚠" : k === "warn" ? "!" : "✓"}</span>
-                  <span>{t}</span>
-                </div>
-              ))}
             </div>
           ) : null}
-        </aside>
+          <div className="qz-rg-fl" style={{ marginTop: 12 }}>
+            Active dates
+          </div>
+          <Seg
+            label="Active dates"
+            value={d.expiry_mode}
+            onChange={(v) => patch({ expiry_mode: v })}
+            options={[
+              ["none", "Doesn't expire"],
+              ["hours", "Hours after the quiz", d.code_mode !== "dynamic"],
+              ["date", "On a date"],
+            ]}
+          />
+          {d.expiry_mode === "hours" ? (
+            <div className="qz-rg-exprow">
+              <input
+                className="qz-input"
+                type="number"
+                min={1}
+                value={d.expiry_hours}
+                aria-label="Hours after the quiz"
+                onChange={(e) => patch({ expiry_hours: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
+              />
+              <span className="qz-rg-exunit">hours after each shopper finishes</span>
+            </div>
+          ) : null}
+          {d.expiry_mode === "date" ? (
+            <input
+              className="qz-input"
+              type="date"
+              value={d.ends_at?.slice(0, 10) ?? ""}
+              aria-label="End date"
+              onChange={(e) => patch({ ends_at: e.target.value ? `${e.target.value}T23:59:59Z` : undefined })}
+            />
+          ) : null}
+          <div className="qz-rg-codeline">
+            Code <b>{offerCodeDisplay(d)}</b>
+          </div>
+        </Group>
+
+        {/* ── Advanced, in Shopify's own order ──────────────────────────── */}
+        <Group title="Discount code">
+          <div className="qz-rg-fl">Where the code comes from</div>
+          <Seg
+            label="Where the code comes from"
+            value={d.code_mode}
+            onChange={(v) => set(withCodeMode(d, v))}
+            options={[
+              ["dynamic", "A new code per shopper"],
+              ["static", "One shared code", lockedToDynamic],
+              ["existing", "An existing discount", lockedToDynamic],
+            ]}
+          />
+          {lockedToDynamic ? (
+            <div className="qz-rg-cap">The email unlocks this offer, so only a code made on submit can be held back.</div>
+          ) : null}
+          {d.code_mode === "dynamic" ? (
+            <div className="qz-rg-fld">
+              <div className="qz-rg-fl">Code prefix</div>
+              <input
+                className="qz-input"
+                value={d.code_prefix}
+                aria-label="Code prefix"
+                onChange={(e) => patch({ code_prefix: e.target.value })}
+              />
+            </div>
+          ) : null}
+          {d.code_mode === "static" ? (
+            <div className="qz-rg-fld">
+              <div className="qz-rg-fl">Code</div>
+              <input
+                className="qz-input"
+                value={d.static_code}
+                placeholder="SAVE10"
+                aria-label="Shared code"
+                onChange={(e) => patch({ static_code: e.target.value.toUpperCase() })}
+              />
+            </div>
+          ) : null}
+          {d.code_mode === "existing" ? (
+            <div className="qz-rg-fld">
+              <div className="qz-rg-fl">Existing discount code</div>
+              <input
+                className="qz-input"
+                value={d.existing_code}
+                placeholder="WELCOME10"
+                aria-label="Existing discount code"
+                onChange={(e) => patch({ existing_code: e.target.value.toUpperCase(), existing_discount_id: undefined })}
+              />
+            </div>
+          ) : (
+            <div className="qz-rg-fld">
+              <div className="qz-rg-fl">Discount name</div>
+              <input
+                className="qz-input"
+                value={d.title}
+                aria-label="Discount name"
+                onChange={(e) => patch({ title: e.target.value })}
+              />
+              <div className="qz-rg-cap">Shoppers see this name too.</div>
+            </div>
+          )}
+        </Group>
+
+        {t === "products" ? (
+          <Group title="Applies to">
+            <Seg
+              label="Applies to"
+              value={d.applies_to as "recommended" | "collections" | "products"}
+              onChange={(v) => patch({ applies_to: v })}
+              options={[
+                ["recommended", "What we recommend", d.code_mode !== "dynamic"],
+                ["collections", "Specific collections"],
+                ["products", "Specific products"],
+              ]}
+            />
+            {d.applies_to === "collections" ? (
+              <div className="qz-rg-plist qz-rg-dpick">
+                {collections.map((c) => (
+                  <label key={c.collectionId} className="qz-rg-ck">
+                    <input
+                      type="checkbox"
+                      checked={d.applies_collection_ids.includes(c.collectionId)}
+                      onChange={() => patch({ applies_collection_ids: toggleIn(d.applies_collection_ids, c.collectionId) })}
+                    />
+                    <span>{c.title}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+            {d.applies_to === "products" ? (
+              <div className="qz-rg-plist qz-rg-dpick">
+                {productIndex.slice(0, 100).map((p) => (
+                  <label key={p.product_id} className="qz-rg-ck">
+                    <input
+                      type="checkbox"
+                      checked={d.applies_product_ids.includes(p.product_id)}
+                      onChange={() => patch({ applies_product_ids: toggleIn(d.applies_product_ids, p.product_id) })}
+                    />
+                    <span>{p.title}</span>
+                  </label>
+                ))}
+              </div>
+            ) : null}
+          </Group>
+        ) : null}
+
+        {t === "shipping" ? (
+          <Group title="Countries">
+            <Seg
+              label="Countries"
+              value={d.shipping_countries === undefined ? "all" : "selected"}
+              onChange={(v) => patch({ shipping_countries: v === "all" ? undefined : [] })}
+              options={[
+                ["all", "All countries"],
+                ["selected", "Selected countries"],
+              ]}
+            />
+            {d.shipping_countries !== undefined ? (
+              <input
+                className="qz-input"
+                value={d.shipping_countries.join(", ")}
+                placeholder="US, CA, GB"
+                aria-label="Country codes"
+                onChange={(e) =>
+                  patch({
+                    shipping_countries: e.target.value
+                      .split(/[\s,]+/)
+                      .map((c) => c.trim().toUpperCase())
+                      .filter((c) => /^[A-Z]{2}$/.test(c)),
+                  })
+                }
+              />
+            ) : null}
+          </Group>
+        ) : null}
+
+        <Group title="Minimum purchase requirements">
+          <Seg
+            label="Minimum purchase requirements"
+            value={d.minimum_subtotal !== undefined ? "amount" : d.minimum_quantity !== undefined ? "quantity" : "none"}
+            onChange={(v) =>
+              patch({
+                minimum_subtotal: v === "amount" ? 50 : undefined,
+                minimum_quantity: v === "quantity" ? 2 : undefined,
+              })
+            }
+            options={[
+              ["none", "No minimum"],
+              ["amount", "Minimum purchase amount"],
+              ["quantity", "Minimum quantity of items"],
+            ]}
+          />
+          {d.minimum_subtotal !== undefined ? (
+            <input
+              className="qz-input"
+              type="number"
+              min={0}
+              value={d.minimum_subtotal}
+              aria-label="Minimum purchase amount"
+              onChange={(e) => patch({ minimum_subtotal: num(e.target.value) ?? 0 })}
+            />
+          ) : null}
+          {d.minimum_quantity !== undefined ? (
+            <input
+              className="qz-input"
+              type="number"
+              min={1}
+              value={d.minimum_quantity}
+              aria-label="Minimum quantity of items"
+              onChange={(e) => patch({ minimum_quantity: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
+            />
+          ) : null}
+        </Group>
+
+        <Group title="Maximum discount uses">
+          <label className="qz-rg-ck">
+            <input
+              type="checkbox"
+              checked={d.usage_limit !== undefined}
+              onChange={(e) => patch({ usage_limit: e.target.checked ? 100 : undefined })}
+            />
+            <span>
+              {d.code_mode === "dynamic"
+                ? "Limit the total codes this quiz can give out"
+                : "Limit number of times this discount can be used in total"}
+            </span>
+          </label>
+          {d.usage_limit !== undefined ? (
+            <input
+              className="qz-input"
+              type="number"
+              min={1}
+              value={d.usage_limit}
+              aria-label="Total uses"
+              onChange={(e) => patch({ usage_limit: Math.max(1, Math.round(Number(e.target.value) || 1)) })}
+            />
+          ) : null}
+          <label className="qz-rg-ck">
+            <input
+              type="checkbox"
+              checked={d.once_per_customer}
+              onChange={(e) => patch({ once_per_customer: e.target.checked })}
+            />
+            <span>Limit to one use per customer</span>
+          </label>
+          {d.code_mode === "dynamic" && d.once_per_customer ? (
+            <div className="qz-rg-cap">Shopify counts use per code, so the app enforces this by email.</div>
+          ) : null}
+        </Group>
+
+        <Group title="Purchase type">
+          <Seg
+            label="Purchase type"
+            value={d.purchase}
+            onChange={(v) => patch({ purchase: v })}
+            options={[
+              ["onetime", "One-time purchase"],
+              ["sub", "Subscription"],
+              ["both", "Both"],
+            ]}
+          />
+          {d.purchase !== "onetime" ? (
+            <>
+              <div className="qz-rg-fl" style={{ marginTop: 10 }}>
+                Recurring payments for a subscription
+              </div>
+              <Seg
+                label="Recurring payments"
+                value={d.recurring_limit === 0 ? "all" : d.recurring_limit === 1 ? "first" : "set"}
+                onChange={(v) => patch({ recurring_limit: v === "all" ? 0 : v === "first" ? 1 : 3 })}
+                options={[
+                  ["first", "First payment only"],
+                  ["set", "A set number"],
+                  ["all", "Every payment"],
+                ]}
+              />
+              {d.recurring_limit > 1 ? (
+                <input
+                  className="qz-input"
+                  type="number"
+                  min={2}
+                  value={d.recurring_limit}
+                  aria-label="Number of payments"
+                  onChange={(e) => patch({ recurring_limit: Math.max(2, Math.round(Number(e.target.value) || 2)) })}
+                />
+              ) : null}
+            </>
+          ) : null}
+        </Group>
+
+        <Group title="Combinations">
+          {(
+            [
+              ["product", "Product discounts"],
+              ["order", "Order discounts"],
+              ["shipping", "Shipping discounts"],
+            ] as const
+          )
+            .filter(([k]) => !(k === "shipping" && t === "shipping"))
+            .map(([k, label]) => (
+              <label key={k} className="qz-rg-ck">
+                <input
+                  type="checkbox"
+                  checked={d.combines?.[k] === true}
+                  onChange={(e) => patch({ combines: { ...(d.combines ?? {}), [k]: e.target.checked } })}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+        </Group>
+
+        {/* ── What this creates in Shopify ───────────────────────────────── */}
+        <section className="qz-rg-dread" aria-label="Summary">
+          <h4 className="qz-rg-grpdiv">
+            {d.code_mode === "existing" ? "What this uses in Shopify" : "What this creates in Shopify"}
+          </h4>
+          <dl>
+            {rows.map(([label, value]) => (
+              <div key={label}>
+                <dt>{label}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       </div>
     </QzModal>
   );

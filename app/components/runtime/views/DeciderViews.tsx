@@ -34,7 +34,13 @@ import { SaveResultsLink, BuddyRow } from "../bits/resultLinks";
 import { ProductCard } from "./ProductCard";
 import { postQuizSession } from "./postQuizSession";
 import { apiUrl } from "../../../lib/apiBase";
-import { ConsentNotice, termsCopy, noticeText, policyHref, SMS_CHECKBOX, SMS_NOTICE } from "./ConsentNotice";
+import { ConsentNotice, noticeText, policyHref, SMS_CHECKBOX, SMS_NOTICE } from "./ConsentNotice";
+import {
+  FixedConsentChecks,
+  FixedLegalText,
+  fixedConsentFacts,
+  type FixedConsentState,
+} from "./FixedConsent";
 
 // ════════════════════════════════════════════════════════════════════════════
 // LOGIC v2 (L2-9) — the decider flow's capture → loading → reveal views.
@@ -203,6 +209,8 @@ export function DeciderCaptureView({
   sessionId,
   onDone,
   shopDomain,
+  storeName,
+  smsReady = false,
   inline = false,
 }: {
   config: ResolvedRecPageConfig;
@@ -210,6 +218,12 @@ export function DeciderCaptureView({
   quizId: string;
   sessionId: string;
   shopDomain?: string;
+  // Results handoff §9 — the store's display name (baked shop_name) for the
+  // fixed wording; §14 — whether an SMS destination can take a number.
+  // Until the Integrations work ships nothing can, so the phone field stays
+  // off every fixed-wording form.
+  storeName?: string;
+  smsReady?: boolean;
   inline?: boolean;
   onDone: (contact?: { email?: string; name?: string; phone?: string }, saved?: boolean) => void;
 }) {
@@ -224,8 +238,19 @@ export function DeciderCaptureView({
   const [termsChecked, setTermsChecked] = useState(false);
   const [smsChecked, setSmsChecked] = useState(false);
   const termsNotice = config.captureTermsMode === "notice";
-  const termsHref = config.captureTermsMode === undefined ? config.termsUrl : policyHref(config.termsUrl, shopDomain);
-  const privacyHref = config.captureTermsMode === undefined ? config.privacyUrl : policyHref(config.privacyUrl, shopDomain);
+  // Results handoff §4 defect 1(c) — every mode resolves links through
+  // policyHref (a raw store path 404'd against the app's domain, and
+  // javascript: was not refused).
+  const termsHref = policyHref(config.termsUrl, shopDomain);
+  const privacyHref = policyHref(config.privacyUrl, shopDomain);
+  // Results handoff §9 — the fixed-wording form (explicit consentVersion only).
+  const fixed = Boolean(config.consentVersion);
+  const facts = fixed ? fixedConsentFacts(config, shopDomain, storeName, smsReady) : null;
+  const [fixedState, setFixedState] = useState<FixedConsentState>({
+    marketing: false,
+    sms: false,
+    terms: false,
+  });
   // Absent mode preserves the existing bare telephone input.
   const smsAsked = config.capturePhone && config.smsConsentMode !== undefined;
   const smsNotice = config.smsConsentMode === "notice";
@@ -235,11 +260,17 @@ export function DeciderCaptureView({
   const [marketingChecked, setMarketingChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const emailValid = /^\S+@\S+\.\S+$/.test(email);
-  const canSubmit =
-    (config.captureEmail ? emailValid : true) &&
-    (!config.captureTermsOn || termsNotice || termsChecked) &&
-    (!smsAsked || smsNotice || !phone.trim() || smsChecked) &&
-    !submitting;
+  // The fixed form waits for the terms box only: marketing and SMS never
+  // block submit (an unticked SMS box just means the number is not sent).
+  const canSubmit = facts
+    ? (config.captureEmail ? emailValid : true) &&
+      (!facts.termsIsBox || fixedState.terms) &&
+      !submitting
+    : (config.captureEmail ? emailValid : true) &&
+      (!config.captureTermsOn || termsNotice || termsChecked) &&
+      (!smsAsked || smsNotice || !phone.trim() || smsChecked) &&
+      !submitting;
+  const sendPhone = facts ? facts.smsOn && fixedState.sms && Boolean(phone.trim()) : Boolean(phone.trim());
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -252,7 +283,30 @@ export function DeciderCaptureView({
         const response = await fetch(apiUrl("/captures"), {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
+          body: JSON.stringify(facts ? {
+            quiz_id: quizId,
+            session_id: sessionId,
+            email,
+            ...(name.trim() ? { first_name: name.trim() } : {}),
+            ...(sendPhone ? { phone: phone.trim() } : {}),
+            ...(facts.marketingOn ? { marketing_consent: fixedState.marketing } : {}),
+            consent: {
+              version: config.consentVersion,
+              placement: inline ? "inline" : "gate",
+              links: { terms: facts.links.terms ?? "", privacy: facts.links.privacy ?? "" },
+              ...(facts.marketingOn
+                ? { marketing: { checked: fixedState.marketing, text: facts.marketingText } }
+                : {}),
+              terms: {
+                mode: facts.termsIsBox ? "checkbox" : "notice",
+                checked: facts.termsIsBox && fixedState.terms,
+                text: facts.termsText,
+              },
+              ...(sendPhone
+                ? { sms: { mode: "checkbox", checked: true, text: `${facts.smsLabel} ${facts.smsFine}` } }
+                : {}),
+            },
+          } : {
             quiz_id: quizId,
             session_id: sessionId,
             email,
@@ -263,7 +317,7 @@ export function DeciderCaptureView({
             ...(config.captureTermsOn || (smsAsked && phone.trim()) ? { consent: {
               ...(config.captureTermsOn ? { terms: {
                 mode: termsNotice ? "notice" : "checkbox", checked: !termsNotice && termsChecked,
-                text: termsNotice ? noticeText(config) : termsCopy(config),
+                text: noticeText(config),
               } } : {}),
               ...(smsAsked && phone.trim() ? { sms: {
                 mode: smsNotice ? "notice" : "checkbox", checked: !smsNotice && smsChecked, text: smsText,
@@ -283,7 +337,7 @@ export function DeciderCaptureView({
       onDone({
         ...(email ? { email } : {}),
         ...(name.trim() ? { name: name.trim() } : {}),
-        ...(phone.trim() ? { phone: phone.trim() } : {}),
+        ...(sendPhone ? { phone: phone.trim() } : {}),
       }, saved);
     }
   }
@@ -350,7 +404,7 @@ export function DeciderCaptureView({
             style={inputStyle}
           />
         )}
-        {config.capturePhone && (
+        {config.capturePhone && (!facts || facts.smsOn) && (
           <input
             type="tel"
             aria-label={tc("gate_phone_placeholder")}
@@ -361,13 +415,19 @@ export function DeciderCaptureView({
             style={inputStyle}
           />
         )}
-        {smsAsked && !smsNotice && (
+        {facts ? (
+          <>
+            <FixedConsentChecks facts={facts} state={fixedState} onChange={setFixedState} />
+            <FixedLegalText facts={facts} />
+          </>
+        ) : null}
+        {!facts && smsAsked && !smsNotice && (
           <label style={{ display: "flex", gap: 10, textAlign: "left", color: "var(--qz-color-muted)" }}>
             <input type="checkbox" checked={smsChecked} onChange={e => setSmsChecked(e.target.checked)} />
             <span>{smsText}</span>
           </label>
         )}
-        {config.captureTermsOn && !termsNotice && (
+        {!facts && config.captureTermsOn && !termsNotice && (
           <label
             style={{
               display: "flex",
@@ -386,15 +446,17 @@ export function DeciderCaptureView({
               onChange={(e) => setTermsChecked(e.target.checked)}
               style={{ marginTop: 3 }}
             />
+            {/* Results handoff §4 defect 1(a) — tokens become links, never
+                printed braces. Token-free text renders the same text node. */}
             <span>
-              {termsCopy(config)}
+              <ConsentNotice config={config} shopDomain={shopDomain} />
             </span>
           </label>
         )}
         {/* rg-wiring — the guided flow's marketing-consent row: opt-in,
             never blocks the reveal (distinct from the blocking terms box
             above). Renders only on an explicit consentOn:true. */}
-        {config.consentOn === true && (
+        {!facts && config.consentOn === true && (
           <label
             style={{
               display: "flex",
@@ -433,8 +495,8 @@ export function DeciderCaptureView({
         {/* rg-wiring — a merchant-written CTA (guided "The ask") wins. */}
         {submitting ? "…" : config.captureCta?.trim() || tc("continue")}
       </button>
-      {config.captureTermsOn && termsNotice && <p style={{ color: "var(--qz-color-muted)", fontSize: "0.85em" }}><ConsentNotice config={config} shopDomain={shopDomain} /></p>}
-      {smsAsked && smsNotice && <p style={{ color: "var(--qz-color-muted)", fontSize: "0.85em" }}>{smsText}</p>}
+      {!facts && config.captureTermsOn && termsNotice && <p style={{ color: "var(--qz-color-muted)", fontSize: "0.85em" }}><ConsentNotice config={config} shopDomain={shopDomain} /></p>}
+      {!facts && smsAsked && smsNotice && <p style={{ color: "var(--qz-color-muted)", fontSize: "0.85em" }}>{smsText}</p>}
       {/* rg-wiring — the guided flow's optional-capture skip: renders only
           on an EXPLICIT captureRequired:false (absent = mandatory, the
           shipped posture). Skipping reveals without a POST. */}
@@ -458,11 +520,12 @@ export function DeciderCaptureView({
       )}
       {/* rg-wiring — split policy links (guided "Consent" tab): render only
           the links the merchant explicitly set. */}
-      {!termsNotice && (termsHref || privacyHref) && (
+      {!facts && !termsNotice && (termsHref || privacyHref) && (
         <p
           style={{
             marginTop: 14,
-            fontSize: "calc(var(--qz-base-size) * 0.78)",
+            // Never below 11px (was 10.9px at a 14px base).
+            fontSize: "max(11px, calc(var(--qz-base-size) * 0.78))",
             fontFamily: "var(--qz-font-body)",
             color: "var(--qz-color-muted)",
           }}
@@ -471,7 +534,7 @@ export function DeciderCaptureView({
             <a
               href={termsHref}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               style={{ color: "inherit", textDecoration: "underline" }}
             >
               {config.termsLabel || "Terms & Conditions"}
@@ -482,7 +545,7 @@ export function DeciderCaptureView({
             <a
               href={privacyHref}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               style={{ color: "inherit", textDecoration: "underline" }}
             >
               {config.privacyLabel || "Privacy Policy"}
@@ -863,7 +926,7 @@ export function DeciderResultView({
       {inlineCapture}
       {/* §L L3 — engagement widgets (present only when the merchant opted in). */}
       {engagement?.reward.enabled && quizId && sessionId ? (
-        <RewardReveal config={engagement.reward} quizId={quizId} sessionId={sessionId} />
+        <RewardReveal config={engagement.reward} quizId={quizId} sessionId={sessionId} preview={isPreviewMode} />
       ) : null}
       {engagement?.referral.enabled && quizId && sessionId ? (
         <ReferralShare config={engagement.referral} quizId={quizId} sessionId={sessionId} preview={isPreviewMode} />
@@ -874,6 +937,7 @@ export function DeciderResultView({
           quizId={quizId}
           sessionId={sessionId}
           outcomeId={resultNodeId}
+          preview={isPreviewMode}
         />
       ) : null}
       {engagement?.share.enabled ? (

@@ -12,6 +12,7 @@ import { computeBenchmarks } from "../lib/quizBenchmarks";
 import { quizCardFacts, quizCardProducts, type QuizCardThumb, type QuizCardProduct } from "../lib/quizLibraryCard";
 import { QuizResultsThumbnail } from "../components/studio/QuizResultsThumbnail";
 import { publishQuiz } from "../lib/quizPublish";
+import { withoutDiscountCode } from "../lib/discount.server";
 import { refreshBucketMembership } from "../lib/bucketPersist.server";
 import { formatDate } from "../lib/formatDate";
 import { EMPTY_GOAL_BRIEF, GoalBox, useGoalCreate, type GoalBrief } from "../components/studio/GoalBox";
@@ -131,7 +132,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         name: `${quiz.name} (copy)`,
         status: "draft",
         version: 0,
-        draftJson: quiz.draftJson as object,
+        draftJson: withoutDiscountCode(quiz.draftJson) as object,
       },
       select: { id: true },
     });

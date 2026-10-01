@@ -12,6 +12,7 @@ import { toGroupingProduct } from "./bucketPersist.server";
 import { formatPctRange, gateRate } from "./analyticsConfidence";
 import { MIN_GOAL_CHARS } from "./funnelDraft.server";
 import { beginGoalFirstFlow } from "./goalPrepick.server";
+import { emailSignalForShop } from "./emailSignal.server";
 import {
   buildHomeQueue,
   buildHomeStarters,
@@ -71,7 +72,7 @@ export async function loadHomeForShop(
   const funnelSelect = { quizId: true, eventType: true, sessionId: true, ts: true } as const;
   const funnelDistinct = ["quizId", "eventType", "sessionId"] as const;
 
-  const [allRows, curRows, prevRows, contacts, emailsCur, products, collections] = await Promise.all([
+  const [allRows, curRows, prevRows, emailSignal, emailsCur, products, collections] = await Promise.all([
     prisma.event.findMany({ where: funnelWhere, select: funnelSelect, distinct: [...funnelDistinct] }),
     prisma.event.findMany({
       where: { ...funnelWhere, ts: { gte: since30 } },
@@ -87,7 +88,7 @@ export async function loadHomeForShop(
       select: funnelSelect,
       distinct: [...funnelDistinct],
     }),
-    prisma.emailCapture.count({ where: { quiz: { shopId: shop.id } } }),
+    emailSignalForShop(shop.id),
     prisma.emailCapture.count({ where: { quiz: { shopId: shop.id }, capturedAt: { gte: since30 } } }),
     // Starters (and the dialog's product gate) only matter before the first quiz.
     noQuiz ? prisma.product.findMany({ where: { shopId: shop.id } }) : [],
@@ -119,8 +120,8 @@ export async function loadHomeForShop(
         }
       : null;
 
-  // One light doc peek per quiz: funnel step, stall, integration wiring.
-  const peek = new Map<string, { stepIndex: number; stalled: boolean; hasIntegration: boolean }>();
+  // One light doc peek per quiz: funnel step and stall.
+  const peek = new Map<string, { stepIndex: number; stalled: boolean }>();
   for (const q of quizzes) {
     const parsed = Quiz.safeParse(q.draftJson);
     const session = parsed.success ? parsed.data.build_session : undefined;
@@ -132,12 +133,8 @@ export async function loadHomeForShop(
     peek.set(q.id, {
       stepIndex: stepIndex(stage),
       stalled: Boolean(session?.gen_error) || (genInFlight && isDetachedJobStalled(q.updatedAt, now)),
-      hasIntegration: parsed.success
-        ? parsed.data.nodes.some((n) => n.type === "integration" && n.data.actions.length > 0)
-        : false,
     });
   }
-  const anyIntegration = [...peek.values()].some((p) => p.hasIntegration);
 
   const queue = buildHomeQueue({
     quizzes: quizzes.map((q) => ({
@@ -149,7 +146,7 @@ export async function loadHomeForShop(
       stalled: peek.get(q.id)?.stalled ?? false,
       starts: benchmarks.byQuiz[q.id]?.started ?? 0,
     })),
-    emailsWithoutDestination: contacts > 0 && !anyIntegration,
+    emailsWaiting: emailSignal.waiting,
     links,
   });
 

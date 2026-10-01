@@ -62,7 +62,11 @@ const NAV: RailItem[] = [
   // { to: "/studio/ai-agent", label: "AI Agent", icon: Sparkles, soon: true },
 ];
 
-export function Rail() {
+/** HOME-3 — the teal signal dot (first-run handoff §7.5), keyed by nav `to`.
+    The value is the screen-reader / tooltip text, so it is never colour alone. */
+export type RailSignals = Partial<Record<string, string>>;
+
+export function Rail({ signals }: { signals?: RailSignals } = {}) {
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -106,6 +110,11 @@ export function Rail() {
             >
               <Icon size={17} strokeWidth={1.5} aria-hidden="true" className="qz-rail-icon" />
               <span className="qz-rail-label">{item.label}</span>
+              {signals?.[item.to] ? (
+                <span className="qz-rail-signal" title={signals[item.to]}>
+                  <span className="qz-sr-only">{signals[item.to]}</span>
+                </span>
+              ) : null}
               {item.soon ? <span className="qz-rail-soon">Soon</span> : null}
             </NavLink>
           );

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Quiz, DesignTokens } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
@@ -9,64 +8,80 @@ import {
   suggestContrastText,
 } from "../../../lib/designTokens";
 import { resolveRecPageGlobal } from "../../../lib/recommendDecider";
+import {
+  TERMS_BOX,
+  TERMS_LINE,
+  defaultMarketingCopy,
+  resolvePolicyLinks,
+  smsBoxLabel,
+  smsSmallPrint,
+  unsubscribeLine,
+  type WordingPart,
+} from "../../../lib/consentWording";
+import { cardCut, offerCodeDisplay, offerLine, offerName, offerTerms } from "../../../lib/offerCopy";
 import { ConsentNotice, termsCopy, SMS_CHECKBOX, SMS_NOTICE } from "../../runtime/views/ConsentNotice";
 import { googleFontsUrl } from "../../runtime/runtimeStyles";
-import { DeviceFrame, type FrameFit } from "../../builder/preview/DeviceFrame";
-import { DEVICES, type DeviceTier } from "../../builder/preview/previewWidth";
-import { IconDesktop, IconExpand, IconMobile, IconX } from "../questionsLogicV3/icons";
-import {
-  resolveGuided,
-  resolveDiscount,
-  offerCode,
-  offerLabel,
-} from "./state";
+import { DeviceFrame } from "../../builder/preview/DeviceFrame";
+import { resolveGuided, resolveDiscount, discountExists } from "./state";
 
-/* Results-guided handoff §6 — the preview. QRTZ-S3: rendered through the
-   shared DeviceFrame (the canonical 390×745 phone / 960×700 inline band of
-   previewWidth.DEVICES — this file used to hardcode 390×844 / 1180×740 and
-   its own fit math), scaled to fit. Owner 2026-08-27 (partial re-reversal of
-   QRTZ-G45): this surface matches the Questions-step pv-bar — the shared SVG
-   device/expand icons clustered right and the size · scale stage tag are
-   back; the fold marker and the step-name label stay off here.
-   THE PREVIEW FOLLOWS THE STEP: the gate screen
-   for the email ask (placement = before), the loading screen for the Loading
-   tab, the results page for everything else. Highlighting (§6/§7): opening a
-   section soft-rings the region it owns; focusing a control rings the ONE
-   element it changes; rings fade after 2.6s. data-part is PER-ELEMENT —
-   never one part for a whole screen. Themed with the draft's resolved design
-   tokens (the same tokens the published quiz renders with), real products
-   from the catalog index. */
+/* Results-guided handoff §11 — the preview. Phone only: DeviceFrame's
+   390×745 phone, capped at 86% (slightly under life-size reads as a preview
+   beside the settings, not a second page). THE PREVIEW FOLLOWS THE STEP: the
+   gate screen for Email/Consent when the ask comes before the results, the
+   loading screen for Loading, the results page for everything else.
+   Rings: ARRIVING on a step or tab draws one hairline ring around the region
+   it owns; TOUCHING a control rings only the element it changes. Both hold
+   one second, then fade. Nonces (`arrival`, `touch`) trigger them — never
+   every render. The phone never changes the step: a click on a region the
+   current step owns opens that tab; anything else is inert. */
 
 export type PreviewScreen = "results" | "gate" | "loading";
+export type PreviewScroll = "region" | "bottom" | "top";
 
 const money = (n: number) => `$${n.toFixed(2)}`;
+// How many matches each arrangement shows in the preview (two per row).
+const SHOWN: Record<string, number> = { hero_grid: 3, grid: 4, list: 3, single_hero: 1 };
+const RING_HOLD_MS = 1000;
+const RING_FADE_MS = 450;
 
 export function GuidedPreview({
   doc,
   productIndex,
   designTokens,
   screen,
-  openSec,
+  sec,
   focusPart,
-  holdSel,
-  onJump,
+  arrival,
+  touch,
+  scroll,
+  liveSecs,
+  onOpenSec,
+  shopDomain,
+  storeName,
 }: {
   doc: Quiz;
   productIndex: IndexedProduct[];
   designTokens: DesignTokens | null | undefined;
   screen: PreviewScreen;
-  /** The open section id (soft ring on its region). */
-  openSec: string | null;
-  /** The focused control's part (solid ring on the one element it changes). */
+  /** The open section (step or tab); null on the Overview. */
+  sec: string | null;
+  /** The touched control's part. */
   focusPart: string | null;
-  /** Overview jump: the ring holds until the next interaction. */
-  holdSel: boolean;
-  /** Clicking a region on the page opens its section in the panel. */
-  onJump: (sec: string) => void;
+  /** Bumped on each arrival on a step or tab. */
+  arrival: number;
+  /** Bumped on each touched control. */
+  touch: number;
+  scroll: PreviewScroll;
+  /** The regions the current step owns (clickable). */
+  liveSecs: string[];
+  onOpenSec: (sec: string) => void;
+  shopDomain?: string;
+  storeName?: string;
 }) {
   const cfg = resolveGuided(doc);
   const runtimeCfg = resolveRecPageGlobal(doc.rec_page_settings);
   const disc = resolveDiscount(doc);
+  const activeDiscount = discountExists(doc) && doc.discount_config?.enabled === true;
 
   const resolved = useMemo(() => resolveDesignTokens(designTokens ?? undefined), [designTokens]);
   const cssVars = useMemo(() => tokensToCssVars(resolved) as CSSProperties, [resolved]);
@@ -80,119 +95,177 @@ export function GuidedPreview({
   );
   const ctaText = suggestContrastText(resolved.colors?.primary ?? "");
 
-  const [view, setView] = useState<DeviceTier>("phone");
-  const [expanded, setExpanded] = useState(false);
-  // questions-artifact (mock .stage-tag) — the size · scale readout on the
-  // stage, fed by DeviceFrame's onFit report (the PhoneCanvas pattern).
-  const [fitScalePct, setFitScalePct] = useState(100);
-  const onFit = useCallback((fit: FrameFit) => setFitScalePct(Math.round(fit.scale * 100)), []);
+  /** A region's attributes: its jump id, and whether this step owns it. */
+  const region = (id: string) => ({
+    "data-jump": id,
+    ...(liveSecs.includes(id) ? { "data-live": "1" } : {}),
+  });
 
-  // real products — the matches pool + the extras shelf's own picks
-  const pool = productIndex.slice(0, 8);
-  const extrasPool = cfg.extrasProductIds.length
-    ? productIndex.filter((p) => cfg.extrasProductIds.includes(p.product_id))
-    : [];
-
-  // ── §6 highlight engine: soft ring the open region, solid ring the focused
-  //    part; fade after 2.6s unless an Overview jump asked it to hold. ──────
+  // ── rings + scroll, driven by the nonces only ─────────────────────────────
   const screenRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  const ring = (targets: Element[], cls: string) => {
+    targets.forEach((e) => e.classList.remove("qz-rg-zfade"));
+    targets.forEach((e) => e.classList.add(cls));
+    const hold = window.setTimeout(() => {
+      targets.forEach((e) => {
+        e.classList.add("qz-rg-zfade");
+        e.classList.remove(cls);
+      });
+      window.setTimeout(() => targets.forEach((e) => e.classList.remove("qz-rg-zfade")), RING_FADE_MS);
+    }, RING_HOLD_MS);
+    return () => window.clearTimeout(hold);
+  };
+  const scrollTo = (target: HTMLElement | null) => {
     const scr = screenRef.current;
     if (!scr) return;
-    scr.querySelectorAll(".qz-rg-zsel, .qz-rg-zsoft").forEach((e) =>
-      e.classList.remove("qz-rg-zsel", "qz-rg-zsoft"),
-    );
-    if (!openSec) return;
-    const targets = focusPart
-      ? [...scr.querySelectorAll(`[data-part="${focusPart}"]`)]
-      : [...scr.querySelectorAll(`[data-jump="${openSec}"]`)];
-    targets.forEach((e) => e.classList.add(focusPart ? "qz-rg-zsel" : "qz-rg-zsoft"));
-    // §7 — scroll via offsetTop, never scrollIntoView: the frame is CSS-scaled,
-    // so client rects are in scaled pixels while scrollTop is content pixels.
-    const t =
-      (focusPart && (scr.querySelector(`[data-part="${focusPart}"]`) as HTMLElement | null)) ||
-      (scr.querySelector(`[data-jump="${openSec}"]:not(.qz-rg-empty)`) as HTMLElement | null) ||
-      (scr.querySelector(`.qz-rg-empty[data-jump="${openSec}"]`) as HTMLElement | null);
-    if (t) {
-      let y = 0;
-      let el: HTMLElement | null = t;
-      while (el && el !== scr) {
-        y += el.offsetTop;
-        el = el.offsetParent as HTMLElement | null;
-      }
-      const target = Math.max(0, y - (scr.clientHeight / 2 - t.offsetHeight / 2));
-      if (Math.abs(target - scr.scrollTop) > 12) scr.scrollTo({ top: target, behavior: "smooth" });
+    if (scroll === "top") {
+      scr.scrollTo({ top: 0, behavior: "smooth" });
+      return;
     }
-    if (holdSel) return;
-    const timer = window.setTimeout(
-      () => targets.forEach((e) => e.classList.remove("qz-rg-zsel", "qz-rg-zsoft")),
-      2600,
-    );
-    return () => window.clearTimeout(timer);
-  });
-
-  // delegate clicks on [data-jump] regions back into the panel
+    if (scroll === "bottom") {
+      scr.scrollTo({ top: scr.scrollHeight, behavior: "smooth" });
+      return;
+    }
+    if (!target) return;
+    // offsetTop, never scrollIntoView: the frame is CSS-scaled, so client
+    // rects are in scaled pixels while scrollTop is content pixels.
+    let y = 0;
+    let el: HTMLElement | null = target;
+    while (el && el !== scr) {
+      y += el.offsetTop;
+      el = el.offsetParent as HTMLElement | null;
+    }
+    const top = Math.max(0, y - (scr.clientHeight / 2 - target.offsetHeight / 2));
+    if (Math.abs(top - scr.scrollTop) > 12) scr.scrollTo({ top, behavior: "smooth" });
+  };
+  // Arrival: one soft ring around the region the section owns.
   useEffect(() => {
     const scr = screenRef.current;
     if (!scr) return;
-    const onClick = (e: MouseEvent) => {
-      const t = (e.target as HTMLElement).closest("[data-jump]");
-      if (t && scr.contains(t)) onJump((t as HTMLElement).dataset.jump!);
+    let cleanup: (() => void) | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      if (!sec) {
+        scrollTo(null);
+        return;
+      }
+      // The real region wins over its empty-state hint.
+      const real = [...scr.querySelectorAll(`[data-jump="${sec}"]:not(.qz-rg-empty)`)];
+      const targets = real.length ? real : [...scr.querySelectorAll(`[data-jump="${sec}"]`)];
+      scrollTo((targets[0] as HTMLElement | undefined) ?? null);
+      cleanup = ring(targets, "qz-rg-zsoft");
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      cleanup?.();
     };
-    scr.addEventListener("click", onClick);
-    return () => scr.removeEventListener("click", onClick);
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrival]);
+  // Touch: ring ONLY the element the control changes.
+  useEffect(() => {
+    const scr = screenRef.current;
+    if (!scr || !focusPart || touch === 0) return;
+    let cleanup: (() => void) | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const targets = [...scr.querySelectorAll(`[data-part="${focusPart}"]`)];
+      scrollTo((targets[0] as HTMLElement | undefined) ?? null);
+      cleanup = ring(targets, "qz-rg-zsel");
+    });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      cleanup?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [touch]);
 
-  // ── screen contents ────────────────────────────────────────────────────────
-  const consentRows = (
+  // Clicks: only a region the current step owns does anything.
+  const onScreenClick = (e: React.MouseEvent) => {
+    const t = (e.target as HTMLElement).closest<HTMLElement>("[data-live]");
+    if (t?.dataset.jump) onOpenSec(t.dataset.jump);
+  };
+
+  // ── the form (gate screen, inline, unlock card) ───────────────────────────
+  const fixed = Boolean(cfg.consentVersion);
+  const links = resolvePolicyLinks(cfg, shopDomain);
+  const labels = {
+    terms: cfg.termsLabel?.trim() || "Terms & Conditions",
+    privacy: cfg.privacyLabel?.trim() || "Privacy Policy",
+  };
+  const sentence = (parts: readonly WordingPart[]) =>
+    parts.map((p, i) =>
+      typeof p === "string" ? (
+        p
+      ) : (
+        <u key={i} title={links[p.link] ?? "No link yet"}>
+          {labels[p.link]}
+        </u>
+      ),
+    );
+  const termsIsBox = cfg.captureTermsMode === "checkbox";
+  const fixedConsent = (
     <>
-      {cfg.consentOn ? (
-        <div className="qz-rg-cons" data-jump="consent" data-part="consent">
-          <i /> <span>{cfg.consentCopy}</span>
-        </div>
-      ) : null}
-      {cfg.capturePhone && cfg.smsConsentMode === "checkbox" ? (
-        <div className="qz-rg-cons" data-jump="consent" data-part="consent">
-          <i /> <span>{cfg.smsConsentText || SMS_CHECKBOX}</span>
-        </div>
-      ) : null}
-      {cfg.captureTermsOn && cfg.captureTermsMode !== "notice" ? <div className="qz-rg-cons" data-jump="consent" data-part="terms"><i /><span>{termsCopy(runtimeCfg)}</span></div> : null}
-    </>
-  );
-
-  const capForm = (unlock: boolean) => {
-    const pending = unlock && !doc.discount_config?.enabled;
-    const expiry =
-      disc.expiry_mode === "hours" ? `expires in ${disc.expiry_hours}h` : "Yours after this step";
-    return (
-      <div
-        className={`qz-rg-capform${unlock ? " is-unlock" : ""}${pending ? " is-pending" : ""}`}
-        data-jump="gate"
-        data-part="gform"
-      >
-        {pending ? <span className="qz-rg-pendlbl">Add a discount to unlock this</span> : null}
-        {unlock ? (
-          <div className="qz-rg-ulead">
-            <span className="qz-rg-ulock" aria-hidden>
-              🔒
-            </span>
-            <span className="qz-rg-utx">
-              <b>{offerLabel(disc)} your match</b>
-              <em>{expiry}</em>
-            </span>
+      {cfg.capturePhone ? <input placeholder="Mobile number (optional)" readOnly data-part="sms" /> : null}
+      <div className="qz-rg-consentgrp" {...region("consent")}>
+        {cfg.consentOn ? (
+          <div className="qz-rg-cons" data-part="mkt">
+            <i /> <span>{cfg.consentCopy.trim() || defaultMarketingCopy(storeName)}</span>
           </div>
         ) : null}
-        <h4 data-part="gcopy">{cfg.captureHeadline || (cfg.capturePlacement === "inline" ? "Save your details" : "Your matches are ready")}</h4>
-        <p data-part="gcopy">{cfg.captureSubtext || (cfg.capturePlacement === "inline" ? "Share your contact details with the store." : "Tell us where to send them.")}</p>
-        <input placeholder="you@email.com" readOnly />
-        {cfg.capturePhone ? <input placeholder="Mobile number (optional)" readOnly /> : null}
-        {consentRows}
-        <button type="button">{doc.rec_page_settings?.global.captureCta || (cfg.capturePlacement === "inline" ? "Save my details" : cfg.captureCta)}</button>
-        {cfg.captureTermsOn && cfg.captureTermsMode === "notice" && <p className="qz-rg-terms" data-jump="consent" data-part="terms"><ConsentNotice config={runtimeCfg}/></p>}
-        {cfg.capturePhone && cfg.smsConsentMode === "notice" && <p className="qz-rg-terms" data-jump="consent">{cfg.smsConsentText || SMS_NOTICE}</p>}
+        {cfg.capturePhone ? (
+          <div className="qz-rg-cons" data-part="sms">
+            <i /> <span>{smsBoxLabel(storeName)}</span>
+          </div>
+        ) : null}
+        {termsIsBox ? (
+          <div className="qz-rg-cons" data-part="terms">
+            <i /> <span>{sentence(TERMS_BOX)}</span>
+          </div>
+        ) : null}
+        <div className="qz-rg-legal">
+          {!termsIsBox ? <p data-part="terms">{sentence(TERMS_LINE)}</p> : null}
+          {cfg.consentOn ? <p>{unsubscribeLine(storeName)}</p> : null}
+          {cfg.capturePhone ? <p>{smsSmallPrint(storeName)}</p> : null}
+        </div>
       </div>
-    );
-  };
+    </>
+  );
+  // A draft never touched by the consent tab still renders the old form live.
+  const legacyConsent = (
+    <>
+      {cfg.capturePhone ? <input placeholder="Mobile number (optional)" readOnly data-part="sms" /> : null}
+      <div className="qz-rg-consentgrp" {...region("consent")}>
+        {cfg.consentOn ? (
+          <div className="qz-rg-cons" data-part="mkt">
+            <i /> <span>{cfg.consentCopy.trim() || "Email me offers and updates. Unsubscribe anytime."}</span>
+          </div>
+        ) : null}
+        {cfg.capturePhone && cfg.smsConsentMode === "checkbox" ? (
+          <div className="qz-rg-cons" data-part="sms">
+            <i /> <span>{cfg.smsConsentText || SMS_CHECKBOX}</span>
+          </div>
+        ) : null}
+        {cfg.captureTermsOn && cfg.captureTermsMode !== "notice" ? (
+          <div className="qz-rg-cons" data-part="terms">
+            <i /> <span>{termsCopy(runtimeCfg)}</span>
+          </div>
+        ) : null}
+        {cfg.captureTermsOn && cfg.captureTermsMode === "notice" ? (
+          <p className="qz-rg-terms" data-part="terms">
+            <ConsentNotice config={runtimeCfg} shopDomain={shopDomain} />
+          </p>
+        ) : null}
+        {cfg.capturePhone && cfg.smsConsentMode === "notice" ? (
+          <p className="qz-rg-terms">{cfg.smsConsentText || SMS_NOTICE}</p>
+        ) : null}
+      </div>
+    </>
+  );
+  const formBody = (
+    <>
+      <input placeholder="you@email.com" readOnly />
+      {fixed ? fixedConsent : legacyConsent}
+      <button type="button">{cfg.captureCta}</button>
+    </>
+  );
 
   let screenBody: ReactNode;
   if (screen === "gate") {
@@ -202,15 +275,17 @@ export function GuidedPreview({
           <span className="qz-rg-gicon" aria-hidden>
             ✉
           </span>
-          <h2 className="qz-rg-h1" data-jump="gate" data-part="gcopy">
+          <h2 className="qz-rg-h1" {...region("gate")} data-part="gcopy">
             {cfg.captureHeadline || "Your matches are ready"}
           </h2>
-          <p className="qz-rg-why" data-jump="gate" data-part="gcopy">
+          <p className="qz-rg-why" {...region("gate")} data-part="gcopy">
             {cfg.captureSubtext || "Tell us where to send them and we’ll unlock your results."}
           </p>
-          {capForm(false)}
-          {cfg.capturePlacement === "before" && !cfg.captureRequired ? (
-            <p className="qz-rg-gskip" data-jump="gate" data-part="gskip">
+          <div className="qz-rg-capform" {...region("gate")} data-part="gform">
+            {formBody}
+          </div>
+          {cfg.where === "before" && !cfg.captureRequired ? (
+            <p className="qz-rg-gskip" {...region("gate")} data-part="gskip">
               {cfg.captureSkipLabel}
             </p>
           ) : null}
@@ -218,83 +293,54 @@ export function GuidedPreview({
       </div>
     );
   } else if (screen === "loading") {
-    // Owner 2026-08-18 — the delay readout ("2.0s") left the visual screen;
-    // the duration is configured in the panel only.
-    const steps = cfg.loadingSteps.filter((s) => s.trim());
+    const steps = cfg.loadingNamed ? cfg.loadingSteps.filter((s) => s.trim()) : [];
     screenBody = (
       <div className="qz-rg-scr qz-rg-loadscr">
-        <div className="qz-rg-gwrap">
-          <h2 className="qz-rg-h1" data-jump="reveal">
-            {cfg.loadingOn ? "Finding your matches" : "No loading screen"}
-          </h2>
-          {cfg.loadingOn ? (
-            <>
-              <div className="qz-rg-lbar" aria-hidden>
-                <i />
-              </div>
-              {cfg.loadingNamed && steps.length ? (
-                <div className="qz-rg-lplain">
-                  {steps.map((s, i) => (
-                    <span key={i} className={i === 0 ? "is-now" : ""}>
-                      {s}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p className="qz-rg-why">The results appear the instant the last answer lands.</p>
-          )}
+        <div className="qz-rg-gwrap" {...region("reveal")}>
+          <h2 className="qz-rg-h1">Finding your matches</h2>
+          <div className="qz-rg-lbar" aria-hidden>
+            <i />
+          </div>
+          {steps.length ? (
+            <div className="qz-rg-lplain">
+              {steps.map((s, i) => (
+                <span key={i} className={i === 0 ? "is-now" : ""}>
+                  {s}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     );
   } else {
     // ── the results page ─────────────────────────────────────────────────────
     const layout = cfg.layout ?? "hero_grid";
-    const n =
-      layout === "single_hero" ? 1 : Math.max(1, Math.min(cfg.gridMax || 3, pool.length || 3));
-    const visible = pool.slice(0, n);
+    const visible = productIndex.slice(0, SHOWN[layout] ?? 3);
     const useHero = (layout === "hero_grid" || layout === "single_hero") && visible.length > 0;
     const hero = useHero ? visible[0] : null;
     const rest = useHero ? visible.slice(1) : visible;
     const isGrid = layout === "hero_grid" || layout === "grid";
-    const offerOn = doc.discount_config?.enabled === true;
-    const unlocking = cfg.capturePlacement === "discount";
-    // §4 — only a product-class percent/fixed discount strikes a product
-    // price; a locked offer never strikes it (the shopper can't have it yet).
-    const cuts = offerOn && !unlocking && disc.kind !== "free_shipping" && disc.scope !== "collections";
+    const inline = cfg.where === "inline";
+    const unlockCard = inline && cfg.unlock;
+    const cut = activeDiscount ? cardCut(disc, { locked: unlockCard, matchingCards: visible.length }) : null;
     const after = (base: number) =>
-      !cuts
-        ? base
-        : disc.kind === "amount"
-          ? Math.max(0, base - disc.value)
-          : Math.max(0, base * (1 - disc.value / 100));
+      !cut ? base : cut.kind === "amount" ? Math.max(0, base - cut.value) : Math.max(0, base * (1 - cut.value / 100));
     const priceOf = (p: IndexedProduct) => (p.price ? parseFloat(p.price) : 0);
     const priceHtml = (base: number) =>
       after(base) < base ? (
         <span className="qz-rg-fp" data-part="price">
           <s className="qz-rg-was">{money(base)}</s> <b className="qz-rg-now">{money(after(base))}</b>
-          {!disc.auto_apply ? <span className="qz-rg-wcode">with code</span> : null}
         </span>
       ) : (
         <span className="qz-rg-fp" data-part="price">
           {base ? money(base) : "$—"}
         </span>
       );
-    const starsOf = cfg.showStars ? (
-      <span className="qz-rg-stars" data-part="stars">
-        ★★★★★ <em>4.8 (212)</em>
-        {cfg.showVerified ? (
-          <b className="qz-rg-vb" data-part="verified">
-            ✓ Verified
-          </b>
-        ) : null}
-      </span>
-    ) : null;
     const descOf = (p: IndexedProduct) =>
       cfg.descOverrides?.[p.product_id] ||
+      p.description ||
       `${p.title.replace(/^The /, "")}. A customer favourite, built for real conditions.`;
-
     const card = (p: IndexedProduct, i: number) => (
       <div key={p.product_id + i} className={isGrid ? "qz-rg-gcard" : "qz-rg-lrow"}>
         <span
@@ -303,7 +349,6 @@ export function GuidedPreview({
         />
         <span className="qz-rg-fbody">
           <span className="qz-rg-fn">{p.title}</span>
-          {starsOf}
           {cfg.showDesc ? (
             <span className="qz-rg-fdesc" data-part="desc">
               {descOf(p)}
@@ -320,44 +365,87 @@ export function GuidedPreview({
         </span>
       </div>
     );
+    const rowsClass = `qz-rg-rows${isGrid ? " is-g2" : ""}`;
 
-    const offerBarNode =
-      offerOn && !unlocking ? (
-        <div className="qz-rg-offer" data-jump="offer" data-part="offer">
-          <span>
-            {offerLabel(disc)} your match
-            {disc.expiry_mode === "hours" ? ` · expires in ${disc.expiry_hours}h` : ""}
-          </span>
-          <b>{offerCode(disc)}</b>
+    // What sits above the matches: the offer bar, the locked card, the form.
+    const offerBar =
+      activeDiscount && !unlockCard ? (
+        <div className="qz-rg-offer" {...region("gate")} data-part="offer">
+          <span>{offerLine(disc)}</span>
+          <b>{offerCodeDisplay(disc)}</b>
         </div>
       ) : null;
+    const lockedCard = unlockCard ? (
+      <div
+        className={`qz-rg-capform is-unlock${activeDiscount ? "" : " is-pending"}`}
+        {...region("gate")}
+        data-part="gform"
+      >
+        {activeDiscount ? null : <span className="qz-rg-pendlbl">Add a discount to unlock this</span>}
+        <div className="qz-rg-ulead" data-part="offer">
+          <span className="qz-rg-ulock" aria-hidden>
+            🔒
+          </span>
+          <span className="qz-rg-utx">
+            <b>{offerName(disc)}</b>
+            <em>{offerTerms(disc).replace(/^ · /, "") || "Yours after this step"}</em>
+          </span>
+        </div>
+        <h4 data-part="gcopy">{cfg.captureHeadline}</h4>
+        <p data-part="gcopy">{cfg.captureSubtext}</p>
+        {formBody}
+      </div>
+    ) : null;
+    const inlineForm =
+      inline && !unlockCard ? (
+        <div className="qz-rg-capform" {...region("gate")} data-part="capture">
+          <h4 data-part="gcopy">{cfg.captureHeadline || "Want these emailed to you?"}</h4>
+          <p data-part="gcopy">{cfg.captureSubtext || "We’ll send this match list to your inbox."}</p>
+          {formBody}
+        </div>
+      ) : null;
+    // A section that is open but draws nothing says so where its block would be.
+    const noAsk =
+      cfg.where === "none" && (sec === "gate" || sec === "consent") ? (
+        <div className="qz-rg-empty" {...region(sec)}>
+          {sec === "gate"
+            ? "No email is asked for. The shopper goes straight from the last answer to the results."
+            : "No email is asked for, so there is no form to show consent on."}
+        </div>
+      ) : null;
+    const picks = cfg.extrasOn ? productIndex.filter((p) => cfg.extrasProductIds.includes(p.product_id)) : [];
+    const shelf = picks.length ? (
+      <div className="qz-rg-extras" {...region("fallback")}>
+        <div className="qz-rg-xh" data-part="xhead">
+          <h3>{cfg.extrasHeading}</h3>
+        </div>
+        {cfg.extrasCopy.trim() ? <p data-part="xhead">{cfg.extrasCopy}</p> : null}
+        <div className={rowsClass} data-part="xprods">
+          {picks.slice(0, cfg.extrasCount).map(card)}
+        </div>
+      </div>
+    ) : sec === "fallback" ? (
+      <div className="qz-rg-empty" {...region("fallback")} data-part="xprods">
+        No products picked yet, so nothing shows under the matches.
+      </div>
+    ) : null;
 
-    const extrasList = (extrasPool.length ? extrasPool : []).slice(0, cfg.extrasCount);
     screenBody = (
       <div className="qz-rg-scr">
         <header className="qz-rg-shead">
-          <h2 className="qz-rg-h1" data-jump="head" data-part="hl">
+          <h2 className="qz-rg-h1" {...region("head")} data-part="hl">
             {cfg.headline}
           </h2>
-          <p className="qz-rg-why" data-jump="head" data-part="why">
+          <p className="qz-rg-why" {...region("head")} data-part="why">
             {cfg.whyCopy}
           </p>
         </header>
-        {openSec === "offer" && !offerOn ? (
-          <div className="qz-rg-empty" data-jump="offer">
-            No discount yet. Build one and it appears as a bar at the top of the page.
-          </div>
-        ) : null}
-        {openSec === "reveal" && !cfg.loadingOn ? (
-          <div className="qz-rg-empty" data-jump="reveal">
-            No loading screen. The results appear the moment the last answer lands.
-          </div>
-        ) : null}
-        {offerBarNode}
-        {unlocking ? capForm(true) : null}
-        {cfg.capturePlacement === "inline" ? capForm(false) : null}
+        {noAsk}
+        {offerBar}
+        {lockedCard}
+        {inlineForm}
         {hero ? (
-          <div className="qz-rg-hero" data-jump="cards" data-part="grid">
+          <div className="qz-rg-hero" {...region("cards")} data-part="grid">
             <span
               className="qz-rg-himg"
               style={hero.image_url ? { backgroundImage: `url("${hero.image_url}")` } : undefined}
@@ -365,7 +453,6 @@ export function GuidedPreview({
               <span className="qz-rg-ftop">★ Our top pick for you</span>
             </span>
             <div className="qz-rg-hbody">
-              {starsOf}
               <div className="qz-rg-hn">{hero.title}</div>
               {cfg.showDesc ? (
                 <div className="qz-rg-fdesc" data-part="desc">
@@ -374,12 +461,7 @@ export function GuidedPreview({
               ) : null}
               <div className="qz-rg-prow">{priceHtml(priceOf(hero))}</div>
               {cfg.showAtc ? (
-                <button
-                  type="button"
-                  className="qz-rg-cta"
-                  data-part="cart"
-                  style={{ color: ctaText }}
-                >
+                <button type="button" className="qz-rg-cta" data-part="cart" style={{ color: ctaText }}>
                   Add to cart
                 </button>
               ) : null}
@@ -387,131 +469,38 @@ export function GuidedPreview({
           </div>
         ) : null}
         {rest.length ? (
-          <div
-            className={`qz-rg-rows${isGrid ? ` is-g${Math.min(cfg.perRow, 4)}` : ""}`}
-            data-jump="cards"
-            data-part="grid"
-          >
+          <div className={rowsClass} {...region("cards")} data-part="grid">
             {rest.map(card)}
           </div>
         ) : null}
-        {cfg.showAddAll ? (
-          <button type="button" className="qz-rg-addall" data-jump="cards" data-part="addall">
+        {/* The live quiz draws "Add all to cart" only for two or more. */}
+        {cfg.showAddAll && visible.length >= 2 ? (
+          <button type="button" className="qz-rg-addall" {...region("cards")} data-part="addall">
             Add all to cart
           </button>
         ) : null}
-        {cfg.extrasOn ? (
-          <div className="qz-rg-extras" data-jump="fallback">
-            <div className="qz-rg-xh" data-part="xhead">
-              <h3>{cfg.extrasHeading}</h3>
-              <span className="qz-rg-xtag">Extra picks</span>
-            </div>
-            <p data-part="xhead">{cfg.extrasCopy}</p>
-            {extrasList.length ? (
-              <div
-                className={`qz-rg-rows${isGrid ? ` is-g${Math.min(cfg.perRow, 4)}` : ""}`}
-                data-part="xprods"
-              >
-                {extrasList.map(card)}
-              </div>
-            ) : (
-              <div className="qz-rg-note" data-part="xprods">
-                No products picked yet. Choose some in the panel.
-              </div>
-            )}
-          </div>
-        ) : null}
+        {shelf}
       </div>
     );
   }
 
   return (
-    <div className="qz-rg-pvwrap" data-device={view}>
-      {/* Owner 2026-08-27 — the Questions-step pv-bar controls: the shared
-          SVG segmented device toggle + icon-only Expand, clustered right (no
-          step-name label on this surface). */}
-      <div className="qz-rg-pvctl">
-        <span className="qz-s3-pvsp" />
-        <span className="qz-s3-segbtns" role="group" aria-label="Preview device">
-          <button
-            type="button"
-            className={view === "phone" ? "is-on" : ""}
-            aria-pressed={view === "phone"}
-            title="Mobile"
-            aria-label="Mobile preview"
-            onClick={() => setView("phone")}
-          >
-            <IconMobile />
-          </button>
-          <button
-            type="button"
-            className={view === "desktop" ? "is-on" : ""}
-            aria-pressed={view === "desktop"}
-            title="Desktop"
-            aria-label="Desktop preview"
-            onClick={() => setView("desktop")}
-          >
-            <IconDesktop />
-          </button>
-        </span>
-        <button
-          type="button"
-          className="qz-s3-expandbtn is-icon"
-          title="Expand"
-          aria-label="Expand preview"
-          onClick={() => setExpanded(true)}
-        >
-          <IconExpand />
-        </button>
-      </div>
+    <div className="qz-rg-pvwrap">
       <div className="qz-rg-pv">
-        <DeviceFrame tier={view} resetKey={screen} showFold={false} onFit={onFit}>
+        <DeviceFrame tier="phone" zoom={86} showFold={false}>
           <div className="qz-rg-frame" style={cssVars}>
             {fontUrl ? <link rel="stylesheet" href={fontUrl} /> : null}
-            <div className="qz-rg-screen" ref={screenRef}>
+            {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+            <div
+              className={`qz-rg-screen${sec ? "" : " is-inert"}`}
+              ref={screenRef}
+              onClick={onScreenClick}
+            >
               {screenBody}
             </div>
           </div>
         </DeviceFrame>
-        {/* questions-artifact (mock .stage-tag) — logical size · fit scale,
-            quiet, bottom-right of the stage. */}
-        <span className="qz-qf-stagetag" aria-hidden>
-          {DEVICES[view].w} × {DEVICES[view].h} · {fitScalePct}%
-        </span>
       </div>
-      {expanded && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className="qz-s3-phscrim"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Expanded preview"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) setExpanded(false);
-              }}
-            >
-              <button
-                type="button"
-                className="qz-s3-phclose"
-                aria-label="Close the expanded preview"
-                onClick={() => setExpanded(false)}
-              >
-                <IconX />
-              </button>
-              {/* Expand is a bigger pane, not a zoom: the same DeviceFrame
-                  measures this window-sized host and the same fit rule
-                  produces the bigger result (never past 1:1). */}
-              <div style={{ width: "92vw", height: "90vh" }}>
-                <DeviceFrame tier={view} showFold={false}>
-                  <div className="qz-rg-frame" style={cssVars}>
-                    <div className="qz-rg-screen">{screenBody}</div>
-                  </div>
-                </DeviceFrame>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
     </div>
   );
 }
