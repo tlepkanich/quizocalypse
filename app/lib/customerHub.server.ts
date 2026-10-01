@@ -10,7 +10,6 @@ export interface HubContact {
   id: string;
   email: string;
   firstName: string | null;
-  phone: string | null;
   capturedAt: string;
   quizId: string;
   quizName: string;
@@ -77,7 +76,6 @@ export async function loadCustomerContacts(shopId: string): Promise<HubContact[]
       id: c.id,
       email: c.email,
       firstName: c.firstName,
-      phone: c.phone,
       capturedAt: c.capturedAt.toISOString(),
       quizId: c.quiz.id,
       quizName: c.quiz.name,
@@ -98,14 +96,14 @@ function csvCell(v: string): string {
 
 export function contactsToCsv(contacts: HubContact[], segment: string): string {
   const rows = segment === "all" ? contacts : contacts.filter((c) => c.segments.includes(segment));
-  const header = ["Email", "Name", "Phone", "Quiz", "Persona", "Recommended", "Status", "Captured"];
+  // No Phone column: phone numbers are never stored (results handoff §14).
+  const header = ["Email", "Name", "Quiz", "Persona", "Recommended", "Status", "Captured"];
   const lines = [header.join(",")];
   for (const r of rows) {
     const status = r.session?.converted ? "Bought" : r.session && !r.session.completed ? "Abandoned" : r.session ? "No purchase yet" : "—";
     lines.push([
       r.email,
       r.firstName ?? "",
-      r.phone ?? "",
       r.quizName,
       r.persona ?? "",
       (r.session?.recommended ?? []).join("; "),

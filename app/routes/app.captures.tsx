@@ -45,7 +45,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       id: c.id,
       email: c.email,
       firstName: c.firstName,
-      phone: c.phone,
       capturedAt: c.capturedAt.toISOString(),
       quizId: c.quiz.id,
       quizName: c.quiz.name,
@@ -82,7 +81,6 @@ export default function AllCaptures() {
                 <tr>
                   <th>Email</th>
                   <th>Name</th>
-                  <th>Phone</th>
                   <th>Quiz</th>
                   <th>When</th>
                 </tr>
@@ -92,7 +90,6 @@ export default function AllCaptures() {
                   <tr key={c.id}>
                     <td className="qz-cell-name">{c.email}</td>
                     <td className="qz-muted">{c.firstName ?? "—"}</td>
-                    <td className="qz-muted">{c.phone ?? "—"}</td>
                     <td>
                       <Link
                         to={`/app/quizzes/${c.quizId}/studio`}

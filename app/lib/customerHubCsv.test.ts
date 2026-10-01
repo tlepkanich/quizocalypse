@@ -9,7 +9,6 @@ function contact(over: Partial<HubContact> = {}): HubContact {
     id: "c1",
     email: "amy@example.com",
     firstName: "Amy",
-    phone: null,
     capturedAt: "2026-08-01T00:00:00.000Z",
     quizId: "q1",
     quizName: "Skin quiz",

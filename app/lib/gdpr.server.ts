@@ -23,7 +23,6 @@ export interface CustomerData {
   captures: Array<{
     email: string;
     firstName: string | null;
-    phone: string | null;
     quizId: string;
     capturedAt: Date;
     // Results handoff §9 — the consent record belongs in the export too.
@@ -60,7 +59,6 @@ export async function collectCustomerData(
       select: {
         email: true,
         firstName: true,
-        phone: true,
         quizId: true,
         capturedAt: true,
         marketingConsent: true,

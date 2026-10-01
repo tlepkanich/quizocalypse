@@ -10,7 +10,7 @@ function mockPrisma(shop: { id: string } | null) {
     emailCapture: {
       findMany: vi
         .fn()
-        .mockResolvedValue([{ email: "a@b.com", firstName: null, phone: null, quizId: "q", capturedAt: new Date() }]),
+        .mockResolvedValue([{ email: "a@b.com", firstName: null, quizId: "q", capturedAt: new Date() }]),
       deleteMany: vi.fn().mockResolvedValue({ count: 2 }),
     },
     backInStockRequest: {
