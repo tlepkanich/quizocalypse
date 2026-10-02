@@ -333,3 +333,24 @@ function verify(rawBodyBuffer, signatureHeader, secret) {
 
 Hash the bytes **as received** (before any JSON parse/re-serialize), and use a
 constant-time compare.
+
+## Storefront add-to-cart bridge (postMessage)
+
+The quiz in an iframe (theme block or launcher pop-up) cannot call the
+storefront's AJAX cart, so it posts a message to the parent page. The theme
+block (`extensions/quizocalypse-block/blocks/quiz.liquid`) and the launcher
+script (`/q/:id.launcher.js`) run the same handler
+(`app/lib/cartBridgeScript.ts`).
+
+| Message from the quiz | Parent does |
+|---|---|
+| `{ type: "qz:add-to-cart", variantId, quantity }` | `POST /cart/add.js` |
+| `{ type: "qz:add-to-cart:coded", variantId, quantity, discount }` | `POST /cart/add.js`, then `GET /cart.js` and `POST /cart/update.js { discount }` with the cart's existing codes plus `discount` (the update replaces the list). `discount` must match `^[A-Za-z0-9_-]{1,64}$`. |
+
+Replies to the quiz: `{ type: "qz:add-to-cart:ok" }` on receipt,
+`{ type: "qz:add-to-cart:fail" }` if the add fails. With no reply in 1200 ms
+the quiz navigates to the cart link (`/cart/{variant}:1?discount=CODE`). A
+parent that predates `:coded` ignores it, so the quiz takes that fallback and
+the code is never dropped. If the add works but the code cannot be applied,
+the parent goes to `/discount/CODE?redirect=/cart` (the item is not added
+twice).

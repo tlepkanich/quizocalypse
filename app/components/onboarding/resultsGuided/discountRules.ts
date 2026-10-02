@@ -28,6 +28,32 @@ export function withCodeMode(d: GuidedDiscount, mode: NonNullable<DiscountConfig
   return next;
 }
 
+/** A discount picked from the store's own list (discountList.server.ts). */
+export interface PickedDiscount {
+  id: string;
+  code: string;
+  facts: Pick<DiscountConfig, "kind" | "value" | "applies_to"> &
+    Partial<Pick<DiscountConfig, "minimum_subtotal" | "minimum_quantity" | "ends_at">>;
+}
+
+/** Pick an existing Shopify discount: save its id and code, and copy the
+ *  facts the shopper is told, so the page's words match what the code does
+ *  at checkout. Nothing is created — the discount is only read. */
+export function withExistingDiscount(d: GuidedDiscount, picked: PickedDiscount): GuidedDiscount {
+  return {
+    ...withCodeMode(d, "existing"),
+    existing_code: picked.code,
+    existing_discount_id: picked.id,
+    kind: picked.facts.kind,
+    value: picked.facts.value,
+    applies_to: picked.facts.applies_to,
+    minimum_subtotal: picked.facts.minimum_subtotal,
+    minimum_quantity: picked.facts.minimum_quantity,
+    expiry_mode: picked.facts.ends_at ? "date" : "none",
+    ends_at: picked.facts.ends_at,
+  };
+}
+
 /** The first reason Save is blocked, in the handoff's order; null = saveable. */
 export function saveBlocker(d: GuidedDiscount): string | null {
   const t = offerType(d);
@@ -38,6 +64,9 @@ export function saveBlocker(d: GuidedDiscount): string | null {
   if (d.code_mode !== "dynamic" && d.expiry_mode === "hours")
     return "A shared code can only expire on a fixed date. Pick a date, or switch to a code per shopper.";
   if (d.expiry_mode === "date" && !d.ends_at) return "Pick the date it expires.";
+  // An existing discount creates nothing: its items and countries are
+  // already set in Shopify.
+  if (d.code_mode === "existing") return null;
   if (t === "products" && d.applies_to === "collections" && d.applies_collection_ids.length === 0)
     return "Pick at least one collection.";
   if (t === "products" && d.applies_to === "products" && d.applies_product_ids.length === 0)

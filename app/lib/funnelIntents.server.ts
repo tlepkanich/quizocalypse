@@ -41,6 +41,7 @@ import {
 } from "./step2Build.server";
 import { saveTemplate, loadSavedTemplate } from "./savedTemplates.server";
 import { runConnectedSync } from "./shopifyConnect.server";
+import { listStoreDiscounts } from "./discountList.server";
 import { startGoalPrepick } from "./goalPrepick.server";
 import {
   resolveSpecInputs,
@@ -172,6 +173,23 @@ async function runStep1FunnelActionImpl(
     form = await request.formData();
   }
   const intent = String(form.get("intent") ?? "");
+
+  // Results handoff §8 — the existing-discount picker. Read-only: lists the
+  // store's active code discounts; nothing is created or changed.
+  if (intent === "list-discounts") {
+    const shopRow = await prisma.shop.findUnique({ where: { id: shop.id }, select: { source: true } });
+    if (shopRow?.source === "standalone" || !shop.shopDomain.endsWith(".myshopify.com")) {
+      return json({ intent, ok: false, error: "Existing discounts need the Wiskr app installed on your Shopify store." });
+    }
+    try {
+      const { unauthenticated } = await import("../shopify.server");
+      const { admin } = await unauthenticated.admin(shop.shopDomain);
+      return json({ intent, ok: true, discounts: await listStoreDiscounts(admin) });
+    } catch (err) {
+      logFor("step1Funnel").warn({ err, shop: shop.shopDomain }, "list-discounts failed");
+      return json({ intent, ok: false, error: "Couldn't read your Shopify discounts. Try again." });
+    }
+  }
 
   if (intent === "resync") {
     // "Refresh catalog" must resolve the RIGHT admin for the workspace type. A

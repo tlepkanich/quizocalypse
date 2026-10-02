@@ -143,6 +143,30 @@ try {
   ok("free shipping hides the value field", (await page.locator("input[aria-label='Discount value']").count()) === 0);
   await page.locator("[aria-label='Discount type'] button", { hasText: "Amount off orders" }).click();
   await page.fill("input[aria-label='Discount value']", "15");
+  // gpick — the existing-discount picker reads the store's real discounts
+  // (read only). Skipped when the local server has no Shopify session.
+  await page.locator(".qz-rg-deditor button", { hasText: "An existing discount" }).click();
+  await page.waitForSelector("[data-rg-existing] [role='radiogroup'], [data-rg-existing] [role='alert']", { timeout: 20000 });
+  const pickRows = page.locator("[data-rg-existing] [role='radiogroup'] label");
+  if ((await pickRows.count()) > 0) {
+    ok("picker blocks Save until a discount is picked", (await text(".qz-rg-saveblock")) === "Pick the discount you already made.");
+    const rowTexts = await pickRows.allInnerTexts();
+    ok("picker never lists the app's own per-shopper pools", !rowTexts.some((t) => /Wiskr probe offer/.test(t)), `${rowTexts.length} rows`);
+    await pickRows.first().locator("input").check();
+    await settle();
+    ok("a picked discount is saveable", (await page.locator(".qz-rg-saveblock").count()) === 0);
+    const pickedCode = (await pickRows.first().locator("b").innerText()).trim();
+    ok("read-back says nothing is created",
+      (await text(".qz-rg-deditor")).includes(`${pickedCode} — nothing is created`) &&
+        (await page.locator(".qz-rg-deditor .qz-rg-grpdiv").allTextContents()).at(-1)?.trim() === "What this uses in Shopify");
+    await page.screenshot({ path: `${SHOTS}/3a-editor-existing.png`, fullPage: true });
+  } else {
+    console.log(`- picker: no store discounts to list (${await text("[data-rg-existing]")})`);
+  }
+  await page.locator(".qz-rg-deditor button", { hasText: "A new code per shopper" }).click();
+  await page.locator("[aria-label='Discount type'] button", { hasText: "Amount off orders" }).click();
+  await page.locator("[aria-label='Value type'] button", { hasText: "Percentage" }).click().catch(() => {});
+  await page.fill("input[aria-label='Discount value']", "15");
   await page.screenshot({ path: `${SHOTS}/3a-editor.png`, fullPage: true });
   await page.locator("button", { hasText: "Save discount" }).click();
   await settle();

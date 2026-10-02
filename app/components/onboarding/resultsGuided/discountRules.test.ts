@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "../../../lib/quizSchema";
 import { resolveDiscount, type GuidedDiscount } from "./state";
-import { expiryReadback, readbackRows, saveBlocker, withCodeMode, withOfferType } from "./discountRules";
+import {
+  expiryReadback,
+  readbackRows,
+  saveBlocker,
+  withCodeMode,
+  withExistingDiscount,
+  withOfferType,
+} from "./discountRules";
 
 const base = (): GuidedDiscount =>
   resolveDiscount(
@@ -65,5 +72,43 @@ describe("discount editor rules (results handoff §8)", () => {
     expect(rows.Discount).toBe("$30 off your match — split across the matching items, not taken off each one");
     expect(rows.Code).toBe("QUIZ-•••••• — a new code per shopper");
     expect(rows.Stacking).toBe("Combines with nothing");
+  });
+});
+
+describe("picking an existing Shopify discount", () => {
+  const picked = {
+    id: "gid://shopify/DiscountCodeNode/9",
+    code: "WELCOME15",
+    facts: { kind: "amount" as const, value: 15, applies_to: "collections" as const, minimum_subtotal: 50, ends_at: "2026-12-01T00:00:00Z" },
+  };
+
+  it("saves the id and code and copies the facts the shopper is told", () => {
+    const d = withExistingDiscount({ ...base(), minimum_quantity: 3 }, picked);
+    expect(d).toMatchObject({
+      code_mode: "existing",
+      existing_code: "WELCOME15",
+      existing_discount_id: "gid://shopify/DiscountCodeNode/9",
+      kind: "amount",
+      value: 15,
+      applies_to: "collections",
+      minimum_subtotal: 50,
+      expiry_mode: "date",
+      ends_at: "2026-12-01T00:00:00Z",
+    });
+    // Shopify allows one minimum: the old one must not survive the pick.
+    expect(d.minimum_quantity).toBeUndefined();
+  });
+
+  it("a discount with no end clears a leftover relative expiry", () => {
+    const d = withExistingDiscount(
+      { ...base(), expiry_mode: "hours", expiry_hours: 24 },
+      { ...picked, facts: { kind: "percentage", value: 10, applies_to: "all" } },
+    );
+    expect(d.expiry_mode).toBe("none");
+    expect(d.ends_at).toBeUndefined();
+  });
+
+  it("is saveable although the quiz holds no collection list: nothing is created", () => {
+    expect(saveBlocker(withExistingDiscount(base(), picked))).toBeNull();
   });
 });

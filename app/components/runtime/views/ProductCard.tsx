@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import type { RecommendedProduct } from "../../../lib/recommendationEngine";
 import { cartPermalink, numericId } from "../../../lib/cartLink";
 import { formatMoney } from "../../../lib/formatMoney";
-import { discountedItemPrice } from "../../../lib/discountMath";
+import { cutItemPrice, discountedItemPrice, type PriceCut } from "../../../lib/discountMath";
 import type { stylesFor } from "../runtimeStyles";
 import { useChrome } from "../chromeStrings";
 import {
@@ -25,6 +25,8 @@ export function ProductCard({
   shopDomain,
   discountCode,
   discountLabel,
+  priceCut,
+  codeViaAjax = false,
   onAdd,
   vertical = false,
   reasons,
@@ -79,6 +81,12 @@ export function ProductCard({
   shopDomain?: string;
   discountCode?: string;
   discountLabel?: string;
+  // Results handoff §8 — the shopper's own offer strikes this card's price
+  // (decider results only; absent = the price renders as before).
+  priceCut?: PriceCut;
+  // Results handoff §12.4 — the code is the shopper's issued offer: the add
+  // stays in the quiz and the code goes onto the AJAX cart.
+  codeViaAjax?: boolean;
   onAdd?: () => void;
   // BIC P8: vertical card for the 2-column result's right rail — full-width
   // square image, text below, CTA at the bottom. Default horizontal everywhere
@@ -235,8 +243,9 @@ export function ProductCard({
             // that THIS result opts into (discountLabel set) AND that the quiz
             // marks strikethrough-eligible (RuntimeDiscountContext). Otherwise the
             // render is byte-identical to before: just the price + optional badge.
-            const discounted =
-              discountLabel && strikethroughPercent != null
+            const discounted = priceCut
+              ? cutItemPrice(Number(product.price), priceCut)
+              : discountLabel && strikethroughPercent != null
                 ? discountedItemPrice(Number(product.price), strikethroughPercent)
                 : null;
             return (
@@ -345,7 +354,12 @@ export function ProductCard({
             onClick={() => {
               onAdd?.();
               if (isPreviewMode) return; // preview: no cart navigation / postMessage
-              addToCartFromQuiz(cartUrl, numericId(selectedVariantId), Boolean(discountCode));
+              addToCartFromQuiz(
+                cartUrl,
+                numericId(selectedVariantId),
+                Boolean(discountCode),
+                codeViaAjax ? discountCode : undefined,
+              );
             }}
             style={{ ...ctaStyle, cursor: "pointer" }}
           >

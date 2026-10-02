@@ -61,27 +61,9 @@ export const EXTRAS_FIRST_PICK = {
   extrasCopy: "Popular with shoppers like you.",
 };
 
-// Placement copy presets — applied while the merchant hasn't written their
-// own (build_session.results_guided.copy_touched); the builder writes them
-// explicitly, so the live quiz's own fallbacks stay untouched.
-export const GATE_COPY: Record<Placement | "unlock", { headline: string; copy: string; cta: string }> = {
-  before: {
-    headline: "Your matches are ready",
-    copy: "Tell us where to send them and we’ll unlock your results.",
-    cta: "Show my results",
-  },
-  inline: {
-    headline: "Want these emailed to you?",
-    copy: "We’ll send this match list to your inbox.",
-    cta: "Email me my matches",
-  },
-  unlock: {
-    headline: "Submit your email to unlock the discount",
-    copy: "We’ll send the code straight over. Yours to use on any match below.",
-    cta: "Unlock my discount",
-  },
-  none: { headline: "", copy: "", cta: "" },
-};
+// Placement copy presets live with the placement's one writer, because the
+// live quiz reads them too (plainAskCopy).
+export { GATE_COPY } from "../../../lib/captureMode";
 
 export const REVEAL_MAX_MS = 3000; // past this the wait reads as broken, not effort
 /** The live interstitial clamps to 1.5 s or more (DeciderViews). */

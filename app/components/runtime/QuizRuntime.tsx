@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { captureMode } from "../../lib/captureMode";
+import { captureMode, plainAskCopy } from "../../lib/captureMode";
 import { InlineDeciderCapture } from "./views/InlineDeciderCapture";
 import { ChromeContext, CHROME_TOKENS, useChrome, type ChromeToken } from "./chromeStrings";
 import { FoxMark } from "../chrome/FoxMark";
@@ -1662,9 +1662,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
           // or (skipped gate / on-page placement) in the locked card.
           const offerOn = doc.discount_config.enabled && doc.discount_config.configured === true;
           const offerUnlock = offerOn && cfg.captureUnlocksOffer === true && cfg.captureEmail !== false;
+          // The unlock is on but no discount is active: the ask must not
+          // promise one (handoff §7).
+          const brokenPromise = cfg.captureUnlocksOffer === true && !offerOn;
           const inlineCaptureForm = (
             <InlineDeciderCapture
-              config={cfg}
+              config={brokenPromise ? plainAskCopy(cfg, "inline") : cfg}
               styles={styles}
               quizId={quizId}
               sessionId={sessionIdRef.current}
@@ -1769,9 +1772,12 @@ export function QuizRuntime(props: QuizRuntimeProps) {
             !captureDone &&
             captureMode(cfg) === "gate";
           if (wantCapture) {
+            // The unlock is on but no discount is active: the gate must not
+            // promise one (handoff §7).
+            const gateOfferOn = doc.discount_config.enabled && doc.discount_config.configured === true;
             content = (
               <DeciderCaptureView
-                config={cfg}
+                config={cfg.captureUnlocksOffer === true && !gateOfferOn ? plainAskCopy(cfg, "before") : cfg}
                 shopDomain={shopDomain}
                 storeName={shopName}
                 styles={styles}

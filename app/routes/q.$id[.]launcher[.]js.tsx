@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { parseLocaleParam, resolveLocale } from "../lib/quizTranslate";
+import { CART_BRIDGE_HANDLER } from "../lib/cartBridgeScript";
 
 // Serves a tiny JS snippet that merchants drop on their storefront via a
 // theme code injection or the Theme App Extension. When loaded it injects
@@ -158,6 +159,25 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   document.body.appendChild(btn);
   document.body.appendChild(modal);
+
+  // In-quiz add-to-cart: the quiz in the modal posts to this page, which
+  // adds same-origin (and applies the shopper's offer code). Only our own
+  // iframe, on our own origin, is heard.
+  ${CART_BRIDGE_HANDLER}
+  var quizOrigin = ${JSON.stringify(origin)};
+  var quizFrame = modal.querySelector("iframe");
+  window.addEventListener("message", function (e) {
+    if (e.origin !== quizOrigin || !quizFrame || e.source !== quizFrame.contentWindow) return;
+    var d = e.data;
+    if (!d || typeof d !== "object") return;
+    qzCartAdd(
+      d,
+      function (type) {
+        try { e.source.postMessage({ type: type }, quizOrigin); } catch (_) {}
+      },
+      function () {}
+    );
+  });
 })();`;
 
   return new Response(script, {

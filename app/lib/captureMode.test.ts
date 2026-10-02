@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { captureMode } from "./captureMode";
+import { GATE_COPY, captureMode, plainAskCopy } from "./captureMode";
 import { resolveRecPageGlobal } from "./recommendDecider";
 import { Quiz, type RecPageGlobal } from "./quizSchema";
 import { setRecPageGlobal } from "./quizMutations";
@@ -195,5 +195,36 @@ describe("capture placement compatibility", () => {
     const none = patchGuided(withSms, { where: "none" });
     expect(none.rec_page_settings?.global.capturePhone).toBeUndefined();
     expect(captureMode(resolveRecPageGlobal(none.rec_page_settings))).toBe("none");
+  });
+});
+
+describe("plainAskCopy (unlock on, no active discount)", () => {
+  const promise = {
+    captureHeadline: GATE_COPY.unlock.headline,
+    captureSubtext: GATE_COPY.unlock.copy,
+    captureCta: GATE_COPY.unlock.cta,
+  };
+
+  it("swaps the unlock preset for the plain gate ask", () => {
+    expect(plainAskCopy(promise, "before")).toEqual({
+      captureHeadline: GATE_COPY.before.headline,
+      captureSubtext: GATE_COPY.before.copy,
+      captureCta: GATE_COPY.before.cta,
+    });
+  });
+
+  it("uses the on-page preset for the inline form", () => {
+    expect(plainAskCopy(promise, "inline").captureCta).toBe(GATE_COPY.inline.cta);
+  });
+
+  it("keeps words the merchant wrote, field by field", () => {
+    const mixed = { ...promise, captureHeadline: "Join the club" };
+    const out = plainAskCopy(mixed, "before");
+    expect(out.captureHeadline).toBe("Join the club");
+    expect(out.captureCta).toBe(GATE_COPY.before.cta);
+  });
+
+  it("keeps every other key", () => {
+    expect(plainAskCopy({ ...promise, captureEmail: true }, "before").captureEmail).toBe(true);
   });
 });

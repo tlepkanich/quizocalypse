@@ -28,6 +28,48 @@ export function captureMode(
 
 export type Placement = "before" | "inline" | "none";
 
+// Placement copy presets — applied while the merchant hasn't written their
+// own (build_session.results_guided.copy_touched); the builder writes them
+// explicitly, so the live quiz's own fallbacks stay untouched.
+export const GATE_COPY: Record<Placement | "unlock", { headline: string; copy: string; cta: string }> = {
+  before: {
+    headline: "Your matches are ready",
+    copy: "Tell us where to send them and we’ll unlock your results.",
+    cta: "Show my results",
+  },
+  inline: {
+    headline: "Want these emailed to you?",
+    copy: "We’ll send this match list to your inbox.",
+    cta: "Email me my matches",
+  },
+  unlock: {
+    headline: "Submit your email to unlock the discount",
+    copy: "We’ll send the code straight over. Yours to use on any match below.",
+    cta: "Unlock my discount",
+  },
+  none: { headline: "", copy: "", cta: "" },
+};
+
+/**
+ * Results handoff §7, unsettled case 1 — the unlock is on but no discount is
+ * active: the live quiz must not promise one, so the ask renders as if the
+ * unlock were off. Only the builder's own unlock preset is swapped; words the
+ * merchant wrote are theirs and stay.
+ */
+export function plainAskCopy<
+  T extends { captureHeadline?: string; captureSubtext?: string; captureCta?: string },
+>(config: T, where: "before" | "inline"): T {
+  const promise = GATE_COPY.unlock;
+  const plain = GATE_COPY[where];
+  return {
+    ...config,
+    ...(config.captureHeadline === promise.headline ? { captureHeadline: plain.headline } : {}),
+    ...(config.captureSubtext === promise.copy ? { captureSubtext: plain.copy } : {}),
+    ...(config.captureCta === promise.cta ? { captureCta: plain.cta } : {}),
+  };
+}
+
+
 /** The builder's reading of the stored placement. "discount" (the retired
  *  fourth option) reads as inline with the unlock on. */
 export function readPlacement(g: Partial<RecPageGlobal>): { where: Placement; unlock: boolean } {

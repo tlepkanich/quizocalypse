@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useFetcher } from "@remix-run/react";
 import type { Quiz, DiscountConfig } from "../../../lib/quizSchema";
 import type { IndexedProduct } from "../../../lib/recommendationEngine";
 import type { BuilderCollection } from "../../builder/stepProps";
@@ -10,7 +11,9 @@ import {
   readbackRows,
   saveBlocker,
   withCodeMode,
+  withExistingDiscount,
   withOfferType,
+  type PickedDiscount,
 } from "./discountRules";
 
 /* Results handoff §8 — the discount editor. The rule: every control writes
@@ -46,6 +49,74 @@ function Seg<T extends string>({
           {text}
         </button>
       ))}
+    </div>
+  );
+}
+
+type StoreDiscountRow = PickedDiscount & { title: string; summary: string };
+type DiscountListResult = { intent?: string; ok?: boolean; error?: string; discounts?: StoreDiscountRow[] };
+
+/** The store's own active code discounts, read from Shopify when the picker
+ *  opens. Picking one saves its id and code and copies its facts. */
+function ExistingDiscountPicker({
+  pickedId,
+  pickedCode,
+  onPick,
+}: {
+  pickedId: string | undefined;
+  pickedCode: string;
+  onPick: (discount: StoreDiscountRow) => void;
+}) {
+  const fetcher = useFetcher<DiscountListResult>();
+  const load = () => fetcher.submit({ intent: "list-discounts" }, { method: "post" });
+  useEffect(() => {
+    load();
+    // Once, when the picker opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const result = fetcher.data?.intent === "list-discounts" ? fetcher.data : null;
+  const loading = fetcher.state !== "idle" || !result;
+  const discounts = result?.discounts ?? [];
+  return (
+    <div className="qz-rg-fld" data-rg-existing>
+      <div className="qz-rg-fl">Existing discount</div>
+      {loading ? (
+        <div className="qz-rg-cap">Reading your Shopify discounts…</div>
+      ) : result.ok !== true ? (
+        <div className="qz-rg-cap" role="alert">
+          {result.error ?? "Couldn't read your Shopify discounts."}{" "}
+          <button type="button" className="qz-rg-later" onClick={load}>
+            Try again
+          </button>
+        </div>
+      ) : discounts.length === 0 ? (
+        <div className="qz-rg-cap">
+          No active code discounts in your store yet. Create one in Shopify, or use a code per shopper.
+        </div>
+      ) : (
+        <div className="qz-rg-plist qz-rg-dpick" role="radiogroup" aria-label="Existing discount">
+          {discounts.map((x) => (
+            <label key={x.id} className="qz-rg-ck">
+              <input
+                type="radio"
+                name="rg-existing-discount"
+                checked={pickedId ? pickedId === x.id : pickedCode === x.code}
+                onChange={() => onPick(x)}
+              />
+              <span>
+                <b>{x.code}</b> · {x.title}
+                {x.summary ? <span className="qz-rg-cap"> — {x.summary}</span> : null}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+      {pickedCode && !loading && result.ok === true && !discounts.some((x) => x.code === pickedCode) ? (
+        <div className="qz-rg-cap" role="alert">
+          {pickedCode} is no longer an active discount in your store. Pick another.
+        </div>
+      ) : null}
+      <div className="qz-rg-cap">The type, value and limits are read from the discount you pick.</div>
     </div>
   );
 }
@@ -298,16 +369,11 @@ export function DiscountEditor({
             </div>
           ) : null}
           {d.code_mode === "existing" ? (
-            <div className="qz-rg-fld">
-              <div className="qz-rg-fl">Existing discount code</div>
-              <input
-                className="qz-input"
-                value={d.existing_code}
-                placeholder="WELCOME10"
-                aria-label="Existing discount code"
-                onChange={(e) => patch({ existing_code: e.target.value.toUpperCase(), existing_discount_id: undefined })}
-              />
-            </div>
+            <ExistingDiscountPicker
+              pickedId={d.existing_discount_id}
+              pickedCode={d.existing_code}
+              onPick={(x) => set(withExistingDiscount(d, x))}
+            />
           ) : (
             <div className="qz-rg-fld">
               <div className="qz-rg-fl">Discount name</div>

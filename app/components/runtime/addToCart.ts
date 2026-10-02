@@ -19,7 +19,36 @@ export function goToCartPermalink(cartUrl: string) {
   }
 }
 
-export function addToCartFromQuiz(cartUrl: string, variantId: string | null, hasDiscount: boolean) {
+/**
+ * Results handoff §12.4 — put a code on the storefront's AJAX cart.
+ * `/cart/update.js { discount }` REPLACES the cart's code list, so the codes
+ * already there are sent back with the new one. Same-origin only (the DOM
+ * embed); the iframe path does the same in the theme block's listener.
+ */
+export async function applyCartDiscount(code: string): Promise<void> {
+  const cart = (await (await fetch("/cart.js")).json()) as { discount_codes?: Array<{ code?: string }> };
+  const kept = (cart.discount_codes ?? []).map((c) => c.code).filter((c): c is string => Boolean(c));
+  const all = [...new Set([...kept, code])];
+  const res = await fetch("/cart/update.js", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ discount: all.join(",") }),
+  });
+  if (!res.ok) throw new Error("discount apply failed");
+}
+
+/**
+ * @param ajaxCode the shopper's issued offer code (decider results only).
+ *   When set, the add stays in the quiz and the code goes onto the AJAX cart;
+ *   every failure falls back to the cart permalink, which carries the code.
+ *   Absent = the behaviour before the offer pipeline, unchanged.
+ */
+export function addToCartFromQuiz(
+  cartUrl: string,
+  variantId: string | null,
+  hasDiscount: boolean,
+  ajaxCode?: string,
+) {
   if (typeof window === "undefined") return;
   const goToCart = () => {
     try {
@@ -28,6 +57,10 @@ export function addToCartFromQuiz(cartUrl: string, variantId: string | null, has
       window.open(cartUrl, "_blank");
     }
   };
+  if (ajaxCode && variantId) {
+    addWithCode(variantId, ajaxCode, goToCart);
+    return;
+  }
   // A discount can only be applied via the cart permalink (the AJAX cart can't
   // carry a code), so go straight there. Also when there's no variant.
   //
@@ -100,4 +133,78 @@ export function addToCartFromQuiz(cartUrl: string, variantId: string | null, has
       goToCart();
     }
   }, 1200);
+}
+
+/** Ask the parent page to add ONE variant; resolve by ack, :fail or silence. */
+function askParent(message: Record<string, unknown>, goToCart: () => void) {
+  let settled = false;
+  const cleanup = () => window.removeEventListener("message", onMsg);
+  const onMsg = (e: MessageEvent) => {
+    if (e.source !== window.parent) return;
+    const d = e.data as { type?: string } | null;
+    if (!d || typeof d !== "object") return;
+    if (d.type === "qz:add-to-cart:ok") {
+      settled = true;
+      cleanup();
+    } else if (d.type === "qz:add-to-cart:fail") {
+      settled = true;
+      cleanup();
+      goToCart();
+    }
+  };
+  window.addEventListener("message", onMsg);
+  try {
+    window.parent.postMessage(message, "*");
+  } catch {
+    cleanup();
+    goToCart();
+    return;
+  }
+  window.setTimeout(() => {
+    if (!settled) {
+      cleanup();
+      goToCart();
+    }
+  }, 1200);
+}
+
+function addWithCode(variantId: string, code: string, goToCart: () => void) {
+  if (isEmbedMode()) {
+    void fetch("/cart/add.js", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ id: Number(variantId), quantity: 1 }] }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("add failed");
+      })
+      .then(
+        () =>
+          applyCartDiscount(code).then(
+            () => {
+              try {
+                document.dispatchEvent(new CustomEvent("cart:refresh"));
+              } catch {
+                // A theme without the event contract still got the item.
+              }
+            },
+            // The item is in the cart, so the permalink would add it twice.
+            // Shopify's discount link applies the code and lands on the cart.
+            () => {
+              window.location.href = `/discount/${encodeURIComponent(code)}?redirect=/cart`;
+            },
+          ),
+        goToCart, // the add itself failed: the permalink adds + applies
+      );
+    return;
+  }
+  if (window.parent === window) {
+    goToCart();
+    return;
+  }
+  // A NEW message type on purpose: a theme block from before the offer
+  // pipeline ignores it, sends no ack, and the 1200 ms fallback takes the
+  // permalink. Had it reused "qz:add-to-cart", an old block would ack, add
+  // the item and silently drop the code.
+  askParent({ type: "qz:add-to-cart:coded", variantId, quantity: 1, discount: code }, goToCart);
 }

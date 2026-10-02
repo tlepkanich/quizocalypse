@@ -36,6 +36,7 @@ import { postQuizSession } from "./postQuizSession";
 import { apiUrl } from "../../../lib/apiBase";
 import { ConsentNotice, noticeText, policyHref, SMS_CHECKBOX, SMS_NOTICE } from "./ConsentNotice";
 import { OfferBar, OfferLockStrip, useOffer } from "./OfferBar";
+import { cardCut } from "../../../lib/offerCopy";
 import type { DiscountConfig } from "../../../lib/quizSchema";
 import {
   FixedConsentChecks,
@@ -696,6 +697,17 @@ export function DeciderResultView({
       : incentiveActive && cfg.incentiveAutoApply
         ? cfg.incentiveCode
         : undefined;
+  // Card prices strike only for an issued offer scoped to "what we recommend"
+  // (cardCut holds the rule). The discount covers the products this session
+  // recorded as shown — the matches, or the fallback page's — and never the
+  // extra picks.
+  const priceCut =
+    issuedOffer && offer
+      ? (cardCut(offer.discount, {
+          locked: false,
+          matchingCards: lineup.shown.length + fallbackRecs.length,
+        }) ?? undefined)
+      : undefined;
   const incentiveChip = incentiveActive ? (
     <div
       style={{
@@ -782,6 +794,8 @@ export function DeciderResultView({
       href={productHref(p, shopDomain, platform)}
       shopDomain={shopDomain}
       discountCode={discountCode}
+      priceCut={extra?.extras ? undefined : priceCut}
+      codeViaAjax={Boolean(issuedOffer) && !isPreviewMode}
       showDescriptions={cfg.showDesc}
       showPrice={cfg.showPrice}
       showCta={cfg.showAtc}
