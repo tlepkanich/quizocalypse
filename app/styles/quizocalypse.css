@@ -205,10 +205,24 @@
   --qz-lift-1: 0 1px 2px rgba(32, 28, 46, 0.05);                                   /* cards: a whisper */
   --qz-lift-2: 0 12px 30px -10px rgba(32, 28, 46, 0.26), 0 1px 2px rgba(32, 28, 46, 0.07); /* menus, popovers */
   --qz-lift-3: 0 24px 56px -16px rgba(32, 28, 46, 0.34), 0 2px 4px rgba(32, 28, 46, 0.08); /* modals, drawers */
-  /* HOME-3 — the card EDGE (owner-approved 2026-09-30, "Edge A"): a hairline
-     ring + a slightly heavier bottom rim, drawn as shadow so the card keeps
-     its exact box. Holds a white card off the Wiskr print with no lift. */
-  --qz-edge: 0 0 0 1px rgba(32, 28, 46, 0.08), 0 2px 0 0 rgba(32, 28, 46, 0.04);
+  /* Tight Edge (admin-wide, approved 2026-10-01) — supersedes "Edge A": a
+     firmer ring over a soft violet-tinted drop. A clickable card's hover
+     swaps the ring only; the shadow stays, so the 18px gap rule still holds.
+     The soft shadow is built from its 14px reach (offset .4, blur .8,
+     spread -.2) — keep the fractional pixels. */
+  --qz-edge-shadow: 0 1px 2px rgba(32, 28, 46, 0.08), 0 5.6px 11.2px -2.8px rgba(44, 30, 120, 0.28);
+  --qz-edge: 0 0 0 1px rgba(32, 28, 46, 0.14), var(--qz-edge-shadow);
+  --qz-edge-hover: 0 0 0 1px rgba(32, 28, 46, 0.26), var(--qz-edge-shadow);
+  --qz-edge-rail: 1px 0 0 rgba(32, 28, 46, 0.14), 8px 0 22px -14px rgba(44, 30, 120, 0.2);
+  /* The Crest GROUND — the one global rule for the Wiskr print: the 6.5%
+     tile over white. Every page that takes the print paints
+     `background: var(--qz-ground-crest)`; no page names the tile or its
+     strength itself. Cards on it use --qz-edge and sit >= 18px apart. */
+  --qz-ground-crest: var(--qz-paper) url("/crest-6.5.svg") 0 0 / 360px 240px repeat;
+  /* Quizzes tab: the opening-question panel, and the tinted card action. */
+  --qz-panel: #F8F6FE;
+  --qz-panel-line: #ECE8F8;
+  --qz-accent-wash-2: #E4DEFB;   /* hover on a wash-filled button */
   --qz-shadow-sm: var(--qz-lift-1);
   --qz-shadow-md: var(--qz-lift-2);
   --qz-shadow-lg: var(--qz-lift-3);
@@ -247,6 +261,8 @@
   --qz-ls-crit-wash: #FBECEA;  /* mock --crit-wash: failed-line fill      */
   --qz-ls-cell-bg:   #FBFAFD;  /* mock --qcell-bg: question-column ground */
 }
+/* Print and forced colours drop the print everywhere it is used. */
+@media print, (forced-colors: active) { :root { --qz-ground-crest: var(--qz-paper); } }
 
 /* =====================================================================
    THE EDITOR STANDS DOWN
@@ -426,6 +442,9 @@ body[data-qz] .qz-btn:focus-visible { outline: none; box-shadow: var(--qz-shadow
 .qz-btn-primary:active, .qz-btn-accent:active { background: var(--qz-accent-2); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18); }
 .qz-btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--qz-ink-3); }
 .qz-btn-ghost:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+/* Tinted action: reads as a button without competing with the one filled violet. */
+.qz-btn-soft { border: 0; border-radius: 999px; background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-btn-soft:hover { background: var(--qz-accent-wash-2); }
 /* Disabled — after the variants so it wins regardless of variant class. */
 .qz-btn[disabled], .qz-btn[aria-disabled="true"] {
   background: var(--qz-cream-2); color: var(--qz-ink-3);
@@ -1375,7 +1394,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   height: 100vh;
   display: flex; flex-direction: column;
   background: var(--qz-paper);
-  border-right: 1px solid var(--qz-rule);
+  border-right: 0;
+  box-shadow: var(--qz-edge-rail);
   padding: 16px 10px;
   overflow: hidden;
   transition: width var(--qz-dur-slow) var(--qz-ease), padding var(--qz-dur-slow) var(--qz-ease);
@@ -6720,229 +6740,197 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-eng-knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: var(--qz-radius-sm); background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: transform var(--qz-dur) var(--qz-ease); }
 .qz-eng-tg.is-on .qz-eng-knob { transform: translateX(18px); }
 
-/* §R-7 — Quizzes library, Quartz pass (docs handoff 2026-08-24). State first,
-   their brand second, the name third, the numbers last. Content is flat; only
-   overlays cast. */
+/* §R-7 — Quizzes library, Crest pass (docs/design/quizzes-tab/crest,
+   2026-10-01). Built for a shop with two to four quizzes: one 960px column of
+   wide cards, the title leading, and the quiz's own opening question as the
+   preview — set in our type, so no photos, no merchant colour, nothing that
+   moves. The page takes the Crest ground, like Home. */
 
-/* ── Ground ─────────────────────────────────────────────────────────
-   Owner call 2026-08-24: this page takes the Home tint. The rail and every
-   card stay --qz-paper; the content column and its sticky toolbar are the
-   tinted ground. Hover states that were --qz-cream-2 move to paper here. */
-.qz-lib-main   { flex: 1 1 auto; background: var(--qz-home-ground); }
-.qz-lib-header { display: flex; align-items: center; justify-content: space-between;
-                 gap: 20px; flex-wrap: wrap; padding: 20px 32px 12px; }
-/* Out-specify `.qz-shell .qz-page-header`'s margin — the toolbar sits flush. */
-.qz-shell .qz-lib-header { margin: 0; }
-
-/* ── Toolbar — sticky, because the whole library scrolls past it ────
-   Every control is 32px tall on purpose: the toolbar lands at the 50px
-   the table head's sticky offset below assumes. */
-.qz-lib-toolbar {
-  position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 8px 32px 10px;
-  background: var(--qz-home-ground);
-  border-bottom: 1px solid var(--qz-rule);
+/* ── Ground + column ─────────────────────────────────────────────────
+   The Wiskr print, the same rule as .hm3. No text sits on it: the title
+   lives in the header card. */
+.qz-lib-main {
+  flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
+  padding: 26px 32px 48px;
+  background: var(--qz-ground-crest);
 }
-.qz-lib-search { position: relative; flex: 1 1 220px; max-width: 300px; }
-.qz-lib-search > svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+.qz-lib-col { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 18px; }
+
+/* ── Header card — the title, Create quiz and (sometimes) the toolbar ─── */
+.qz-lib-head { padding: 18px 22px; background: var(--qz-paper); border-radius: 22px; box-shadow: var(--qz-edge); }
+/* With the toolbar the title row scrolls away and the toolbar stays pinned:
+   71 = 18 padding + 38 title row + 14 margin + 1 hairline. The pinned part
+   is 12 + 34 + 14 = 60px (the table head's sticky offset below). */
+.qz-lib-head.has-bar { position: sticky; top: -71px; z-index: 20; padding-bottom: 14px; }
+.qz-lib-headrow { display: flex; align-items: center; justify-content: space-between;
+                  flex-wrap: wrap; gap: 10px 20px; min-height: 38px; }
+.qz-lib-h1 { margin: 0; font-family: var(--qz-font-display); font-size: 30px; font-weight: 700;
+             line-height: 1.1; letter-spacing: -.02em; color: var(--qz-ink); }
+/* The only filled violet button on the page. */
+.qz-btn.qz-lib-create { min-height: 38px; padding: 11px 20px; border: 0; border-radius: 999px;
+                        font-size: 14.5px; font-weight: 600; }
+
+/* ── Toolbar — every control 34px tall and pill-shaped ─────────────── */
+.qz-lib-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px;
+              margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--qz-rule-2); }
+.qz-lib-search { position: relative; flex: 1 1 200px; max-width: 300px; min-width: 0; }
+.qz-lib-search > svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
                        color: var(--qz-ink-4); pointer-events: none; }
-.qz-lib-search > .qz-input { padding: 6px 12px 6px 32px; font-size: 13.5px; }
-.qz-lib-sort   { flex: 0 0 auto; width: auto; padding: 6px 12px; font-size: 13.5px; }
-.qz-lib-spacer { flex: 1; }
+.qz-lib-search > .qz-input { height: 34px; padding: 0 14px 0 33px; border-radius: 999px;
+                             box-shadow: inset 0 0 0 1px var(--qz-rule); font-size: 13.5px; }
+.qz-lib-sort { flex: 0 0 auto; width: auto; height: 34px; padding: 0 30px 0 14px; border-radius: 999px;
+               box-shadow: inset 0 0 0 1px var(--qz-rule); font-size: 13px; font-weight: 600; }
+.qz-lib-search > .qz-input:hover, .qz-lib-sort:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
 .qz-lib-count  { margin-left: 5px; font-size: 11px; font-weight: 700; color: var(--qz-ink-4);
                  font-variant-numeric: tabular-nums; }
 [aria-pressed="true"] > .qz-lib-count { color: var(--qz-accent-ink); }
-/* The segmented track is --qz-cream-2 by default, which IS the ground here.
-   On this page it takes the paper surface plus a boundary, and the selected
-   segment moves to the accent wash (a paper tile is invisible on paper). */
-.qz-lib-toolbar .qz-segmented { padding: 2px; background: var(--qz-paper); border: 1px solid var(--qz-rule); }
-.qz-lib-toolbar .qz-segmented button { height: 26px; padding: 0 11px; font-size: 12.5px; }
-.qz-lib-toolbar .qz-segmented button[aria-pressed="true"] {
+.qz-lib-bar .qz-segmented { padding: 3px; border: 0; background: var(--qz-cream-2); }
+.qz-lib-bar .qz-segmented button { display: inline-flex; align-items: center; height: 28px;
+                                   padding: 0 12px; font-size: 12.5px; font-weight: 600; }
+.qz-lib-bar .qz-segmented button[aria-pressed="true"] {
   background: var(--qz-accent-wash); color: var(--qz-accent-ink);
   border-color: transparent; box-shadow: inset 0 0 0 1px var(--qz-accent-line);
 }
-.qz-lib-body   { padding: 14px 32px 32px; }
-/* §5 empty state — dashed paper card so it reads on the tinted ground. */
-.qz-lib-empty  { border: 1px dashed var(--qz-rule-strong); background: var(--qz-paper);
-                 border-radius: var(--qz-radius-lg); }
-.qz-lib-more { min-width: 34px; padding-left: 8px; padding-right: 8px; font-size: 18px; line-height: 1; flex: 0 0 auto; }
+.qz-lib-view { margin-left: auto; }
+.qz-lib-view .qz-segmented button { padding: 0 9px; }
 
-/* ── Card — state first (header strip), their brand, the name, two figures.
-   ~292px tall at minmax(258px, 1fr); 4 across on a wide monitor. ─────── */
-/* Each track is at least ¼ of the row (minus 3 gaps), so the grid never
-   exceeds 4 tiles per row; narrower rows still collapse to 3/2/1. */
-.qz-qcard-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(258px, calc((100% - 36px) / 4)), 1fr)); gap: 12px; }
-.qz-lib-viewmore { display: flex; justify-content: center; margin-top: 14px; }
+/* ── States + paging — white cards on the edge, like every card here ── */
+.qz-lib-empty { background: var(--qz-paper); border-radius: 22px; box-shadow: var(--qz-edge); }
+.qz-lib-viewmore { display: flex; justify-content: center; }
+.qz-lib-viewmore button {
+  min-height: 34px; padding: 8px 18px; border: 0; border-radius: 999px;
+  background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-rule);
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--qz-ink); cursor: pointer;
+}
+.qz-lib-viewmore button:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+body[data-qz] .qz-lib-viewmore button:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-shadow-focus); }
+
+/* ── The card — 960 × 224: the opening-question panel left (434px), the
+   body right. The body comes first in the DOM (the name is heard before the
+   question); grid placement puts the panel on the left. ─────────────── */
+.qz-qcard-list { display: flex; flex-direction: column; gap: 18px; }
 .qz-qcard {
-  display: flex; flex-direction: column; overflow: hidden;
-  background: var(--qz-paper);
-  border: 1px solid var(--qz-rule);
-  border-radius: var(--qz-radius-lg);
-  transition: border-color var(--qz-dur) var(--qz-ease);
+  display: grid; grid-template-columns: 434px minmax(0, 1fr); overflow: hidden; padding: 0;
+  background: var(--qz-paper); border: 0; border-radius: 22px; box-shadow: var(--qz-edge);
+  transition: box-shadow var(--qz-dur) var(--qz-ease);
 }
-/* Flat at rest. No translate, no scale — that was the Soft-Pastel card. */
-.qz-qcard:hover, .qz-qcard:focus-within { border-color: var(--qz-rule-strong); }
+/* Hover and focus swap the ring only — the shadow stays. */
+.qz-qcard:hover, .qz-qcard:focus-within { box-shadow: var(--qz-edge-hover); }
 
-/* Header strip: state left, recency right, both aligned across a row. */
-.qz-qcard-head {
-  display: flex; align-items: center; gap: 8px;
-  min-height: 35px; padding: 8px 13px;
-  border-bottom: 1px solid var(--qz-rule);
-  font-size: 12px; color: var(--qz-ink-4);
-  font-variant-numeric: tabular-nums;
+/* The panel is full-bleed: clipped by the card's corners, no radius, ring
+   or shadow of its own, a hairline on its right. Not a control. */
+.qz-qpanel {
+  grid-column: 1; grid-row: 1; min-width: 0; min-height: 224px;
+  display: flex; flex-direction: column; padding: 24px 22px 22px 26px;
+  background: var(--qz-panel); border-right: 1px solid var(--qz-panel-line);
 }
-.qz-qcard-when { margin-left: auto; }
+.qz-qpanel-lbl { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+                 margin: 0; font-size: 10px; font-weight: 700; letter-spacing: .08em;
+                 text-transform: uppercase; color: var(--qz-ink-4); }
+.qz-qpanel-lbl span + span { font-size: 11.5px; font-weight: 600; letter-spacing: 0;
+                             text-transform: none; font-variant-numeric: tabular-nums; }
+.qz-qpanel-q { margin: 9px 0 0; font-size: 17px; font-weight: 600; line-height: 1.3;
+               letter-spacing: -.012em; color: var(--qz-ink);
+               display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+               overflow: hidden; overflow-wrap: anywhere; }
+.qz-qpanel-q.is-untitled { color: var(--qz-ink-4); }
+.qz-qpanel-opts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px;
+                  margin: auto 0 0; padding: 14px 0 0; list-style: none; }
+.qz-qpanel-opt { min-width: 0; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 11px;
+                 border-radius: 8px; background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-rule);
+                 font-size: 12.5px; font-weight: 500; color: var(--qz-ink-3); }
+.qz-qpanel-opt.is-input { grid-column: 1 / -1; color: var(--qz-ink-4); }
+.qz-qpanel-opt i { flex: none; width: 8px; height: 8px; border-radius: 999px;
+                   box-shadow: inset 0 0 0 1.5px var(--qz-ink-25); }
+.qz-qpanel-opt span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qz-qpanel-none { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center;
+                  justify-content: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--qz-ink-4); }
+.qz-qpanel-none svg { color: var(--qz-ink-25); }
 
-/* Preview — the merchant's first screen in the merchant's own tokens.
-   .qz-qprev* is unchanged; only the height and the hover row move. */
-.qz-qcard-preview { position: relative; height: 132px; overflow: hidden; cursor: pointer;
-                    border-bottom: 1px solid var(--qz-rule); }
-/* The same first-screen render, denser for the 132px box (was 210px). Scoped
-   here so the .qz-qprev* family itself stays untouched. Without `flex: none`
-   the column lets the clamped headline shrink to NOTHING at this height —
-   the merchant's card would render subtext + Start and lose their headline. */
-.qz-qcard-preview .qz-qprev { padding: 12px 16px; gap: 5px; }
-.qz-qcard-preview .qz-qprev > * { flex: none; }
-.qz-qcard-preview .qz-qprev-logo { width: 24px; height: 24px; font-size: 12px; border-radius: 7px; }
-.qz-qcard-preview .qz-qprev-logoimg { width: 26px; height: 26px; border-radius: 7px; }
-.qz-qcard-preview .qz-qprev-h { font-size: 13px; -webkit-line-clamp: 1; }
-.qz-qcard-preview .qz-qprev-sub { font-size: 10px; max-width: 92%; white-space: nowrap;
-                                  overflow: hidden; text-overflow: ellipsis; }
-.qz-qcard-preview .qz-qprev-start,
-.qz-qcard-preview .qz-qprev-start-neutral { margin-top: 2px; padding: 5px 14px; font-size: 10px; }
-.qz-qcard-shot    { position: absolute; inset: 0; }
-/* A miniature results page: photography leads, product names provide context. */
-.qz-qcard-preview.has-results { height: 248px; }
-.qz-result-thumb { position: absolute; inset: 0; padding: 16px 16px 0; background: color-mix(in srgb, var(--result-accent) 12%, var(--qz-paper)); color: var(--result-ink); overflow: hidden; }
-.qz-result-thumb-page { min-height: 260px; padding: 14px; background: var(--result-bg); border-radius: 8px 8px 0 0; }
-.qz-result-thumb-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-family: var(--qz-font-body); font-size: 9px; line-height: 1.3; }
-.qz-result-thumb-header img { max-width: 56px; height: 16px; object-fit: contain; }
-.qz-result-thumb-header > span { margin-left: auto; }
-.qz-result-thumb-heading { font-size: 19px; font-weight: 650; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.qz-result-thumb-products { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 10px; height: 150px; }
-.qz-result-thumb-product { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 5px; }
-.qz-result-thumb-products.is-hero_grid .qz-result-thumb-product:first-child { grid-row: span 2; }
-.qz-result-thumb-photo { min-height: 0; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 5px; background: color-mix(in srgb, var(--result-ink) 5%, var(--result-bg)); }
-.qz-result-thumb-photo img { display: block; width: 100%; height: 100%; }
-.qz-result-thumb-name { font-family: var(--qz-font-body); font-size: 9px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.qz-result-thumb-monogram { font-size: 28px; font-weight: 500; }
-.qz-result-thumb-products.is-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.qz-result-thumb-products.is-list { grid-template-columns: minmax(0, 1fr); }
-.qz-result-thumb-products.is-list .qz-result-thumb-product { flex-direction: row; align-items: center; gap: 9px; }
-.qz-result-thumb-products.is-list .qz-result-thumb-photo { flex: 0 0 42px; height: 42px; }
-.qz-result-thumb-products.is-single_hero, .qz-result-thumb-products.is-single { grid-template-columns: minmax(0, 1fr); }
-.qz-result-thumb-footer { display: flex; gap: 5px; margin-top: 14px; }
-.qz-result-thumb-footer span { height: 3px; border-radius: 2px; flex: 1; background: color-mix(in srgb, var(--result-ink) 12%, transparent); }
-.qz-result-thumb-footer span:first-child { background: var(--result-accent); }
-.qz-result-thumb-empty { height: 150px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; text-align: center; font-family: var(--qz-font-body); font-size: 11px; line-height: 1.5; }
-.qz-result-thumb-empty-mark { font-family: inherit; font-size: 56px; line-height: 1; font-weight: 600; }
-.qz-qcard-float   { position: absolute; inset: auto 10px 10px; display: flex;
-                    opacity: 0; transition: opacity var(--qz-dur) var(--qz-ease); z-index: 4; }
-.qz-qcard:hover .qz-qcard-float,
-.qz-qcard-preview:focus-within .qz-qcard-float { opacity: 1; }
-.qz-qcard-float .qz-btn { flex: 1; justify-content: center; box-shadow: var(--qz-lift-1); }
-/* Brand-rendered first screen (merchant tokens via inline style). */
-.qz-qprev { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 22px 20px; gap: 8px; }
-.qz-qprev.is-compact { position: static; width: 76px; height: 76px; flex: 0 0 auto; padding: 8px; border-radius: 8px; gap: 4px; overflow: hidden; }
-.qz-qprev-empty { background: var(--qz-cream-2); }
-.qz-qprev-logo { width: 30px; height: 30px; border-radius: 9px; color: white; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; }
-.qz-qprev-logo-neutral { background: var(--qz-ink-3); }
-.qz-qprev-logoimg { width: 34px; height: 34px; border-radius: 9px; object-fit: contain; }
-.qz-qprev-h { font-size: 15px; font-weight: 700; line-height: 1.25; max-width: 92%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.qz-qprev.is-compact .qz-qprev-h { font-size: 9px; -webkit-line-clamp: 2; }
-.qz-qprev-sub { font-size: 10.5px; opacity: 0.75; }
-.qz-qprev-start { margin-top: 4px; color: white; font-size: 11px; font-weight: 700; padding: 7px 18px; border-radius: 999px; } /* shopper-mimic: stays round */
-.qz-qprev.is-compact .qz-qprev-start { display: none; }
-.qz-qprev-start-neutral { margin-top: 4px; background: var(--qz-ink); color: white; font-size: 11px; font-weight: 600; padding: 6px 15px; border-radius: 999px; }
-.qz-qprev.is-compact .qz-qprev-start-neutral { padding: 3px 10px; font-size: 9px; }
-/* Body */
-.qz-qcard-body     { display: flex; flex-direction: column; gap: 8px; padding: 11px 13px 12px; }
-.qz-qcard-titlerow { display: flex; align-items: flex-start; gap: 8px; }
-.qz-qcard-title {
-  flex: 1; min-width: 0;
-  font-family: var(--qz-font-display); font-weight: 700; font-size: 15px;
-  line-height: 1.3; letter-spacing: -0.012em;
-  color: var(--qz-ink); text-decoration: none;
-}
-/* The clamp MUST live on a nested span. A flex item blockifies
-   display:-webkit-box, which kills the clamp and collapses the line box —
-   the title then overlaps whatever sits above it. */
-.qz-qcard-title > span {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.qz-qcard-title:hover { color: var(--qz-accent-ink); }
+/* Body: status row, title, then figures + action pinned to the bottom. */
+.qz-qcard-body { grid-column: 2; grid-row: 1; min-width: 0; display: flex; flex-direction: column;
+                 padding: 18px 22px 16px 24px; }
+.qz-qcard-meta { display: flex; align-items: center; gap: 10px; min-height: 28px;
+                 font-size: 12.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-qcard-meta > .qz-popover-anchor:last-child { margin: -1px -8px -1px auto; }
+.qz-lib-more { flex: none; width: 28px; height: 28px; display: grid; place-items: center; padding: 0;
+               border: 0; border-radius: 999px; background: transparent; color: var(--qz-ink-4); cursor: pointer; }
+.qz-lib-more:hover, .qz-lib-more[aria-expanded="true"] { background: var(--qz-cream-2); color: var(--qz-ink); }
+body[data-qz] .qz-lib-more:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+.qz-qcard-title { margin: 8px 0 0; font-family: var(--qz-font-display); font-size: 21px; font-weight: 700;
+                  line-height: 1.22; letter-spacing: -.02em; }
+.qz-qcard-title > a { display: block; color: var(--qz-ink); text-decoration: none; border-radius: 6px; }
+/* The clamp MUST live on a nested span: a link blockified by its parent
+   kills display:-webkit-box and the clamp with it. */
+.qz-qcard-title > a > span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                             overflow: hidden; overflow-wrap: anywhere; }
+.qz-qcard-title > a:hover { color: var(--qz-accent-ink); }
+.qz-qcard-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+                 margin-top: auto; padding-top: 12px; }
+.qz-qcard-act { flex: none; min-height: 34px; padding: 9px 16px; font-size: 13px; font-weight: 600;
+                text-decoration: none; }
 
-/* ── Figures — two, unboxed, hairline-divided ───────────────────────── */
-.qz-qcard-figs { display: grid; grid-template-columns: 1fr 1fr;
-                 border-top: 1px solid var(--qz-rule-2); padding-top: 8px; }
-.qz-qcard-fig  { margin: -2px 0; padding: 2px 8px; text-align: left;
-                 border-left: 1px solid var(--qz-rule-2);
-                 border-radius: var(--qz-radius-sm); background: transparent; font: inherit; }
-.qz-qcard-figs > .qz-qcard-fig:first-child { padding-left: 0; border-left: 0; }
-.qz-qcard-fig b { display: block; font-size: 21px; font-weight: 800; line-height: 1;
-                  letter-spacing: -0.02em; color: var(--qz-ink);
-                  font-variant-numeric: tabular-nums; }
+/* ── Figures — Questions and Recs, hairline-divided ─────────────────── */
+.qz-qcard-figs { display: flex; }
+.qz-qcard-fig  { min-width: 92px; padding: 2px 16px; text-align: left; color: inherit; font: inherit;
+                 border: 0; border-left: 1px solid var(--qz-rule-2); border-radius: 0; background: transparent; }
+.qz-qcard-figs > .qz-qcard-fig:first-child { min-width: 0; padding-left: 0; padding-right: 20px; border-left: 0; }
+.qz-qcard-fig b { display: block; font-size: 20px; font-weight: 800; line-height: 1;
+                  letter-spacing: -0.02em; color: var(--qz-ink); font-variant-numeric: tabular-nums; }
 .qz-qcard-fig b.is-none { color: var(--qz-ink-25); }
 .qz-qcard-fig span { display: block; margin-top: 4px; font-size: 10px; font-weight: 700;
                      letter-spacing: 0.08em; text-transform: uppercase; color: var(--qz-ink-4); }
-/* Recs is the only figure that opens anything. It sits inside a QzPopover
-   anchor span, so the anchor becomes the grid cell and the button fills it. */
-.qz-qcard-figs > .qz-popover-anchor { display: block; min-width: 0; }
-.qz-qcard-figs .qz-popover-anchor > .qz-qcard-fig { width: 100%; height: 100%; }
-button.qz-qcard-fig { cursor: pointer; border-top: 0; border-right: 0; border-bottom: 0; }
-button.qz-qcard-fig:hover { background: var(--qz-cream-2); }
+/* Recs is the only figure that opens anything (inside a QzPopover anchor). */
+.qz-qcard-figs > .qz-popover-anchor { display: block; }
+button.qz-qcard-fig { cursor: pointer; border-radius: 0 8px 8px 0; }
+button.qz-qcard-fig:hover { background: var(--qz-ls-cell-bg); }
 button.qz-qcard-fig b::after {
   content: ""; display: inline-block; vertical-align: 3px; margin-left: 5px;
-  width: 0; height: 0; border: 4px solid transparent; border-top-color: var(--qz-ink-25);
+  width: 0; height: 0; border: 4px solid transparent; border-bottom: 0; border-top-color: var(--qz-ink-25);
 }
 button.qz-qcard-fig:hover b::after { border-top-color: var(--qz-ink-3); }
 
-/* ── Status tags — weighted, not equal ──────────────────────────────── */
+/* ── Status tags — the .hm3-tag colours, one size up ────────────────── */
 .qz-qtag {
-  flex: none; display: inline-flex; align-items: center; gap: 5px;
-  padding: 2px 7px; border-radius: var(--qz-radius-sm);
-  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  flex: none; display: inline-flex; align-items: center;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; white-space: nowrap;
 }
-.qz-qtag i { display: block; width: 6px; height: 6px; border-radius: 1px; }
 .qz-qtag.is-live  { background: var(--qz-live-wash); color: var(--qz-live-ink); }
-.qz-qtag.is-live  i { background: var(--qz-live-ink); }
-.qz-qtag.is-setup { background: color-mix(in srgb, var(--qz-warn) 10%, var(--qz-paper));
-                    color: var(--qz-warn); }
-.qz-qtag.is-setup i { background: var(--qz-warn); }
-.qz-qtag.is-draft { background: var(--qz-cream-2); color: var(--qz-ink-4);
-                    box-shadow: inset 0 0 0 1px var(--qz-rule); }
-.qz-qtag.is-draft i { background: var(--qz-ink-25); }
+.qz-qtag.is-draft { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+.qz-qtag.is-setup { background: var(--qz-ls-warn-wash); color: var(--qz-warn); }
 
-/* ── Table view ─────────────────────────────────────────────────────── */
-.qz-qtable-wrap { overflow-x: auto; background: var(--qz-paper);
-                  border: 1px solid var(--qz-rule); border-radius: var(--qz-radius-lg); }
+/* ── Table view — reached only from the toolbar's view toggle ─────── */
+.qz-qtable-wrap { overflow-x: auto; padding: 6px 8px 8px; background: var(--qz-paper);
+                  border: 0; border-radius: 22px; box-shadow: var(--qz-edge); }
 .qz-qtable { width: 100%; min-width: 720px; border-collapse: collapse; }
 .qz-qtable thead th {
-  padding: 9px 12px; text-align: left; white-space: nowrap;
-  background: var(--qz-cream-2); color: var(--qz-ink-4);
-  border-bottom: 1px solid var(--qz-rule);
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  padding: 12px 12px 10px; text-align: left; white-space: nowrap;
+  background: var(--qz-paper); color: var(--qz-ink-4);
+  border-bottom: 1px solid var(--qz-rule-2);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
 }
 .qz-qtable th.is-num, .qz-qtable td.is-num { text-align: right; font-variant-numeric: tabular-nums; }
 .qz-qtable tbody tr { border-bottom: 1px solid var(--qz-rule-2); }
 .qz-qtable tbody tr:last-child { border-bottom: 0; }
-.qz-qtable tbody tr:hover { background: var(--qz-cream-2); }
-.qz-qtable td { padding: 8px 12px; font-size: 13.5px; color: var(--qz-ink-3); vertical-align: middle; }
+.qz-qtable tbody tr:hover { background: var(--qz-ls-cell-bg); }
+.qz-qtable td { padding: 9px 12px; font-size: 13.5px; color: var(--qz-ink-3); vertical-align: middle; }
 .qz-qtable td.is-num { color: var(--qz-ink); font-weight: 600; }
 .qz-qtable td.is-num.is-none { color: var(--qz-ink-25); font-weight: 500; }
-.qz-qtable-name { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.qz-qtable-chip { flex: none; width: 30px; height: 30px; border-radius: var(--qz-radius-sm);
-                  display: flex; align-items: center; justify-content: center;
-                  color: #fff; font-size: 12px; font-weight: 800; }
+/* The name, with the opening question under it. No brand-colour chip. */
+.qz-qtable-name { display: flex; flex-direction: column; gap: 2px; min-width: 240px; max-width: 460px; }
 .qz-qtable-name a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                     font-size: 14px; font-weight: 600; letter-spacing: -0.008em;
                     color: var(--qz-ink); text-decoration: none; }
 .qz-qtable-name a:hover { color: var(--qz-accent-ink); }
+.qz-qtable-name span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                       font-size: 12.5px; color: var(--qz-ink-4); }
 /* The old list view put an accent button on EVERY row. At 190 rows that is
    190 accent controls, which is the same as none. Ghost, and on hover. */
 .qz-qtable td.is-act { text-align: right; white-space: nowrap; }
+.qz-qtable td.is-act > * { vertical-align: middle; }
+.qz-qtable td.is-act .qz-popover-anchor { display: inline-block; }
 .qz-qtable-rowbtn { opacity: 0; transition: opacity var(--qz-dur) var(--qz-ease); }
 .qz-qtable tr:hover .qz-qtable-rowbtn,
 .qz-qtable tr:focus-within .qz-qtable-rowbtn { opacity: 1; }
@@ -6977,25 +6965,30 @@ button.qz-qcard-fig:hover b::after { border-top-color: var(--qz-ink-3); }
 .qz-goal-extras { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px;
                   padding: 10px 4px 0; border-top: 1px solid var(--qz-rule-2); }
 
-/* ── Reduced motion ─────────────────────────────────────────────────── */
+/* ── Reduced motion — the hover edge is the only transition ─────────── */
 @media (prefers-reduced-motion: reduce) {
-  .qz-qcard, .qz-qcard-float, .qz-qtable-rowbtn { transition: none; }
-  .qz-qcard-float, .qz-qtable-rowbtn { opacity: 1; }
-  .qz-qcard-float { position: static; margin-top: 8px; }
+  .qz-qcard, .qz-qtable-rowbtn { transition: none; }
+  .qz-qtable-rowbtn { opacity: 1; }
 }
 
-/* ── Breakpoints — Quartz's three, not the eight we have ────────────── */
-@media (max-width: 1024px) {
-  .qz-lib-header  { padding: 16px 16px 10px; }
-  .qz-lib-toolbar { position: static; padding: 8px 16px 10px; }
-  .qz-lib-body    { padding: 12px 16px 24px; }
-}
+/* ── Narrow windows — desktop only; these stop the page breaking ───── */
 @media (min-width: 1025px) {
   .qz-qtable-wrap { overflow-x: visible; }
-  .qz-qtable thead th { position: sticky; top: 50px; z-index: 5; }
+  .qz-qtable thead th { position: sticky; top: 60px; z-index: 5; }
 }
-@media (max-width: 720px) {
-  .qz-qcard-grid { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
+  .qz-qcard { grid-template-columns: 354px minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+  .qz-lib-main { padding: 18px 16px 40px; }
+  .qz-lib-head { padding: 16px; }
+  .qz-lib-head.has-bar { position: static; padding-bottom: 16px; }
+  .qz-lib-h1 { font-size: 26px; }
+  .qz-lib-view { margin-left: 0; }
+  .qz-qcard { grid-template-columns: minmax(0, 1fr); }
+  .qz-qpanel { min-height: 0; padding: 18px 20px; border-right: 0; border-bottom: 1px solid var(--qz-panel-line); }
+  .qz-qcard-body { grid-column: 1; grid-row: 2; padding: 14px 20px 16px; }
+  .qz-qcard-title { font-size: 19px; }
 }
 
 /* §R-8 — Customers re-engagement hub: smart-segment cards + actions + table. */
@@ -9663,9 +9656,8 @@ body[data-qz] .qz-cust-row:focus-visible {
 .hm3 {
   flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
   padding: 34px 32px 48px;
-  background: var(--qz-paper) url("/crest-10.svg") 0 0 / 360px 240px repeat;
+  background: var(--qz-ground-crest);
 }
-@media print, (forced-colors: active) { .hm3 { background-image: none; } }
 /* Vertical centring that can never clip: auto margins take spare room and
    collapse to 0 when the column is taller than the page. */
 .hm3-col { width: 100%; max-width: 840px; margin-block: auto; }
@@ -9963,7 +9955,7 @@ body[data-qz] .qz-cust-row:focus-visible {
 
 /* — The compact create row under the lead card — */
 .hm3-makerow { display: grid; grid-template-columns: 132px minmax(0, 1fr); overflow: hidden; }
-.hm3-makerow:focus-within { box-shadow: 0 0 0 1px var(--qz-accent-line), 0 2px 0 0 rgba(32, 28, 46, 0.04); }
+.hm3-makerow:focus-within { box-shadow: 0 0 0 1px var(--qz-accent-line), var(--qz-edge-shadow); }
 .hm3-makerow-art {
   position: relative; overflow: hidden; border-right: 1px solid var(--qz-rule);
   background: linear-gradient(165deg, #F4F1FF, #E9E4FC);
@@ -9984,12 +9976,22 @@ body[data-qz] .qz-cust-row:focus-visible {
 .hm3-sync { padding: 20px 22px; }
 .hm3-sync-line { margin: 12px 0 14px; font-size: 13.5px; color: var(--qz-ink-3); }
 .hm3-sync-acts { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Also waiting: action, then name, each in its own column — a long name
+   wraps beside the action, never under it. */
+.hm3-rows { display: grid; grid-template-columns: 26px max-content minmax(0, 1fr) auto; column-gap: 12px; }
 .hm3-row {
-  display: flex; align-items: center; gap: 14px; min-height: 58px; padding: 13px 0;
+  display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; gap: 0 12px;
+  align-items: center; min-height: 58px; padding: 13px 0;
   border-bottom: 1px solid var(--qz-rule-2);
 }
 .hm3-row:last-child { border-bottom: 0; }
-.hm3-rowtitle { flex: 1 1 auto; min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
+.hm3-rowverb { font-size: 14.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; color: var(--qz-ink); }
+.hm3-rowname {
+  min-width: 0; font-size: 14px; font-weight: 500; line-height: 1.3; color: var(--qz-ink-3);
+  overflow-wrap: anywhere; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.hm3-rowtitle { min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
 /* Every monogram and tile on Home is one family (§7.7): 26px, 12px radius,
    violet wash, ink letter. No merchant brand colour in our chrome. */
 .hm3-tile, .hm3-qmark {
@@ -10004,9 +10006,9 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .hm3-rowact:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
 .hm3-rowact .hm3-ic { width: 14px; height: 14px; color: var(--qz-ink-25); }
-/* The teal signal row (§7.5): teal tile, chip stacked under the title,
-   teal action. The only alarm colour on the page. */
-.hm3-rowmain { flex: 1 1 auto; min-width: 0; display: grid; gap: 5px; justify-items: start; }
+/* The teal signal row (§7.5): teal tile, chip beside the title, teal
+   action. The only alarm colour on the page. */
+.hm3-rowmain { grid-column: 2 / 4; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
 .hm3-row.is-signal .hm3-tile { background: var(--qz-teal-wash); color: var(--qz-teal); }
 .hm3-row.is-signal .hm3-rowact, .hm3-row.is-signal .hm3-rowact .hm3-ic { color: var(--qz-teal); }
 .hm3-row.is-signal .hm3-rowact:hover { background: var(--qz-teal-wash); }
@@ -10093,7 +10095,10 @@ body[data-qz] .qz-cust-row:focus-visible {
   .hm3-qmeter, .hm3-qnum { display: none; }
   /* Narrow: the tag drops under the name instead of squeezing it. */
   .hm3-qname, .hm3-quizzes.is-ingrid .hm3-qname { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
-  .hm3-rowact { min-width: 0; }
+  .hm3-rowact { min-width: 0; grid-column: 3; }
+  .hm3-rows { grid-template-columns: 26px minmax(0, 1fr) auto; }
+  .hm3-row > .hm3-tile, .hm3-row > .hm3-rowact { grid-row: 1 / span 2; }
+  .hm3-rowverb, .hm3-rowname, .hm3-rowmain { grid-column: 2; }
   .hm3-box textarea, .hm3-passive { font-size: 17px; }
   .hm3-q { font-size: 22px; }
   .hm3-box { padding: 14px; }

@@ -18,10 +18,14 @@ export interface HomeWaitItem {
   /** Stable per quiz + kind — the dismiss cookie stores it. */
   key: string;
   title: string;
+  /** The Also-waiting row's action column ("Publish", "Finish setup"). */
+  action: string;
+  /** The quiz the action applies to; absent on the emails row. */
+  name?: string;
   href: string;
   /** Setup items only: 0-based index of the step the draft is parked on. */
   stepIndex?: number;
-  /** Emails only: the teal chip under the title ("128 waiting"). */
+  /** Emails only: the teal chip beside the title ("128 waiting"). */
   chip?: string;
 }
 
@@ -99,6 +103,8 @@ export function buildHomeQueue(input: {
       title: setup.stalled
         ? `Setup stalled on “${setup.name}”`
         : `Finish setting up “${setup.name}”`,
+      action: setup.stalled ? "Setup stalled" : "Finish setup",
+      name: setup.name,
       href: links.setup(setup.id),
       stepIndex: setup.stepIndex,
     });
@@ -109,6 +115,8 @@ export function buildHomeQueue(input: {
       kind: "publish",
       key: `publish:${draft.id}`,
       title: `Publish “${draft.name}”`,
+      action: "Publish",
+      name: draft.name,
       href: links.editor(draft.id),
     });
   }
@@ -118,6 +126,8 @@ export function buildHomeQueue(input: {
       kind: "store",
       key: `store:${unvisited.id}`,
       title: `Add “${unvisited.name}” to your store`,
+      action: "Add to store",
+      name: unvisited.name,
       href: links.embed(unvisited.id),
     });
   }
@@ -126,8 +136,9 @@ export function buildHomeQueue(input: {
       kind: "emails",
       key: "emails",
       title: "Send your captured emails somewhere",
+      action: "Email integration setup",
       href: links.integrations,
-      // The teal signal row's chip, stacked under the title (§7.5).
+      // The teal signal row's chip, beside the title (§7.5).
       chip: `${input.emailsWaiting.toLocaleString("en-US")} waiting`,
     });
   }

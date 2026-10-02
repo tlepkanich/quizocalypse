@@ -48,6 +48,30 @@ describe("buildHomeQueue", () => {
     expect(item).toMatchObject({ kind: "stalled", title: "Setup stalled on “Serum Finder”" });
   });
 
+  it("splits each row into an action and the quiz name", () => {
+    const items = buildHomeQueue({
+      quizzes: [
+        quiz({ id: "setup", name: "Serum Finder", inSetup: true }),
+        quiz({ id: "draft", name: "Gift Guide", status: "draft" }),
+        quiz({ id: "live", name: "Dog Food Finder", status: "published", starts: 0 }),
+      ],
+      emailsWaiting: 3,
+      links,
+    });
+    expect(items.map((i) => [i.action, i.name])).toEqual([
+      ["Finish setup", "Serum Finder"],
+      ["Publish", "Gift Guide"],
+      ["Add to store", "Dog Food Finder"],
+      ["Email integration setup", undefined],
+    ]);
+    const [stalled] = buildHomeQueue({
+      quizzes: [quiz({ inSetup: true, stalled: true })],
+      emailsWaiting: 0,
+      links,
+    });
+    expect(stalled).toMatchObject({ action: "Setup stalled", name: "Serum Finder" });
+  });
+
   it("links into the embedded app with the same keys (§12)", () => {
     const input = {
       quizzes: [
