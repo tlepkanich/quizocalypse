@@ -99,6 +99,11 @@
   --qz-crit:        #A5241C;
   --qz-draft-wash:  #F5F4F8;  --qz-draft-ink:  #645E78;
   --qz-live-wash:   #E7F3ED;  --qz-live-ink:   #0F6B45;
+  /* HOME-3 — the teal SIGNAL (owner-approved 2026-09-30, "Teal B"): the one
+     alarm colour on Home, for captured emails with nowhere to go. Blue-leaning
+     (hue 189°) so it never reads as the ok green (155°). 5.59:1 on white,
+     4.82:1 on its wash. Use ONLY for that signal. */
+  --qz-teal:        #0B7285;  --qz-teal-wash:  #E2F1F5;
   /* repo-only derived wash (was an additive :root patch further down) */
   --qz-warn-wash:   color-mix(in srgb, var(--qz-warn) 14%, var(--qz-paper));
 
@@ -200,6 +205,10 @@
   --qz-lift-1: 0 1px 2px rgba(32, 28, 46, 0.05);                                   /* cards: a whisper */
   --qz-lift-2: 0 12px 30px -10px rgba(32, 28, 46, 0.26), 0 1px 2px rgba(32, 28, 46, 0.07); /* menus, popovers */
   --qz-lift-3: 0 24px 56px -16px rgba(32, 28, 46, 0.34), 0 2px 4px rgba(32, 28, 46, 0.08); /* modals, drawers */
+  /* HOME-3 — the card EDGE (owner-approved 2026-09-30, "Edge A"): a hairline
+     ring + a slightly heavier bottom rim, drawn as shadow so the card keeps
+     its exact box. Holds a white card off the Wiskr print with no lift. */
+  --qz-edge: 0 0 0 1px rgba(32, 28, 46, 0.08), 0 2px 0 0 rgba(32, 28, 46, 0.04);
   --qz-shadow-sm: var(--qz-lift-1);
   --qz-shadow-md: var(--qz-lift-2);
   --qz-shadow-lg: var(--qz-lift-3);
@@ -1427,6 +1436,13 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   background: var(--qz-accent-wash); color: var(--qz-accent-ink); font-weight: 600;
 }
 .qz-rail-item[aria-current="page"] .qz-rail-icon { opacity: 1; }
+/* HOME-3 — the teal signal dot (first-run handoff §7.5): Integrations, while
+   captured emails have nowhere to go. Collapsed, it rides the icon's corner. */
+.qz-rail-signal {
+  flex: none; width: 7px; height: 7px; margin-left: auto; border-radius: 999px;
+  background: var(--qz-teal);
+}
+.qz-rail.is-collapsed .qz-rail-signal { position: absolute; top: 9px; right: 9px; margin: 0; }
 /* P3 Edit 5 — "Soon" tag on v1 placeholder nav items. */
 .qz-rail-soon {
   margin-left: auto; flex: none;
@@ -9659,7 +9675,8 @@ body[data-qz] .qz-cust-row:focus-visible {
   stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
 }
 
-.hm3-card { background: var(--qz-paper); border: 1px solid var(--qz-rule); border-radius: 22px; }
+/* Cards take the Crest edge, not a border (§13.4). */
+.hm3-card { background: var(--qz-paper); border: 0; border-radius: 22px; box-shadow: var(--qz-edge); }
 .hm3-lbl {
   margin: 0; font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; color: var(--qz-ink-4);
@@ -9946,7 +9963,7 @@ body[data-qz] .qz-cust-row:focus-visible {
 
 /* — The compact create row under the lead card — */
 .hm3-makerow { display: grid; grid-template-columns: 132px minmax(0, 1fr); overflow: hidden; }
-.hm3-makerow:focus-within { border-color: var(--qz-accent-line); }
+.hm3-makerow:focus-within { box-shadow: 0 0 0 1px var(--qz-accent-line), 0 2px 0 0 rgba(32, 28, 46, 0.04); }
 .hm3-makerow-art {
   position: relative; overflow: hidden; border-right: 1px solid var(--qz-rule);
   background: linear-gradient(165deg, #F4F1FF, #E9E4FC);
@@ -9987,6 +10004,12 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .hm3-rowact:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
 .hm3-rowact .hm3-ic { width: 14px; height: 14px; color: var(--qz-ink-25); }
+/* The teal signal row (§7.5): teal tile, chip stacked under the title,
+   teal action. The only alarm colour on the page. */
+.hm3-rowmain { flex: 1 1 auto; min-width: 0; display: grid; gap: 5px; justify-items: start; }
+.hm3-row.is-signal .hm3-tile { background: var(--qz-teal-wash); color: var(--qz-teal); }
+.hm3-row.is-signal .hm3-rowact, .hm3-row.is-signal .hm3-rowact .hm3-ic { color: var(--qz-teal); }
+.hm3-row.is-signal .hm3-rowact:hover { background: var(--qz-teal-wash); }
 
 .hm3-tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: auto; }
 .hm3-tile2 {
@@ -10023,6 +10046,7 @@ body[data-qz] .qz-cust-row:focus-visible {
 .hm3-tag.is-live { background: var(--qz-live-wash); color: var(--qz-ok); }
 .hm3-tag.is-draft { background: var(--qz-cream-2); color: var(--qz-ink-4); }
 .hm3-tag.is-setup { background: var(--qz-ls-warn-wash); color: var(--qz-warn); }
+.hm3-tag.is-signal { background: var(--qz-teal-wash); color: var(--qz-teal); }
 .hm3-qname {
   flex: 1 1 auto; min-width: 0; display: grid; grid-template-columns: minmax(0, 176px) 72px;
   align-items: center; column-gap: 10px;

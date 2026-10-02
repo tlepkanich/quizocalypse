@@ -27,6 +27,7 @@ import { logFor, reportError } from "./log.server";
 import { withAiSpendRecording } from "./aiBudget.server";
 import { Quiz, BuildSession, QuizType as QuizTypeSchema } from "./quizSchema";
 import type { Quiz as QuizDocT } from "./quizSchema";
+import { pickHeadlessType } from "./headlessTypePick";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { suggestQuizGoal } from "./goalSuggest";
 import {
@@ -280,7 +281,8 @@ export function startSpeculativeBuild(
         webResearchText,
       });
       log.info({ quizId, ms: Date.now() - tTypes }, "speculative types took");
-      const top = types[0];
+      // Same pick as the headless chain (handoff §11 defect 5).
+      const top = pickHeadlessType(types);
       if (!top) {
         await finishFailed(shopId, quizId, signature);
         return;

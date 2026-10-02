@@ -15,6 +15,7 @@ import {
   type BrandGuidelines,
 } from "../brandGuidelines";
 import type { GeneratedQuestionFlow } from "../smartBuild";
+import { clampQuestionsTo } from "../questionCountClamp";
 import { z } from "zod";
 import {
   MODEL,
@@ -408,6 +409,11 @@ export interface GenerateQuestionFlowInput {
   // in smartBuild) owns correctness regardless of what the AI emits. Absent →
   // the prompt is byte-identical to before.
   logicModel?: "decider";
+  // HOME-3 (first-run handoff §10.1) — the merchant pinned the count (Home's
+  // Questions picker). The tool schema, the prompt and a retry all ask for
+  // EXACTLY this many; a final overshoot is trimmed (clampQuestionsTo).
+  // Absent → "Target question count" stays a hint, byte-identical to before.
+  exactQuestionCount?: number;
 }
 
 // Per-type prompt addendum (E2). Empty for the historical product_match.
@@ -476,11 +482,24 @@ export function deciderAddendum(m?: "decider"): string {
 export async function generateQuestionFlow(
   input: GenerateQuestionFlowInput,
 ): Promise<GeneratedQuestionFlow> {
+  const exact = input.exactQuestionCount;
   const tool = {
     name: "emit_question_flow",
     description:
       "Emit the quiz's questions (and optional welcome/email copy). No intro/result/branch nodes.",
-    input_schema: questionFlowToolJsonSchema as unknown as Anthropic.Tool.InputSchema,
+    input_schema: (exact
+      ? {
+          ...questionFlowToolJsonSchema,
+          properties: {
+            ...questionFlowToolJsonSchema.properties,
+            questions: {
+              ...questionFlowToolJsonSchema.properties.questions,
+              minItems: exact,
+              maxItems: exact,
+            },
+          },
+        }
+      : questionFlowToolJsonSchema) as unknown as Anthropic.Tool.InputSchema,
   } satisfies Anthropic.Tool;
 
   const toneLine = `Tone: ${input.tone}.`;
@@ -494,7 +513,9 @@ export async function generateQuestionFlow(
 
   const userMessage = [
     toneLine,
-    `Target question count: ${input.questionCount}.`,
+    exact
+      ? `Question count: EXACTLY ${exact} questions — no more, no fewer. The merchant chose this number.`
+      : `Target question count: ${input.questionCount}.`,
     "Merchant's quiz goal (verbatim):",
     input.goalPrompt || "(none — infer from the catalog + buckets)",
     "",
@@ -553,12 +574,27 @@ export async function generateQuestionFlow(
     }
 
     const parsed = QuestionFlowSchema.safeParse(toolUse.input);
+    // A pinned count that misses is a validation failure while retries remain.
+    if (parsed.success && exact && parsed.data.questions.length !== exact && attempt < MAX_ATTEMPTS) {
+      lastIssue = `Expected exactly ${exact} questions, got ${parsed.data.questions.length}`;
+      continue;
+    }
     if (parsed.success) {
+      // Last resort: trim an overshoot, never cutting the deciding question.
+      const questions = exact
+        ? clampQuestionsTo(parsed.data.questions, exact)
+        : parsed.data.questions;
       return {
-        questions: parsed.data.questions.map((q) => ({
+        questions: questions.map((q) => ({
           // FIX-1 — deterministic anti-slop pass on the AI-authored copy only.
           text: stripEmoji(q.text),
           question_type: q.question_type,
+          // Logic-step §5 role + E3 chapter/reassurance copy: parsed and
+          // prompted for since those programs, but this mapping used to drop
+          // them, so built quizzes never received any. Absent stays absent.
+          ...(q.role ? { role: q.role } : {}),
+          ...(q.section_label?.trim() ? { section_label: stripEmoji(q.section_label) } : {}),
+          ...(q.helper_text?.trim() ? { helper_text: stripEmoji(q.helper_text) } : {}),
           ...(q.required !== undefined ? { required: q.required } : {}),
           ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
           ...(q.education_card_before ? { education_card_before: q.education_card_before } : {}),

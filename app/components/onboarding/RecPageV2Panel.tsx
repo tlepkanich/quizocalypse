@@ -11,6 +11,7 @@ import {
   resolveRecPageGlobal,
   settingsForTarget,
 } from "../../lib/recommendDecider";
+import { CHROME_TOKENS } from "../runtime/chromeStrings";
 import {
   GLOBAL_WHY_COPY_KEY,
   isWhyCopyStale,
@@ -494,6 +495,22 @@ export function RecPageV2Panel({
                     </option>
                   ))}
                 </select>
+              </label>
+              {/* Owner 2026-09-30 — the fallback page's own headline. Global-
+                  only (NOT in the override subset); "" clears to the
+                  translatable default the placeholder shows. */}
+              <label className="qz-rp2-field">
+                <span>Fallback headline</span>
+                <input
+                  value={effective.fallbackHeadline ?? ""}
+                  placeholder={CHROME_TOKENS.decider_fallback_headline}
+                  aria-label="Fallback headline"
+                  onChange={(e) => patchGlobal({ fallbackHeadline: text(e.target.value) })}
+                />
+                <span className="qz-dim" style={{ fontSize: 11.5 }}>
+                  Shown when a shopper gets the fallback products. The line under it
+                  says no exact match was found.
+                </span>
               </label>
             </>
           ) : null}

@@ -100,8 +100,16 @@ export const CHROME_TOKENS = {
   capture_headline: "Your results are ready",
   capture_subtext: "Enter your email and we'll reveal your personalized match.",
   decider_hero_badge: "Our top pick for you",
-  decider_fallback_heading:
-    "We couldn't find an exact match — here are our most-loved products.",
+  // Fallback page (owner 2026-09-30) — the h2 when the merchant has not set
+  // rec_page_settings.global.fallbackHeadline, and the ONE line under it
+  // (replaces the why-copy there). These replaced the old single line
+  // `decider_fallback_heading`; a locale that still stores
+  // `chrome.decider_fallback_heading` is simply ignored (chromeFor iterates
+  // this table), and the two new tokens fall back to English per string
+  // until the locale is regenerated (K1 contract).
+  decider_fallback_headline: "Our most-loved products",
+  decider_fallback_subline:
+    "We couldn't find an exact match for your answers, so here are some favourites.",
   all_out_of_stock: "These picks are temporarily out of stock — check back soon.",
   incentive_code_auto: "🎁 Code {code} — applied automatically at checkout",
   incentive_code_manual: "🎁 Use code {code} at checkout",

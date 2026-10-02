@@ -27,6 +27,7 @@ import {
 import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
 import type { QuizType, RichTemplateOption, Quiz as QuizDocT } from "./quizSchema";
+import { pickHeadlessType } from "./headlessTypePick";
 import { loadGenerationBuckets, refreshBucketMembership } from "./bucketPersist.server";
 import { sameIdSet } from "./bucketPersist";
 
@@ -340,7 +341,8 @@ export async function failToBlankQuestions(
 //
 // FLOW-1 — `opts.headless` (the goal-first flow's confirm, funnel-reconfig Flow
 // 1): the merchant never sees Shape, so on success the job AUTO-PICKS the AI's
-// top type (types[0] — the templates[0] precedent), pins its question_range to
+// best product_match type (pickHeadlessType — handoff §11 defect 5: types[0]
+// silently picked a personality framing for a product quiz), pins its question_range to
 // the goal brief's chosen length when one was set, and chains straight into
 // startStep2Templates with failMode "blank_questions" (the merchant chose a
 // goal, not Shape — every failure lands the blank-Questions notice, never a
@@ -410,7 +412,7 @@ export function startStep2Types(
       // generating screen narrates the template + question passes; a kill
       // between here and the templates persisting is covered by retry-gen's
       // existing "templating" branch (picked_type_id finds the type below).
-      const top = headless ? types[0] : undefined;
+      const top = headless ? pickHeadlessType(types) : undefined;
       if (headless && top) {
         const len = headless.questionLength;
         const effectiveType = len
@@ -783,6 +785,7 @@ export async function buildQuizFromPicked(
       name: buildName,
       goalPrompt,
       questionCount: pinnedCount ?? picked.question_count,
+      ...(pinnedCount !== undefined ? { questionCountExact: true } : {}),
       tone: "friendly",
       flow: {
         welcome_message: false,

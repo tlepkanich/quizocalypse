@@ -4,6 +4,7 @@ import {
   // QZY-1 (quiz-logic spec §6.1) — rule LIST actions.
   applyRuleAction,
   deciderFallbackProducts,
+  fallbackHeadlineFor,
   orderBySignal,
   productRating,
   resolveRecPageGlobal,
@@ -17,7 +18,7 @@ import {
   type ResolvedRecPageConfig,
 } from "./recommendDecider";
 import { recommendForResultExplained, type IndexedProduct } from "./recommendationEngine";
-import { Quiz } from "./quizSchema";
+import { Quiz, RecPageSettings } from "./quizSchema";
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 
@@ -1211,4 +1212,33 @@ it("QWIDGET shopper pool dedupes a multi-pick union, keeps its grid, and narrows
   expect(recommendForResultExplained({...base,selectedAnswerIds:["powder","park","beginner"]}).products.map((p) => p.product_id)).toEqual(["a","c"]);
   const legacy = Quiz.parse({...d,logic_model:undefined});
   expect(recommendForResultExplained({...base,quiz:legacy,selectedAnswerIds:["park","powder"]}).decider).toBeUndefined();
+});
+
+// Owner 2026-09-30 — the fallback page's headline is GLOBAL-ONLY.
+describe("fallbackHeadlineFor + the global-only fallbackHeadline", () => {
+  it("returns the merchant value, else the caller's default (blank counts as unset)", () => {
+    expect(fallbackHeadlineFor({ fallbackHeadline: "Staff favourites" }, "Default")).toBe(
+      "Staff favourites",
+    );
+    expect(fallbackHeadlineFor({ fallbackHeadline: "  Padded  " }, "Default")).toBe("Padded");
+    expect(fallbackHeadlineFor({ fallbackHeadline: "   " }, "Default")).toBe("Default");
+    expect(fallbackHeadlineFor({}, "Default")).toBe("Default");
+  });
+
+  it("has no read-time default (absent stays absent so the chrome default can translate)", () => {
+    expect("fallbackHeadline" in REC_PAGE_DEFAULTS).toBe(false);
+    expect(resolveRecPageGlobal(undefined).fallbackHeadline).toBeUndefined();
+  });
+
+  it("a per-target override cannot carry it; every target inherits the global value", () => {
+    const parsed = RecPageSettings.parse({
+      global: { fallbackHeadline: "Staff favourites" },
+      overrides: { cat_a: { headline: "Target reveal", fallbackHeadline: "Sneaky" } },
+    });
+    const doc = { rec_page_settings: parsed };
+    expect(doc.rec_page_settings?.overrides.cat_a).toEqual({ headline: "Target reveal" });
+    const cfg = settingsForTarget(doc.rec_page_settings, "cat_a");
+    expect(cfg.headline).toBe("Target reveal");
+    expect(cfg.fallbackHeadline).toBe("Staff favourites");
+  });
 });

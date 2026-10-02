@@ -200,6 +200,7 @@ describe("RecPageV2Panel — sparse per-target overrides", () => {
       "Show product descriptions",
       "If a result comes up empty",
       "Contact capture",
+      "Fallback headline",
     ]) {
       expect(overrideText).not.toContain(globalOnly);
     }
@@ -213,6 +214,7 @@ describe("RecPageV2Panel — sparse per-target overrides", () => {
       "Show product descriptions",
       "If a result comes up empty",
       "Contact capture",
+      "Fallback headline",
     ]) {
       expect(globalText).toContain(globalOnly);
     }
@@ -230,6 +232,37 @@ describe("RecPageV2Panel — sparse per-target overrides", () => {
       global: { headline: "Hey you" },
       overrides: {},
     });
+  });
+
+  it("Fallback headline: placeholder is the default, typing stores it on GLOBAL, clearing drops it", () => {
+    const onCommit = vi.fn();
+    mount(panel(doc(), onCommit, null));
+
+    const field = fieldInput("Fallback headline");
+    expect(field.value).toBe("");
+    expect(field.placeholder).toBe("Our most-loved products");
+
+    typeInto(field, "Staff favourites");
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    const committed = onCommit.mock.calls[0]![0] as Quiz;
+    expect(committed.rec_page_settings).toEqual({
+      global: { fallbackHeadline: "Staff favourites" },
+      overrides: {},
+    });
+
+    act(() => root?.unmount());
+    document.body.replaceChildren();
+    const clearCommit = vi.fn();
+    mount(
+      panel(
+        doc({ rec_page_settings: { global: { fallbackHeadline: "Staff favourites" }, overrides: {} } }),
+        clearCommit,
+        null,
+      ),
+    );
+    expect(fieldInput("Fallback headline").value).toBe("Staff favourites");
+    typeInto(fieldInput("Fallback headline"), "");
+    expect((clearCommit.mock.calls[0]![0] as Quiz).rec_page_settings).toBeUndefined();
   });
 
   it("unchecking Lock under a LOCKED global stores an explicit false on the override", () => {

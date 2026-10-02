@@ -9,6 +9,7 @@ import {
   targetProducts,
   revealLineup,
   deciderFallbackProducts,
+  fallbackHeadlineFor,
   productRating,
   type ResolvedRecPageConfig,
   type RevealLayout,
@@ -20,6 +21,7 @@ import type { BuilderCategory } from "../../builder/stepProps";
 import { useQuizDraft } from "../../studio/useQuizDraft";
 import { useFunnelBar, FunnelSaveChip } from "../funnelChrome";
 import { ScrubNumber } from "../../controls/ScrubNumber";
+import { CHROME_TOKENS } from "../../runtime/chromeStrings";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Step4Results — the funnel's Step 4, EXACT to results-page-redesign.html
@@ -606,7 +608,9 @@ function Step4Preview({
 
   const addAllTotal = lineup.shown.reduce((sum, p) => sum + (Number(p.price) || 0), 0);
   const showAddAll = cfg.showAddAll && lineup.shown.length >= 2;
-  const fbHeading = doc.global_fallback?.heading || "Our most-loved products";
+  // Owner 2026-09-30 — the decider fallback page's own headline + line (the
+  // runtime's DeciderResultView), not the legacy global_fallback.heading.
+  const fbHeading = fallbackHeadlineFor(cfg, CHROME_TOKENS.decider_fallback_headline);
   const offerActive = cfg.incentiveOn && Boolean(cfg.incentiveCode);
 
   return (
@@ -670,6 +674,7 @@ function Step4Preview({
               {fallbackProducts.length > 0 ? (
                 <>
                   <div className="qz-s4p-fb-heading">{fbHeading}</div>
+                  <p className="qz-s4p-why">{CHROME_TOKENS.decider_fallback_subline}</p>
                   <div className="qz-s4p-items">
                     {fallbackProducts.map((p, i) => card(p, false, i))}
                   </div>

@@ -1883,6 +1883,15 @@ export const RecPageGlobal = z.object({
   emptyFallback: z.enum(["collection", "hide"]).optional(),
   emptyFallbackCol: z.string().optional(),
   safetyNetCol: z.string().optional(),
+  // Fallback headline (owner 2026-09-30) — the h2 of the decider fallback
+  // page (no hero, no grid, fallback products; reached by an empty target or
+  // the D1 safety net). GLOBAL-ONLY: deliberately NOT in RecPageOverride (the
+  // safety-net page has no target to override from). NO read-time default in
+  // REC_PAGE_DEFAULTS — absent/blank falls through to the locale-aware chrome
+  // token `decider_fallback_headline`, so the default stays translatable (the
+  // captureHeadline pattern). A merchant value is translated via the
+  // `recpage.fallbackHeadline` key (quizTranslate.ts).
+  fallbackHeadline: z.string().optional(),
   // §7.1 — the capture screen before the reveal. Email is default-ON at READ
   // time (REC_PAGE_DEFAULTS); when every capture option is off the screen is
   // skipped entirely. .optional() NEVER .default() — the translations-field

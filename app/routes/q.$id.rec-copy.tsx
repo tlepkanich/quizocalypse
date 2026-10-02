@@ -3,7 +3,11 @@ import { json } from "@remix-run/node";
 import prisma from "../db.server";
 import { logFor } from "../lib/log.server";
 import { Quiz } from "../lib/quizSchema";
-import type { IndexedProduct } from "../lib/recommendationEngine";
+import {
+  recommendForResultExplained,
+  type IndexedProduct,
+  type RecommendationInput,
+} from "../lib/recommendationEngine";
 import { resolveTarget, settingsForTarget } from "../lib/recommendDecider";
 import { describeRuleConditions } from "../lib/ruleSummary";
 import { generateRuntimeRecCopy, QuizGenerationError } from "../lib/claude";
@@ -132,6 +136,23 @@ async function actionImpl({ request, params }: ActionFunctionArgs) {
   // Refusals — cheap 200s the runtime treats as "use the merchant copy":
   if (!cfg.whyOn) return no("why_off");
   if (cfg.whyCopyLocked) return no("locked"); // merchant pinned their approved copy
+  // A target with nothing to show lands on the fallback page, which never
+  // renders the why-copy (fallback headline, 2026-09-30). Run the reveal's own
+  // computation on the baked sidecars and refuse before any spend.
+  const resultNode = doc.nodes.find((n) => n.type === "result");
+  if (resultNode) {
+    const reveal = recommendForResultExplained({
+      quiz: doc,
+      productIndex: raw.product_index ?? [],
+      selectedAnswerIds: answerIds,
+      resultNodeId: resultNode.id,
+      ...(raw.target_product_ids_map ? { targetProductIdsMap: raw.target_product_ids_map } : {}),
+      ...(raw.target_index
+        ? { targetIndex: raw.target_index as NonNullable<RecommendationInput["targetIndex"]> }
+        : {}),
+    });
+    if (reveal.products.length === 0) return no("no_products");
+  }
 
   const key = recCopyCacheKey(id, sessionId, resolved.targetId);
   const now = Date.now();

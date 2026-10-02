@@ -10,6 +10,7 @@ import { useFunnelBar, FunnelSaveChip, type FunnelBarOverride } from "../funnelC
 import { GuidedPreview, type PreviewScreen, type PreviewScroll } from "./GuidedPreview";
 import { DiscountEditor } from "./DiscountEditor";
 import { TermsModal, DescriptionsModal, ExtrasPickerModal } from "./modals";
+import { CHROME_TOKENS } from "../../runtime/chromeStrings";
 import {
   resolveGuided,
   resolveDiscount,
@@ -449,6 +450,24 @@ export function ResultsGuided({
           patch({ whyCopy: t });
           focusOn("why");
         }, true)}
+      </div>
+      {/* Owner 2026-09-30 — the fallback page's own headline (shown when no
+          product matches and the fallback products render). The decider
+          Results step's only home for it: the RecPageV2Panel twin sits
+          behind RecommendationStage, which decider drafts never mount.
+          Blank → absent → the translatable default the placeholder shows. */}
+      <div className="qz-rg-fld">
+        <div className="qz-rg-fl">Fallback headline</div>
+        <input
+          className="qz-input"
+          value={cfg.fallbackHeadline ?? ""}
+          placeholder={CHROME_TOKENS.decider_fallback_headline}
+          aria-label="Fallback headline"
+          onChange={(e) => patch({ fallbackHeadline: e.target.value || undefined })}
+        />
+        <div className="qz-rg-note">
+          Shown when nothing matches and shoppers see your fallback products.
+        </div>
       </div>
     </>
   );

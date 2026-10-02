@@ -212,3 +212,76 @@ describe("generation parse boundary — emoji-laden AI output lands clean", () =
     expect(regen.answers.map((a) => a.text)).toEqual(["Hydration", "Oil control"]);
   });
 });
+
+describe("generateQuestionFlow — roles, chapters, and a pinned count", () => {
+  const base = {
+    goalPrompt: "match boards",
+    catalogSummary: "tags: carve, park",
+    buckets: [{ id: "b1", name: "Carvers", tags: ["carve"] }],
+    flow: { welcome_message: false, email_gate: false, mixed_input_types: false },
+    tone: "friendly" as const,
+  };
+  const q = (text: string, role?: "decides" | "narrows" | "info", extra: Record<string, string> = {}) => ({
+    text,
+    question_type: "single_select",
+    ...(role ? { role } : {}),
+    ...extra,
+    answers: [
+      { text: "A", tags: ["carve"] },
+      { text: "B", tags: ["park"] },
+    ],
+  });
+
+  it("passes role, section_label and helper_text through (they used to be dropped)", async () => {
+    createMessageMock.mockResolvedValueOnce(
+      toolResponse("emit_question_flow", {
+        questions: [
+          q("Where do you ride?", "decides"),
+          q("What size?", "narrows", { section_label: "Your fit 🏂", helper_text: "Rough is fine." }),
+          q("Anything else?", "info"),
+        ],
+      }),
+    );
+    const flow = await generateQuestionFlow({ ...base, questionCount: 3 });
+    expect(flow.questions.map((x) => x.role)).toEqual(["decides", "narrows", "info"]);
+    expect(flow.questions[1]).toMatchObject({ section_label: "Your fit", helper_text: "Rough is fine." });
+  });
+
+  it("leaves absent fields absent (role-less output keeps its old shape)", async () => {
+    createMessageMock.mockResolvedValueOnce(toolResponse("emit_question_flow", { questions: [q("Where?")] }));
+    const flow = await generateQuestionFlow({ ...base, questionCount: 1 });
+    expect(Object.keys(flow.questions[0]!).sort()).toEqual(["answers", "question_type", "text"]);
+  });
+
+  it("retries a pinned count that misses, and asks for EXACTLY n", async () => {
+    createMessageMock
+      .mockResolvedValueOnce(toolResponse("emit_question_flow", { questions: [q("1"), q("2"), q("3")] }))
+      .mockResolvedValueOnce(toolResponse("emit_question_flow", { questions: [q("1"), q("2")] }));
+    const flow = await generateQuestionFlow({ ...base, questionCount: 2, exactQuestionCount: 2 });
+    expect(createMessageMock).toHaveBeenCalledTimes(2);
+    expect(flow.questions).toHaveLength(2);
+    const firstCall = createMessageMock.mock.calls[0]![0] as {
+      messages: Array<{ content: string }>;
+      tools: Array<{ input_schema: { properties: { questions: { minItems: number; maxItems: number } } } }>;
+    };
+    expect(firstCall.messages[0]!.content).toContain("EXACTLY 2 questions");
+    expect(firstCall.tools[0]!.input_schema.properties.questions).toMatchObject({ minItems: 2, maxItems: 2 });
+  });
+
+  it("trims a final overshoot without cutting the deciding question", async () => {
+    const over = { questions: [q("n1", "narrows"), q("i1", "info"), q("d", "decides")] };
+    createMessageMock
+      .mockResolvedValueOnce(toolResponse("emit_question_flow", over))
+      .mockResolvedValueOnce(toolResponse("emit_question_flow", over))
+      .mockResolvedValueOnce(toolResponse("emit_question_flow", over));
+    const flow = await generateQuestionFlow({ ...base, questionCount: 2, exactQuestionCount: 2 });
+    expect(flow.questions.map((x) => x.text)).toEqual(["n1", "d"]);
+  });
+
+  it("keeps the old hint wording when no count is pinned", async () => {
+    createMessageMock.mockResolvedValueOnce(toolResponse("emit_question_flow", { questions: [q("1")] }));
+    await generateQuestionFlow({ ...base, questionCount: 5 });
+    const call = createMessageMock.mock.calls[0]![0] as { messages: Array<{ content: string }> };
+    expect(call.messages[0]!.content).toContain("Target question count: 5.");
+  });
+});

@@ -14,7 +14,7 @@ import {
 } from "../../../lib/recommendationEngine";
 
 // D1 safety net — the unresolved shopper renders through the normal decider
-// reveal: the "couldn't find an exact match" line, the fallback grid, Start
+// reveal: the fallback headline + its one line, the fallback grid, Start
 // over, and the completion analytics (a deliberate funnel-number change:
 // these shoppers used to fire no quiz_completed / recommendation_viewed).
 
@@ -72,7 +72,8 @@ describe("DeciderResultView on the D1 safety-net payload", () => {
     });
 
     const text = host.textContent ?? "";
-    expect(text).toContain(CHROME_TOKENS.decider_fallback_heading);
+    expect(host.querySelector("h2")?.textContent).toBe(CHROME_TOKENS.decider_fallback_headline);
+    expect(text).toContain(CHROME_TOKENS.decider_fallback_subline);
     expect(text).not.toContain(CHROME_TOKENS.no_results_match);
     expect(text).toContain("Product n1");
     expect(text).toContain("Product n2");

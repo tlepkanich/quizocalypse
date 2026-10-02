@@ -4,7 +4,12 @@ import type {
   RecommendedProduct,
 } from "../../../lib/recommendationEngine";
 import type { DeciderFallback, ResolvedRecPageConfig } from "../../../lib/recommendDecider";
-import { revealLineup, REC_PAGE_DEFAULTS, productRating } from "../../../lib/recommendDecider";
+import {
+  fallbackHeadlineFor,
+  revealLineup,
+  REC_PAGE_DEFAULTS,
+  productRating,
+} from "../../../lib/recommendDecider";
 import type { ResolvedEngagement } from "../../../lib/engagementSchema";
 import { FeedbackWidget } from "../engagement/FeedbackWidget";
 import { RewardReveal } from "../engagement/RewardReveal";
@@ -557,6 +562,8 @@ export function DeciderCaptureView({
 // §4–§6 — the target-based reveal page: headline + why-copy from the effective
 // (override-merged) config, the hero card, the grid, the incentive chip, and
 // the §6 fallback section when the resolved target has nothing showable.
+// On that fallback page (also the D1 safety-net payload, targetId null) the
+// h2 is the fallback headline and one honest line replaces the why-copy.
 export function DeciderResultView({
   decider,
   fallback,
@@ -812,10 +819,19 @@ export function DeciderResultView({
   // wins; otherwise the mapped Group's persona name; otherwise the plain default.
   // The persona image + description render only when the persona is the active
   // content (no headline override).
+  // Fallback page (owner 2026-09-30) — when showFallback, the h2 is the
+  // fallback headline (merchant's global fallbackHeadline, else the chrome
+  // default) and NO persona framing renders: the page shows favourites, not
+  // the persona's match, so neither the reveal headline (global or per-target
+  // override) nor the persona name/image/description may claim one.
   const persona = decider.persona;
   const headlineOverridden = cfg.headline !== REC_PAGE_DEFAULTS.headline;
-  const revealHeadline = headlineOverridden ? cfg.headline : persona?.name?.trim() || cfg.headline;
-  const showPersona = Boolean(persona && !headlineOverridden);
+  const revealHeadline = showFallback
+    ? fallbackHeadlineFor(cfg, tc("decider_fallback_headline"))
+    : headlineOverridden
+      ? cfg.headline
+      : persona?.name?.trim() || cfg.headline;
+  const showPersona = !showFallback && Boolean(persona && !headlineOverridden);
 
   return (
     <div
@@ -837,7 +853,12 @@ export function DeciderResultView({
       {showPersona && persona?.description?.trim() ? (
         <p style={{ ...styles.muted, marginTop: 8 }}>{persona.description}</p>
       ) : null}
-      {cfg.whyOn && (aiWhyCopy?.trim() || cfg.whyCopy.trim()) ? (
+      {/* Fallback page: ONE honest line replaces the why-copy (merchant
+          template or AI paragraph); "matched you with products tailored…"
+          would be untrue over favourites. */}
+      {showFallback ? (
+        <p style={{ ...styles.muted, marginTop: 8 }}>{tc("decider_fallback_subline")}</p>
+      ) : cfg.whyOn && (aiWhyCopy?.trim() || cfg.whyCopy.trim()) ? (
         <p style={{ ...styles.muted, marginTop: 8 }}>
           {aiWhyCopy?.trim() || cfg.whyCopy}
         </p>
@@ -853,11 +874,6 @@ export function DeciderResultView({
       {decider.allOutOfStock ? (
         <p style={{ marginTop: 12, fontSize: 13, color: "var(--qz-color-muted)" }}>
           {tc("all_out_of_stock")}
-        </p>
-      ) : null}
-      {showFallback ? (
-        <p style={{ marginTop: 12, fontSize: 13, color: "var(--qz-color-muted)" }}>
-          {tc("decider_fallback_heading")}
         </p>
       ) : null}
       {!hero && grid.length === 0 && !showFallback ? (

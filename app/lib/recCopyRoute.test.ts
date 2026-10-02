@@ -77,8 +77,30 @@ function deciderDoc(patch: Record<string, unknown> = {}) {
   });
 }
 
-function quizRow(doc: unknown, shop: { aiRecCopyEnabled: boolean } = { aiRecCopyEnabled: true }) {
-  return { shopId: "s1", publishedJson: doc, shop: { ...shop, brandGuidelines: null } };
+// The sidecars publish bakes onto a decider doc (product_index +
+// target_product_ids_map + target_index): both targets have an in-stock product.
+function product(id: string) {
+  return {
+    product_id: id, title: id, handle: id, price: "10.00", image_url: null,
+    tags: [], collection_ids: [], inventory_in_stock: true,
+  };
+}
+const BAKED = {
+  product_index: [product("p_park"), product("p_pow")],
+  target_product_ids_map: { cat_park: ["p_park"], cat_pow: ["p_pow"] },
+  target_index: { cat_park: { type: "collection", name: "Park" }, cat_pow: { type: "collection", name: "Powder" } },
+};
+
+function quizRow(
+  doc: unknown,
+  shop: { aiRecCopyEnabled: boolean } = { aiRecCopyEnabled: true },
+  baked: Record<string, unknown> = BAKED,
+) {
+  return {
+    shopId: "s1",
+    publishedJson: { ...(doc as Record<string, unknown>), ...baked },
+    shop: { ...shop, brandGuidelines: null },
+  };
 }
 
 let ipCounter = 0;
@@ -184,6 +206,16 @@ describe("gate sequence — cheap refusals before any spend", () => {
     );
     expect(res.status).toBe(200);
     expect(await codeOf(res)).toBe("no_target");
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("a target with nothing to show (the fallback page never renders why-copy) → {code:'no_products'}", async () => {
+    p.quiz.findFirst.mockResolvedValue(
+      quizRow(deciderDoc(), undefined, { ...BAKED, target_product_ids_map: { cat_park: [], cat_pow: ["p_pow"] } }),
+    );
+    const res = await recCopyAction(post(VALID()));
+    expect(res.status).toBe(200);
+    expect(await codeOf(res)).toBe("no_products");
     expect(generate).not.toHaveBeenCalled();
   });
 

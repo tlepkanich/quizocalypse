@@ -599,11 +599,20 @@ export function HomeScreens({
                 </div>
                 <div>
                   {also.map((a) => (
-                    <div key={a.key} className="hm3-row">
+                    // The emails row is the teal signal (§7.5): teal tile, the
+                    // chip stacked under the title, a teal action.
+                    <div key={a.key} className={a.kind === "emails" ? "hm3-row is-signal" : "hm3-row"}>
                       <span className="hm3-tile" aria-hidden="true">
                         <GoalIc>{WAIT[a.kind].icon}</GoalIc>
                       </span>
-                      <b className="hm3-rowtitle">{a.title}</b>
+                      {a.chip ? (
+                        <span className="hm3-rowmain">
+                          <b className="hm3-rowtitle">{a.title}</b>
+                          <span className="hm3-tag is-signal">{a.chip}</span>
+                        </span>
+                      ) : (
+                        <b className="hm3-rowtitle">{a.title}</b>
+                      )}
                       <Link className="hm3-rowact" to={a.href}>
                         {a.key === dismissedKey ? WAIT[a.kind].demoted : WAIT[a.kind].row}{" "}
                         <GoalIc>{ICON.chev}</GoalIc>

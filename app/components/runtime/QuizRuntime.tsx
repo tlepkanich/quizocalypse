@@ -522,12 +522,28 @@ export function QuizRuntime(props: QuizRuntimeProps) {
     if (!resolved) return null;
     const cfg = settingsForTarget(doc.rec_page_settings, resolved.targetId);
     if (!cfg.whyOn || cfg.whyCopyLocked) return null;
+    // A target that resolves but has nothing to show lands on the fallback
+    // page, which never renders the why-copy (fallback headline, 2026-09-30).
+    // Same computation the reveal runs, so the two can never disagree: no
+    // products → no paid AI request.
+    const reveal = recommendForResultExplained({
+      quiz: doc,
+      productIndex,
+      selectedAnswerIds: answerIds,
+      resultNodeId: node.id,
+      ...(answerWeights ? { answerWeights } : {}),
+      ...targetFields,
+    });
+    if (reveal.products.length === 0) return null;
     return {
       targetId: resolved.targetId,
       answerIds,
       captureNeeded: captureMode(cfg) === "gate",
     };
-  }, [isPreview, isDecider, aiCopyEnabled, quizId, currentNodeId, path, doc]);
+    // targetFields is rebuilt each render from targetProductIdsMap/targetIndex,
+    // so those two are the real dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPreview, isDecider, aiCopyEnabled, quizId, currentNodeId, path, doc, productIndex, answerWeights, targetProductIdsMap, targetIndex]);
 
   // Fire at capture-gate-clear (abandoners cost $0) — the loading interstitial
   // then absorbs the latency. Reduced-motion skips the interstitial, so there's
