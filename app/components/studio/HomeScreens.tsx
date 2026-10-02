@@ -95,17 +95,17 @@ const ICON = {
   ),
 };
 
-/* Per-kind copy (§7.3, §7.5): the reminder's button, a plain Also-waiting
-   row's action, and the action a DISMISSED reminder keeps as its row (§7.4). */
+/* Per-kind copy (§7.3, §7.5): the reminder's button and an Also-waiting
+   row's link. A DISMISSED reminder keeps the same link as its row (§7.4). */
 const WAIT: Record<
   HomeWaitItem["kind"],
-  { icon: ReactNode; tag: [string, string] | null; lead: string; row: string; demoted: string }
+  { icon: ReactNode; tag: [string, string] | null; lead: string; row: string }
 > = {
-  stalled: { icon: ICON.clock, tag: ["setup", "Paused"], lead: "Open setup", row: "Open", demoted: "Open" },
-  setup: { icon: ICON.layers, tag: ["setup", "In setup"], lead: "Continue setup", row: "Resume", demoted: "Resume" },
-  publish: { icon: ICON.globe, tag: ["draft", "Draft"], lead: "Review and publish", row: "Review", demoted: "Review" },
-  store: { icon: ICON.store, tag: ["live", "Live"], lead: "Add to store", row: "Embed", demoted: "Add to store" },
-  emails: { icon: ICON.mail, tag: null, lead: "Connect", row: "Connect", demoted: "Connect" },
+  stalled: { icon: ICON.clock, tag: ["setup", "Paused"], lead: "Open setup", row: "Open" },
+  setup: { icon: ICON.layers, tag: ["setup", "In setup"], lead: "Continue setup", row: "Resume" },
+  publish: { icon: ICON.globe, tag: ["draft", "Draft"], lead: "Review and publish", row: "Review" },
+  store: { icon: ICON.store, tag: ["live", "Live"], lead: "Add to store", row: "Embed" },
+  emails: { icon: ICON.mail, tag: null, lead: "Connect", row: "Connect" },
 };
 
 const QUESTION = "What type of quiz do you want to create?";
@@ -597,28 +597,42 @@ export function HomeScreens({
                     Also waiting
                   </p>
                 </div>
-                <div>
-                  {also.map((a) => (
-                    // The emails row is the teal signal (§7.5): teal tile, the
-                    // chip stacked under the title, a teal action.
-                    <div key={a.key} className={a.kind === "emails" ? "hm3-row is-signal" : "hm3-row"}>
-                      <span className="hm3-tile" aria-hidden="true">
-                        <GoalIc>{WAIT[a.kind].icon}</GoalIc>
-                      </span>
-                      {a.chip ? (
-                        <span className="hm3-rowmain">
-                          <b className="hm3-rowtitle">{a.title}</b>
-                          <span className="hm3-tag is-signal">{a.chip}</span>
+                <div className="hm3-rows">
+                  {also.map((a) => {
+                    const linkText = WAIT[a.kind].row;
+                    return (
+                      // A quiz row reads action, then name, each in its own
+                      // column. The emails row is the teal signal (§7.5): teal
+                      // tile, the chip beside the title, a teal action.
+                      <div
+                        key={a.key}
+                        className={a.kind === "emails" ? "hm3-row is-signal" : "hm3-row"}
+                        title={a.name}
+                      >
+                        <span className="hm3-tile" aria-hidden="true">
+                          <GoalIc>{WAIT[a.kind].icon}</GoalIc>
                         </span>
-                      ) : (
-                        <b className="hm3-rowtitle">{a.title}</b>
-                      )}
-                      <Link className="hm3-rowact" to={a.href}>
-                        {a.key === dismissedKey ? WAIT[a.kind].demoted : WAIT[a.kind].row}{" "}
-                        <GoalIc>{ICON.chev}</GoalIc>
-                      </Link>
-                    </div>
-                  ))}
+                        {a.name ? (
+                          <>
+                            <b className="hm3-rowverb">{a.action}</b>
+                            <span className="hm3-rowname">{a.name}</span>
+                          </>
+                        ) : (
+                          <span className="hm3-rowmain">
+                            <b className="hm3-rowtitle">{a.action}</b>
+                            {a.chip ? <span className="hm3-tag is-signal">{a.chip}</span> : null}
+                          </span>
+                        )}
+                        <Link
+                          className="hm3-rowact"
+                          to={a.href}
+                          aria-label={[`${linkText}: ${a.action}`, a.name].filter(Boolean).join(" ")}
+                        >
+                          {linkText} <GoalIc>{ICON.chev}</GoalIc>
+                        </Link>
+                      </div>
+                    );
+                  })}
                 </div>
               </section>
               {statsCard}

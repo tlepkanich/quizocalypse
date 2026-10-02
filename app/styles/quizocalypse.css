@@ -205,15 +205,20 @@
   --qz-lift-1: 0 1px 2px rgba(32, 28, 46, 0.05);                                   /* cards: a whisper */
   --qz-lift-2: 0 12px 30px -10px rgba(32, 28, 46, 0.26), 0 1px 2px rgba(32, 28, 46, 0.07); /* menus, popovers */
   --qz-lift-3: 0 24px 56px -16px rgba(32, 28, 46, 0.34), 0 2px 4px rgba(32, 28, 46, 0.08); /* modals, drawers */
-  /* HOME-3 — the card EDGE (owner-approved 2026-09-30, "Edge A"): a hairline
-     ring + a slightly heavier bottom rim, drawn as shadow so the card keeps
-     its exact box. Holds a white card off the Wiskr print with no lift. */
   /* Tight Edge (admin-wide, approved 2026-10-01) — supersedes "Edge A": a
      firmer ring over a soft violet-tinted drop. A clickable card's hover
-     swaps the ring only; the shadow stays, so the 18px gap rule still holds. */
+     swaps the ring only; the shadow stays, so the 18px gap rule still holds.
+     The soft shadow is built from its 14px reach (offset .4, blur .8,
+     spread -.2) — keep the fractional pixels. */
   --qz-edge-shadow: 0 1px 2px rgba(32, 28, 46, 0.08), 0 5.6px 11.2px -2.8px rgba(44, 30, 120, 0.28);
   --qz-edge: 0 0 0 1px rgba(32, 28, 46, 0.14), var(--qz-edge-shadow);
   --qz-edge-hover: 0 0 0 1px rgba(32, 28, 46, 0.26), var(--qz-edge-shadow);
+  --qz-edge-rail: 1px 0 0 rgba(32, 28, 46, 0.14), 8px 0 22px -14px rgba(44, 30, 120, 0.2);
+  /* The Crest GROUND — the one global rule for the Wiskr print: the 6.5%
+     tile over white. Every page that takes the print paints
+     `background: var(--qz-ground-crest)`; no page names the tile or its
+     strength itself. Cards on it use --qz-edge and sit >= 18px apart. */
+  --qz-ground-crest: var(--qz-paper) url("/crest-6.5.svg") 0 0 / 360px 240px repeat;
   /* Quizzes tab: the opening-question panel, and the tinted card action. */
   --qz-panel: #F8F6FE;
   --qz-panel-line: #ECE8F8;
@@ -256,6 +261,8 @@
   --qz-ls-crit-wash: #FBECEA;  /* mock --crit-wash: failed-line fill      */
   --qz-ls-cell-bg:   #FBFAFD;  /* mock --qcell-bg: question-column ground */
 }
+/* Print and forced colours drop the print everywhere it is used. */
+@media print, (forced-colors: active) { :root { --qz-ground-crest: var(--qz-paper); } }
 
 /* =====================================================================
    THE EDITOR STANDS DOWN
@@ -1387,7 +1394,8 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
   height: 100vh;
   display: flex; flex-direction: column;
   background: var(--qz-paper);
-  border-right: 1px solid var(--qz-rule);
+  border-right: 0;
+  box-shadow: var(--qz-edge-rail);
   padding: 16px 10px;
   overflow: hidden;
   transition: width var(--qz-dur-slow) var(--qz-ease), padding var(--qz-dur-slow) var(--qz-ease);
@@ -6744,9 +6752,8 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-lib-main {
   flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
   padding: 26px 32px 48px;
-  background: var(--qz-paper) url("/crest-6.5.svg") 0 0 / 360px 240px repeat;
+  background: var(--qz-ground-crest);
 }
-@media print, (forced-colors: active) { .qz-lib-main { background-image: none; } }
 .qz-lib-col { width: 100%; max-width: 960px; display: flex; flex-direction: column; gap: 18px; }
 
 /* ── Header card — the title, Create quiz and (sometimes) the toolbar ─── */
@@ -9649,9 +9656,8 @@ body[data-qz] .qz-cust-row:focus-visible {
 .hm3 {
   flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
   padding: 34px 32px 48px;
-  background: var(--qz-paper) url("/crest-6.5.svg") 0 0 / 360px 240px repeat;
+  background: var(--qz-ground-crest);
 }
-@media print, (forced-colors: active) { .hm3 { background-image: none; } }
 /* Vertical centring that can never clip: auto margins take spare room and
    collapse to 0 when the column is taller than the page. */
 .hm3-col { width: 100%; max-width: 840px; margin-block: auto; }
@@ -9949,7 +9955,7 @@ body[data-qz] .qz-cust-row:focus-visible {
 
 /* — The compact create row under the lead card — */
 .hm3-makerow { display: grid; grid-template-columns: 132px minmax(0, 1fr); overflow: hidden; }
-.hm3-makerow:focus-within { box-shadow: 0 0 0 1px var(--qz-accent-line), 0 2px 0 0 rgba(32, 28, 46, 0.04); }
+.hm3-makerow:focus-within { box-shadow: 0 0 0 1px var(--qz-accent-line), var(--qz-edge-shadow); }
 .hm3-makerow-art {
   position: relative; overflow: hidden; border-right: 1px solid var(--qz-rule);
   background: linear-gradient(165deg, #F4F1FF, #E9E4FC);
@@ -9970,12 +9976,22 @@ body[data-qz] .qz-cust-row:focus-visible {
 .hm3-sync { padding: 20px 22px; }
 .hm3-sync-line { margin: 12px 0 14px; font-size: 13.5px; color: var(--qz-ink-3); }
 .hm3-sync-acts { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Also waiting: action, then name, each in its own column — a long name
+   wraps beside the action, never under it. */
+.hm3-rows { display: grid; grid-template-columns: 26px max-content minmax(0, 1fr) auto; column-gap: 12px; }
 .hm3-row {
-  display: flex; align-items: center; gap: 14px; min-height: 58px; padding: 13px 0;
+  display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; gap: 0 12px;
+  align-items: center; min-height: 58px; padding: 13px 0;
   border-bottom: 1px solid var(--qz-rule-2);
 }
 .hm3-row:last-child { border-bottom: 0; }
-.hm3-rowtitle { flex: 1 1 auto; min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
+.hm3-rowverb { font-size: 14.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; color: var(--qz-ink); }
+.hm3-rowname {
+  min-width: 0; font-size: 14px; font-weight: 500; line-height: 1.3; color: var(--qz-ink-3);
+  overflow-wrap: anywhere; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.hm3-rowtitle { min-width: 0; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
 /* Every monogram and tile on Home is one family (§7.7): 26px, 12px radius,
    violet wash, ink letter. No merchant brand colour in our chrome. */
 .hm3-tile, .hm3-qmark {
@@ -9990,9 +10006,9 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .hm3-rowact:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
 .hm3-rowact .hm3-ic { width: 14px; height: 14px; color: var(--qz-ink-25); }
-/* The teal signal row (§7.5): teal tile, chip stacked under the title,
-   teal action. The only alarm colour on the page. */
-.hm3-rowmain { flex: 1 1 auto; min-width: 0; display: grid; gap: 5px; justify-items: start; }
+/* The teal signal row (§7.5): teal tile, chip beside the title, teal
+   action. The only alarm colour on the page. */
+.hm3-rowmain { grid-column: 2 / 4; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
 .hm3-row.is-signal .hm3-tile { background: var(--qz-teal-wash); color: var(--qz-teal); }
 .hm3-row.is-signal .hm3-rowact, .hm3-row.is-signal .hm3-rowact .hm3-ic { color: var(--qz-teal); }
 .hm3-row.is-signal .hm3-rowact:hover { background: var(--qz-teal-wash); }
@@ -10079,7 +10095,10 @@ body[data-qz] .qz-cust-row:focus-visible {
   .hm3-qmeter, .hm3-qnum { display: none; }
   /* Narrow: the tag drops under the name instead of squeezing it. */
   .hm3-qname, .hm3-quizzes.is-ingrid .hm3-qname { grid-template-columns: minmax(0, 1fr); row-gap: 4px; }
-  .hm3-rowact { min-width: 0; }
+  .hm3-rowact { min-width: 0; grid-column: 3; }
+  .hm3-rows { grid-template-columns: 26px minmax(0, 1fr) auto; }
+  .hm3-row > .hm3-tile, .hm3-row > .hm3-rowact { grid-row: 1 / span 2; }
+  .hm3-rowverb, .hm3-rowname, .hm3-rowmain { grid-column: 2; }
   .hm3-box textarea, .hm3-passive { font-size: 17px; }
   .hm3-q { font-size: 22px; }
   .hm3-box { padding: 14px; }
