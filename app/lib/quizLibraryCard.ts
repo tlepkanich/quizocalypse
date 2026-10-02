@@ -1,82 +1,90 @@
-import { resolveDesignTokens } from "./designTokens";
-import { z } from "zod";
-import { DesignTokens, RecPageGlobal } from "./quizSchema";
+import type { Quiz as QuizDoc } from "./quizSchema";
+import { isFreeformType } from "./quizSchema";
+import { orderedQuestions } from "./questionOrder";
 
-// Per-card facts + bounded thumbnail data for the Quizzes library.
+// Per-card facts for the Quizzes library.
 // Pure + defensive: reads a loosely-typed quiz doc (draftJson) WITHOUT a full
 // Zod parse, so a legacy/odd doc can never throw the library loader. Facts are
 // cosmetic — a missing field just falls back.
 
 interface LooseAnswer {
+  text?: unknown;
   target_id?: string;
 }
 interface LooseNode {
   type?: string;
   data?: {
-    headline?: string;
-    subtext?: string;
-    button_label?: string;
+    text?: unknown;
+    question_type?: unknown;
     answers?: LooseAnswer[];
   };
 }
 interface LooseDoc {
-  logic_model?: string;
-  design_linked?: boolean;
-  rec_page_design?: unknown;
-  rec_page_settings?: { global?: unknown };
   nodes?: LooseNode[];
-  design_tokens?: {
-    colors?: { primary?: string; background?: string; text?: string };
-    typography?: { body?: { family?: string }; heading?: { family?: string } };
-    logo?: { url?: string };
-  };
+  edges?: unknown[];
 }
 
-export interface QuizCardThumb {
-  /** A results-page composition, without pretending to compute a winner. */
-  results?: QuizCardResults;
-  // §R-7 card preview: the quiz's first screen rendered in the MERCHANT's brand.
-  headline: string;
-  subtext: string;
-  buttonLabel: string;
-  logoUrl: string | null;
-  bg: string;
-  primary: string;
+// Quizzes tab (Crest) — the card's preview is the quiz's own opening question,
+// set in our type: different for every quiz, and it can't render badly.
+export interface QuizCardOpening {
+  /** The opening question's text, trimmed. */
   text: string;
-  font: string | null;
-  /** true = nothing built yet → the neutral "New quiz · Start" fallback. */
-  isNew: boolean;
+  /** "typed" = text | email | numeric | date | slider: no answer list is drawn. */
+  kind: "choices" | "typed";
+  questionType: string;
+  /** The first four answer labels, in stored order. Empty when kind is "typed". */
+  answers: string[];
+  /** Every answer on the question, for the "5 answers" count. 0 when typed. */
+  answerCount: number;
 }
 export interface QuizCardFacts {
   questions: number;
   personas: number;
   targetIds: string[];
-  thumb: QuizCardThumb;
+  /** null = no questions yet. */
+  opening: QuizCardOpening | null;
 }
 
-const DEFAULTS = resolveDesignTokens().colors ?? {};
+const OPENING_ANSWERS = 4;
 
-export interface QuizCardResults {
-  headline: string;
-  layout: "hero_grid" | "grid" | "list" | "single_hero";
-  imgFit: "cover" | "contain";
+// "Opening question" = Q1 as the builder numbers it (orderedQuestions walks the
+// flow from the intro), not the first question in nodes order. orderFlow
+// iterates doc.nodes / doc.edges directly and throws on a malformed doc, so it
+// only runs when both are arrays, inside a try; anything else falls back to the
+// first question in nodes order.
+function openingNode(d: LooseDoc, nodes: LooseNode[]): LooseNode | undefined {
+  if (Array.isArray(d.nodes) && Array.isArray(d.edges)) {
+    try {
+      const first = orderedQuestions(d as unknown as QuizDoc)[0]?.node as LooseNode | undefined;
+      if (first) return first;
+    } catch {
+      // Odd doc — the nodes-order fallback below.
+    }
+  }
+  return nodes.find((n) => n?.type === "question");
 }
 
-export interface QuizCardProduct {
-  id: string;
-  title: string;
-  imageUrl: string | null;
-}
-
-const previewImage = z.string().refine((url) =>
-  /^https?:\/\//i.test(url) || (url.startsWith("/") && !url.startsWith("//")),
-);
-
-/** Prefer real photography, but retain named products when photos are absent. */
-export function quizCardProducts(products: readonly QuizCardProduct[]): QuizCardProduct[] {
-  const unique = [...new Map(products.map((p) => [p.id, p])).values()];
-  return unique.map((p) => ({ ...p, imageUrl: previewImage.safeParse(p.imageUrl).success ? p.imageUrl : null }))
-    .sort((a, b) => Number(Boolean(b.imageUrl)) - Number(Boolean(a.imageUrl))).slice(0, 3);
+function quizCardOpening(d: LooseDoc, nodes: LooseNode[]): QuizCardOpening | null {
+  const node = openingNode(d, nodes);
+  if (!node) return null;
+  const data = node.data && typeof node.data === "object" ? node.data : {};
+  const text = typeof data.text === "string" ? data.text.trim() : "";
+  const questionType = typeof data.question_type === "string" ? data.question_type : "";
+  // A typed question stores one seed answer in answers[] — never show it.
+  if (isFreeformType(questionType)) {
+    return { text, kind: "typed", questionType, answers: [], answerCount: 0 };
+  }
+  // Text only: icon, image_url and every other answer field are ignored.
+  const labels = (Array.isArray(data.answers) ? data.answers : [])
+    .map((a) => (a && typeof a.text === "string" ? a.text.trim() : ""))
+    .filter(Boolean);
+  return {
+    text,
+    kind: "choices",
+    questionType,
+    answers: labels.slice(0, OPENING_ANSWERS),
+    answerCount: labels.length,
+  };
 }
 
 export function quizCardFacts(doc: unknown): QuizCardFacts {
@@ -98,38 +106,10 @@ export function quizCardFacts(doc: unknown): QuizCardFacts {
   }
   const personas = targets.size > 0 ? targets.size : resultNodes;
 
-  const intro = nodes.find((n) => n?.type === "intro");
-  const isDecider = d.logic_model === "decider";
-  const resultDesign = isDecider && d.design_linked === false
-    ? DesignTokens.safeParse(d.rec_page_design) : null;
-  const tokens = resultDesign?.success ? resultDesign.data : d.design_tokens;
-  const c = tokens?.colors ?? {};
-  const headline = intro?.data?.headline?.trim() || "";
-  // A first screen that's still the default "New quiz" (or empty) with no brand
-  // color set → the neutral placeholder, not a fake brand render.
-  const isNew = (!headline || /^new quiz$/i.test(headline)) && !c.primary;
-  const settings = RecPageGlobal.safeParse(d.rec_page_settings?.global);
-  const config = settings.success ? settings.data : {};
-  const results: QuizCardResults | undefined = isDecider ? {
-    headline: config.headline?.trim() || "Your perfect match",
-    layout: config.layout || "hero_grid",
-    imgFit: config.imgFit || "contain",
-  } : undefined;
   return {
     questions,
     personas,
     targetIds: [...targets],
-    thumb: {
-      ...(results ? { results } : {}),
-      headline: headline || "New quiz",
-      subtext: intro?.data?.subtext?.trim() || "",
-      buttonLabel: intro?.data?.button_label?.trim() || "Start",
-      logoUrl: tokens?.logo?.url ?? null,
-      bg: c.background || DEFAULTS.background || "rgb(255,255,255)",
-      primary: c.primary || DEFAULTS.primary || "rgb(109,90,230)",
-      text: c.text || DEFAULTS.text || "rgb(26,26,26)",
-      font: tokens?.typography?.heading?.family || tokens?.typography?.body?.family || null,
-      isNew,
-    },
+    opening: quizCardOpening(d, nodes),
   };
 }

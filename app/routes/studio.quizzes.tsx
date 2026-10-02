@@ -1,16 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { Prisma } from "@prisma/client";
 import { Link, useLoaderData, useNavigate, useSubmit, useNavigation } from "@remix-run/react";
-import { Search } from "lucide-react";
+import { ArrowRight, CircleHelp, Ellipsis, List, Rows2, Search } from "lucide-react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import prisma from "../db.server";
-import { QzCard, QzSegmented } from "../components/qz";
+import { QzSegmented } from "../components/qz";
 import { QzMenu, QzModal, QzPopover } from "../components/qz-overlays";
 import { computeBenchmarks } from "../lib/quizBenchmarks";
-import { quizCardFacts, quizCardProducts, type QuizCardThumb, type QuizCardProduct } from "../lib/quizLibraryCard";
-import { QuizResultsThumbnail } from "../components/studio/QuizResultsThumbnail";
+import { quizCardFacts, type QuizCardOpening } from "../lib/quizLibraryCard";
 import { publishQuiz } from "../lib/quizPublish";
 import { withoutDiscountCode } from "../lib/discount.server";
 import { refreshBucketMembership } from "../lib/bucketPersist.server";
@@ -25,7 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // from the library, making the work impossible to resume. Their cards
   // route back into the setup flow instead of the builder.
   const quizzes = await prisma.quiz.findMany({
-    // draftJson drives the per-card facts + screen-1 thumbnail (§R-7).
+    // draftJson drives the per-card facts + the opening question (§R-7).
     where: { shopId: shop.id },
     select: { id: true, name: true, status: true, version: true, updatedAt: true, draftJson: true, buildState: true },
     orderBy: { updatedAt: "desc" },
@@ -45,11 +44,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // pull the first 8 named products (with photos) for the read-only popover.
   const factsById = new Map(quizzes.map((q) => [q.id, quizCardFacts(q.draftJson)]));
   const allTargetIds = [...new Set([...factsById.values()].flatMap((f) => f.targetIds))];
-  const previewQuizIds = quizzes.filter((q) => factsById.get(q.id)?.thumb.results).map((q) => q.id);
-  const cats = allTargetIds.length || previewQuizIds.length
+  const cats = allTargetIds.length
     ? await prisma.category.findMany({
-      where: { shopId: shop.id, OR: [{ id: { in: allTargetIds } }, { quizId: { in: previewQuizIds } }] },
-      select: { id: true, quizId: true, productIds: true },
+      where: { shopId: shop.id, id: { in: allTargetIds } },
+      select: { id: true, productIds: true },
       orderBy: { id: "asc" },
     })
     : [];
@@ -75,16 +73,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         const p = productById.get(id);
         return { id, title: p?.title ?? "Untitled product", imageUrl: p?.imageUrl ?? null };
       });
-      // Results thumbnails sample this quiz's catalog, including selected
-      // groups in unfinished drafts. Never pull unrelated shop products.
-      const previewIds = [...new Set([
-        ...recProductIds,
-        ...cats.filter((c) => c.quizId === q.id).flatMap((c) => c.productIds),
-      ])];
-      const previewProducts = facts.thumb.results ? quizCardProducts(previewIds.flatMap((id) => {
-        const p = productById.get(id);
-        return p ? [{ id, title: p.title, imageUrl: p.imageUrl }] : [];
-      })) : [];
       return {
         id: q.id,
         name: q.name,
@@ -98,8 +86,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         personas: facts.personas,
         recs: recProductIds.length,
         recProducts,
-        previewProducts,
-        thumb: facts.thumb,
+        opening: facts.opening,
       };
     }),
   });
@@ -174,36 +161,64 @@ type SortKey = "recent" | "name" | "oldest";
 // "View more" reveals the next 20 (client-side: the loader already ships all rows).
 const PAGE_SIZE = 20;
 
-// Image-led results compositions for decider quizzes; legacy thumbnails stay intact.
-function QuizCardPreview({ thumb, products, compact }: { thumb: QuizCardThumb; products: QuizCardProduct[]; compact?: boolean }) {
-  if (thumb.results) return <QuizResultsThumbnail thumb={thumb} products={products} />;
-  if (thumb.isNew) {
+// Quizzes tab (Crest) — the toolbar rule's fixed geometry. Every card is
+// exactly CARD_H tall at desktop widths (title and question each cap at two
+// lines), so where the last card lands is arithmetic, not measurement.
+const CARD_H = 224;
+const LIST_GAP = 18;
+// The header card without the toolbar: 18 padding + the 38px title row + 18.
+const HEAD_H = 74;
+
+// SSR-safe layout effect: the server branch is a no-op either way.
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+// Typed questions draw one input-shaped box instead of an answer list.
+const TYPED_OPENING: Record<string, { label: string; box: string }> = {
+  text: { label: "Text", box: "Shopper types an answer" },
+  email: { label: "Email", box: "Shopper types their email" },
+  numeric: { label: "Number", box: "Shopper enters a number" },
+  date: { label: "Date", box: "Shopper picks a date" },
+  slider: { label: "Slider", box: "Shopper moves a slider" },
+};
+
+// The card's preview: the quiz's own opening question, in our type. Real
+// text (not aria-hidden), but not a control — the title and the action open
+// the quiz.
+function OpeningPanel({ opening }: { opening: QuizCardOpening | null }) {
+  if (!opening) {
     return (
-      <div className={`qz-qprev qz-qprev-empty${compact ? " is-compact" : ""}`} aria-hidden>
-        <div className="qz-qprev-logo qz-qprev-logo-neutral">Q</div>
-        {!compact ? <div className="qz-qprev-h">New quiz</div> : null}
-        <span className="qz-qprev-start-neutral">Start</span>
+      <div className="qz-qpanel">
+        <div className="qz-qpanel-none">
+          <CircleHelp size={22} strokeWidth={1.5} aria-hidden />
+          <span>No questions yet</span>
+        </div>
       </div>
     );
   }
-  const brand = thumb.primary;
+  const typed = opening.kind === "typed" ? TYPED_OPENING[opening.questionType] ?? TYPED_OPENING.text! : null;
+  const count = `${opening.answerCount} answer${opening.answerCount === 1 ? "" : "s"}`;
   return (
-    <div
-      className={`qz-qprev${compact ? " is-compact" : ""}`}
-      aria-hidden
-      style={{
-        background: `linear-gradient(160deg, color-mix(in srgb, ${brand} 7%, ${thumb.bg}), color-mix(in srgb, ${brand} 15%, ${thumb.bg}))`,
-        ...(thumb.font ? { fontFamily: thumb.font } : {}),
-      }}
-    >
-      {thumb.logoUrl ? (
-        <img className="qz-qprev-logoimg" src={thumb.logoUrl} alt="" />
+    <div className="qz-qpanel">
+      <p className="qz-qpanel-lbl">
+        <span>Opening question</span>
+        <span>{typed ? typed.label : count}</span>
+      </p>
+      {opening.text ? (
+        <p className="qz-qpanel-q" title={opening.text}>{opening.text}</p>
       ) : (
-        <div className="qz-qprev-logo" style={{ background: brand }}>{(thumb.headline || "Q").charAt(0).toUpperCase()}</div>
+        <p className="qz-qpanel-q is-untitled">Untitled question</p>
       )}
-      <div className="qz-qprev-h" style={{ color: thumb.text }}>{thumb.headline}</div>
-      {!compact && thumb.subtext ? <div className="qz-qprev-sub" style={{ color: thumb.text }}>{thumb.subtext}</div> : null}
-      <span className="qz-qprev-start" style={{ background: brand }}>{thumb.buttonLabel}</span>
+      {typed ? (
+        <ul className="qz-qpanel-opts">
+          <li className="qz-qpanel-opt is-input"><span>{typed.box}</span></li>
+        </ul>
+      ) : opening.answers.length ? (
+        <ul className="qz-qpanel-opts">
+          {opening.answers.map((a, i) => (
+            <li className="qz-qpanel-opt" key={i} title={a}><i aria-hidden /><span>{a}</span></li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -212,7 +227,7 @@ function QuizCardPreview({ thumb, products, compact }: { thumb: QuizCardThumb; p
 function StatusTag({ status, inSetup }: { status: string; inSetup: boolean }) {
   const kind = status === "published" ? "live" : inSetup ? "setup" : "draft";
   const label = kind === "live" ? "Live" : kind === "setup" ? "In setup" : "Draft";
-  return <span className={`qz-qtag is-${kind}`}><i aria-hidden /> {label}</span>;
+  return <span className={`qz-qtag is-${kind}`}>{label}</span>;
 }
 
 // §3.7 — the recs popover body. Read-only: there is no edit affordance and
@@ -284,9 +299,9 @@ export default function StudioQuizzes() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [sort, setSort] = useState<SortKey>("recent");
-  // Owner ruling (2026-09-16) — the visual grid is the default view; the
+  // Owner ruling (2026-09-16) — the visual list is the default view; the
   // table stays as the density mode behind the toggle.
-  const [view, setView] = useState<"grid" | "table">("grid");
+  const [view, setView] = useState<"cards" | "table">("cards");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [creating, setCreating] = useState(false);
   const [recsFor, setRecsFor] = useState<string | null>(null);
@@ -294,6 +309,63 @@ export default function StudioQuizzes() {
 
   const act = (intent: string, id: string) => submit({ intent, id }, { method: "post" });
   const isBusy = navigation.state !== "idle";
+
+  // ── The toolbar rule (owner): the toolbar shows when there are more cards
+  // than the window can show — with the toolbar hidden, would the last card
+  // of the first page end below the window? Decided on the WHOLE list, never
+  // the filtered one (searching down to one result must not hide the search
+  // field). The server has no window: start from "more than three" and
+  // correct after mount.
+  const firstPage = Math.min(quizzes.length, PAGE_SIZE);
+  const [showBar, setShowBar] = useState(quizzes.length > 3);
+  const mainRef = useRef<HTMLDivElement>(null);
+  const headRowRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const checkBar = useCallback(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    let want = false;
+    if (firstPage > 0) {
+      // Under 680px cards stack and are taller than CARD_H: measure them.
+      let cardH = CARD_H;
+      if (window.matchMedia("(max-width: 680px)").matches) {
+        const cards = listRef.current?.querySelectorAll<HTMLElement>(".qz-qcard");
+        if (!cards?.length) return; // table view — keep the current answer
+        let sum = 0;
+        cards.forEach((c) => { sum += c.offsetHeight; });
+        cardH = sum / cards.length;
+      }
+      // Document coordinates; offsetHeight ignores the sticky offset.
+      const cs = getComputedStyle(main);
+      const headH = headRowRef.current
+        ? headRowRef.current.offsetHeight + 2 * parseFloat(getComputedStyle(headRowRef.current.parentElement!).paddingTop)
+        : HEAD_H;
+      const listTop = main.getBoundingClientRect().top + window.scrollY + parseFloat(cs.paddingTop) + headH + LIST_GAP;
+      const lastBottom = listTop + cardH * firstPage + LIST_GAP * (firstPage - 1);
+      want = lastBottom > window.innerHeight;
+    }
+    // A focused search field keeps the toolbar until it blurs.
+    if (!want && searchRef.current && document.activeElement === searchRef.current) return;
+    setShowBar(want);
+  }, [firstPage]);
+
+  useIsoLayoutEffect(() => {
+    checkBar();
+    window.addEventListener("resize", checkBar);
+    return () => window.removeEventListener("resize", checkBar);
+  }, [checkBar]);
+
+  // With the toolbar hidden, no hidden filter may hold rows back: reset
+  // search, status and sort, and show the cards.
+  useEffect(() => {
+    if (showBar) return;
+    setQuery("");
+    setStatus("all");
+    setSort("recent");
+    setView("cards");
+  }, [showBar]);
 
   // §3.7 — the recs popover also closes when the content column scrolls
   // (its own list scrolling inside stays open).
@@ -366,9 +438,11 @@ export default function StudioQuizzes() {
     { label: "Delete", tone: "crit" as const, onSelect: () => setPendingDelete({ id: q.id, name: q.name }) },
   ];
 
-  const overflowTrigger = (
-    <button type="button" className="qz-btn qz-btn-ghost qz-btn-sm qz-lib-more" aria-label="More actions" title="More actions">
-      ⋯
+  // Repeated controls carry the quiz's name — "More actions" on every card
+  // tells a screen-reader user nothing.
+  const overflowTrigger = (q: QuizRow) => (
+    <button type="button" className="qz-lib-more" aria-label={`More actions for ${q.name}`} title="More actions">
+      <Ellipsis size={16} strokeWidth={2.4} aria-hidden />
     </button>
   );
 
@@ -387,23 +461,89 @@ export default function StudioQuizzes() {
     />
   );
 
-  return (
-    <div className="qz-lib-main">
-      {/* §3.2 — one title, ONE accent action. The h1 keeps the shipped
-          .qz-page-header .qz-display rule (38/700/-0.01em/1.1) untouched. */}
-      <header className="qz-page-header qz-lib-header">
-        <h1 className="qz-display">Quizzes</h1>
-        <button type="button" className="qz-btn qz-btn-accent" onClick={() => setCreating(true)}>
-          Create quiz →
-        </button>
-      </header>
+  const bar = showBar && quizzes.length > 0;
 
-      {quizzes.length === 0 ? (
-        /* QRTZ-S2 — states.mjs mt- pattern (zero-quizzes): icon tile, one-line
-           title, ≤30ch body, ONE action — it opens the create dialog, where
-           every other build path now lives. */
-        <div className="qz-lib-body">
-          <QzCard>
+  return (
+    <div className="qz-lib-main" ref={mainRef}>
+      <div className="qz-lib-col">
+        {/* §3.2 — one header card: the page title and ONE accent action; the
+            toolbar joins it only when the cards run past the window. */}
+        <header className={`qz-lib-head${bar ? " has-bar" : ""}`}>
+          <div className="qz-lib-headrow" ref={headRowRef}>
+            <h1 className="qz-lib-h1">Quizzes</h1>
+            <button type="button" className="qz-btn qz-btn-accent qz-lib-create" onClick={() => setCreating(true)}>
+              Create quiz <ArrowRight size={15} strokeWidth={2} aria-hidden />
+            </button>
+          </div>
+          {bar ? (
+            /* §3.4 — the operate toolbar: search · status (counts) · sort · view. */
+            <div className="qz-lib-bar">
+              <div className="qz-lib-search">
+                <Search size={14} strokeWidth={2} aria-hidden />
+                <input
+                  ref={searchRef}
+                  className="qz-input"
+                  type="search"
+                  placeholder="Search quizzes…"
+                  value={query}
+                  aria-label="Search quizzes"
+                  onChange={(e) => setQuery(e.target.value)}
+                  onBlur={checkBar}
+                />
+              </div>
+              <QzSegmented
+                ariaLabel="Filter by status"
+                value={status}
+                onChange={setStatus}
+                options={[
+                  { value: "all", label: "All", count: counts.all },
+                  { value: "live", label: "Live", count: counts.live },
+                  { value: "draft", label: "Draft", count: counts.draft },
+                ]}
+              />
+              <select className="qz-select qz-lib-sort" value={sort} aria-label="Sort" onChange={(e) => setSort(e.target.value as SortKey)}>
+                <option value="recent">Recently edited</option>
+                <option value="name">Name A–Z</option>
+                <option value="oldest">Oldest first</option>
+              </select>
+              <div className="qz-lib-view">
+                <QzSegmented
+                  ariaLabel="View"
+                  value={view}
+                  onChange={setView}
+                  options={[
+                    {
+                      value: "cards",
+                      title: "Card view",
+                      label: (
+                        <>
+                          <Rows2 size={14} strokeWidth={1.75} aria-hidden />
+                          <span className="qz-sr-only">Card view</span>
+                        </>
+                      ),
+                    },
+                    {
+                      value: "table",
+                      title: "Table view",
+                      label: (
+                        <>
+                          <List size={14} strokeWidth={1.75} aria-hidden />
+                          <span className="qz-sr-only">Table view</span>
+                        </>
+                      ),
+                    },
+                  ]}
+                />
+              </div>
+            </div>
+          ) : null}
+        </header>
+
+        {quizzes.length === 0 ? (
+          /* QRTZ-S2 — states.mjs mt- pattern (zero-quizzes): icon tile, one-line
+             title, ≤30ch body, ONE action — it opens the create dialog, where
+             every other build path now lives. */
+          <div className="qz-lib-empty">
             <div className="qz-mt">
               <span className="qz-mt-ico">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -417,205 +557,127 @@ export default function StudioQuizzes() {
                 Start a quiz
               </button>
             </div>
-          </QzCard>
-        </div>
-      ) : (
-        <>
-          {/* §3.4 — sticky operate toolbar: search · status (counts) · sort · view. */}
-          <div className="qz-lib-toolbar">
-            <div className="qz-lib-search">
-              <Search size={14} strokeWidth={2} aria-hidden />
-              <input
-                className="qz-input"
-                type="search"
-                placeholder="Search quizzes…"
-                value={query}
-                aria-label="Search quizzes"
-                onChange={(e) => setQuery(e.target.value)}
-              />
+          </div>
+        ) : shown.length === 0 ? (
+          /* §5 — a filter matching nothing is NOT the same as having nothing:
+             the action CLEARS the filter. */
+          <div className="qz-lib-empty">
+            <div className="qz-mt">
+              <span className="qz-mt-ico">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="m16 16 4.5 4.5" />
+                </svg>
+              </span>
+              <b>No quizzes match that</b>
+              <p>Try a different search, or clear the Live / Draft filter.</p>
+              <button
+                type="button"
+                className="qz-mt-btn"
+                onClick={() => {
+                  setQuery("");
+                  setStatus("all");
+                }}
+              >
+                {query.trim() ? "Clear search" : "Clear filter"}
+              </button>
             </div>
-            <QzSegmented
-              ariaLabel="Filter by status"
-              value={status}
-              onChange={setStatus}
-              options={[
-                { value: "all", label: "All", count: counts.all },
-                { value: "live", label: "Live", count: counts.live },
-                { value: "draft", label: "Draft", count: counts.draft },
-              ]}
-            />
-            <select className="qz-select qz-lib-sort" value={sort} aria-label="Sort" onChange={(e) => setSort(e.target.value as SortKey)}>
-              <option value="recent">Recently edited</option>
-              <option value="name">Name A–Z</option>
-              <option value="oldest">Oldest first</option>
-            </select>
-            <QzSegmented
-              ariaLabel="View"
-              value={view}
-              onChange={setView}
-              options={[
-                {
-                  value: "grid",
-                  title: "Grid view",
-                  label: (
-                    <>
-                      <span aria-hidden>▦</span>
-                      <span className="qz-sr-only">Grid view</span>
-                    </>
-                  ),
-                },
-                {
-                  value: "table",
-                  title: "Table view",
-                  label: (
-                    <>
-                      <span aria-hidden>≣</span>
-                      <span className="qz-sr-only">Table view</span>
-                    </>
-                  ),
-                },
-              ]}
-            />
           </div>
-
-          <div className="qz-lib-body">
-            {shown.length === 0 ? (
-              /* §5 — a filter matching nothing is NOT the same as having
-                 nothing: dashed paper card, and the action CLEARS the filter. */
-              <div className="qz-lib-empty">
-                <div className="qz-mt">
-                  <span className="qz-mt-ico">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <circle cx="11" cy="11" r="6.5" />
-                      <path d="m16 16 4.5 4.5" />
-                    </svg>
-                  </span>
-                  <b>No quizzes match that</b>
-                  <p>Try a different search, or clear the Live / Draft filter.</p>
-                  <button
-                    type="button"
-                    className="qz-mt-btn"
-                    onClick={() => {
-                      setQuery("");
-                      setStatus("all");
-                    }}
-                  >
-                    {query.trim() ? "Clear search" : "Clear filter"}
-                  </button>
-                </div>
-              </div>
-            ) : view === "grid" ? (
-              <div className="qz-qcard-grid">
-                {visible.map((q) => (
-                  <article key={q.id} className="qz-qcard">
-                    {/* §3.5 — state first, then their brand, the name, the numbers. */}
-                    <div className="qz-qcard-head">
-                      <StatusTag status={q.status} inSetup={q.inSetup} />
-                      <span className="qz-qcard-when">Edited {formatDate(q.updatedAt)}</span>
+        ) : view === "cards" ? (
+          <div className="qz-qcard-list" ref={listRef}>
+            {visible.map((q) => (
+              <article key={q.id} className="qz-qcard" aria-labelledby={`qz-qcard-${q.id}`}>
+                {/* The body comes first in the DOM so a screen reader hears
+                    the quiz's name before its question; CSS puts the panel
+                    in the left column. */}
+                <div className="qz-qcard-body">
+                  <div className="qz-qcard-meta">
+                    <StatusTag status={q.status} inSetup={q.inSetup} />
+                    <span>Edited {formatDate(q.updatedAt)}</span>
+                    <QzMenu trigger={overflowTrigger(q)} items={menuItems(q)} />
+                  </div>
+                  {/* The clamp lives on the nested span — a flex/grid item
+                      blockifies -webkit-box and kills the clamp. */}
+                  <h2 className="qz-qcard-title" id={`qz-qcard-${q.id}`}>
+                    <Link to={openTo(q)}><span>{q.name}</span></Link>
+                  </h2>
+                  <div className="qz-qcard-foot">
+                    <div className="qz-qcard-figs">
+                      <div className="qz-qcard-fig">
+                        {q.questions > 0 ? <b>{q.questions}</b> : <b className="is-none">—</b>}
+                        <span>Questions</span>
+                      </div>
+                      {q.recs > 0 ? (
+                        recsTrigger(q, "qz-qcard-fig", <><b>{q.recs}</b><span>Recs</span></>)
+                      ) : (
+                        <div className="qz-qcard-fig"><b className="is-none">—</b><span>Recs</span></div>
+                      )}
                     </div>
-
-                    <div
-                      className={`qz-qcard-preview${q.thumb.results ? " has-results" : ""}`}
-                      role="button"
-                      tabIndex={0}
+                    <Link
+                      to={openTo(q)}
+                      className="qz-btn qz-btn-soft qz-qcard-act"
                       aria-label={q.inSetup ? `Resume setting up ${q.name}` : `Open ${q.name} in the builder`}
-                      onClick={() => navigate(openTo(q))}
-                      onKeyDown={(e) => { if (e.key === "Enter") navigate(openTo(q)); }}
                     >
-                      <div className="qz-qcard-shot"><QuizCardPreview thumb={q.thumb} products={q.previewProducts} /></div>
-                      <div className="qz-qcard-float">
-                        {/* Preview moved to the ⋯ menu. One action here, never two. */}
-                        <button
-                          type="button"
-                          className="qz-btn qz-btn-accent qz-btn-sm"
-                          onClick={(e) => { e.stopPropagation(); navigate(openTo(q)); }}
-                        >
-                          {q.inSetup ? "Resume setup" : "Open builder"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="qz-qcard-body">
-                      <div className="qz-qcard-titlerow">
-                        {/* The clamp lives on the nested span — a flex item
-                            blockifies -webkit-box and kills the clamp. */}
-                        <Link to={openTo(q)} className="qz-qcard-title"><span>{q.name}</span></Link>
-                        <QzMenu trigger={overflowTrigger} items={menuItems(q)} />
-                      </div>
-                      <div className="qz-qcard-figs">
-                        <div className="qz-qcard-fig"><b>{q.questions}</b><span>Questions</span></div>
-                        {q.recs > 0 ? (
-                          recsTrigger(q, "qz-qcard-fig", <><b>{q.recs}</b><span>Recs</span></>)
-                        ) : (
-                          <div className="qz-qcard-fig"><b className="is-none">—</b><span>Recs</span></div>
-                        )}
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="qz-qtable-wrap">
-                <table className="qz-qtable">
-                  <thead>
-                    <tr>
-                      <th>Quiz</th>
-                      <th>Status</th>
-                      <th className="is-num">Questions</th>
-                      <th className="is-num">Recs</th>
-                      <th>Edited</th>
-                      <th className="is-act"><span className="qz-sr-only">Actions</span></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visible.map((q) => (
-                      <tr key={q.id}>
-                        <td>
-                          <div className="qz-qtable-name">
-                            <span
-                              className="qz-qtable-chip"
-                              style={{ background: q.thumb.isNew ? "var(--qz-ink-3)" : q.thumb.primary }}
-                              aria-hidden
-                            >
-                              {(q.thumb.headline || "Q").charAt(0).toUpperCase()}
-                            </span>
-                            <Link to={openTo(q)} title={q.name}>{q.name}</Link>
-                          </div>
-                        </td>
-                        <td><StatusTag status={q.status} inSetup={q.inSetup} /></td>
-                        <td className="is-num">{q.questions}</td>
-                        <td className={q.recs > 0 ? "is-num" : "is-num is-none"}>
-                          {q.recs > 0 ? recsTrigger(q, "qz-qtable-recs", q.recs) : <span>—</span>}
-                        </td>
-                        <td>{formatDate(q.updatedAt)}</td>
-                        <td className="is-act">
-                          <span className="qz-qtable-rowbtn">
-                            <Link to={openTo(q)} className="qz-btn qz-btn-ghost qz-btn-sm">
-                              {q.inSetup ? "Resume" : "Open"}
-                            </Link>
-                          </span>
-                          <QzMenu trigger={overflowTrigger} items={menuItems(q)} placement="bottom" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {hiddenCount > 0 ? (
-              <div className="qz-lib-viewmore">
-                <button
-                  type="button"
-                  className="qz-btn qz-btn-sm"
-                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                >
-                  View {Math.min(PAGE_SIZE, hiddenCount)} more
-                </button>
-              </div>
-            ) : null}
+                      {q.inSetup ? "Resume setup" : "Open builder"}
+                    </Link>
+                  </div>
+                </div>
+                <OpeningPanel opening={q.opening} />
+              </article>
+            ))}
           </div>
-        </>
-      )}
+        ) : (
+          <div className="qz-qtable-wrap">
+            <table className="qz-qtable">
+              <thead>
+                <tr>
+                  <th>Quiz</th>
+                  <th>Status</th>
+                  <th className="is-num">Questions</th>
+                  <th className="is-num">Recs</th>
+                  <th>Edited</th>
+                  <th className="is-act"><span className="qz-sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((q) => (
+                  <tr key={q.id}>
+                    <td>
+                      <div className="qz-qtable-name">
+                        <Link to={openTo(q)} title={q.name}>{q.name}</Link>
+                        <span title={q.opening?.text || undefined}>
+                          {q.opening ? q.opening.text || "Untitled question" : "No questions yet"}
+                        </span>
+                      </div>
+                    </td>
+                    <td><StatusTag status={q.status} inSetup={q.inSetup} /></td>
+                    <td className="is-num">{q.questions}</td>
+                    <td className={q.recs > 0 ? "is-num" : "is-num is-none"}>
+                      {q.recs > 0 ? recsTrigger(q, "qz-qtable-recs", q.recs) : <span>—</span>}
+                    </td>
+                    <td>{formatDate(q.updatedAt)}</td>
+                    <td className="is-act">
+                      <span className="qz-qtable-rowbtn">
+                        <Link to={openTo(q)} className="qz-btn qz-btn-ghost qz-btn-sm">
+                          {q.inSetup ? "Resume" : "Open"}
+                        </Link>
+                      </span>
+                      <QzMenu trigger={overflowTrigger(q)} items={menuItems(q)} placement="bottom" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {hiddenCount > 0 ? (
+          <div className="qz-lib-viewmore">
+            <button type="button" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+              View {Math.min(PAGE_SIZE, hiddenCount)} more
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {creating ? <CreateQuizDialog onClose={() => setCreating(false)} /> : null}
 
