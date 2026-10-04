@@ -3,6 +3,7 @@ import { AI_FEATURES, PLANS, PLAN_ORDER, nextPlanUp, selfServePlan } from "./cat
 import {
   apportion,
   breakEvenMark,
+  billForCycle,
   clampAmount,
   creditAlertToSend,
   creditFigures,
@@ -107,6 +108,34 @@ describe("creditSignal", () => {
   it("never shows nearly-out in a trial, but still shows over", () => {
     expect(creditSignal(at(390), true)).toBeNull();
     expect(creditSignal(at(401), true)).toBe("over");
+  });
+});
+
+describe("billForCycle", () => {
+  const bill = (credits: CycleCredits, used: number) =>
+    billForCycle(PLANS.growth, credits, creditFigures(PLANS.growth, credits, usage(used, 0, 0)));
+
+  it("is the plan alone for a shop with no added credits that stayed inside its credits", () => {
+    expect(bill(NO_EXTRA, 2020)).toEqual({ lines: [{ label: "Growth", cents: 20000 }], totalCents: 20000 });
+  });
+
+  it("adds every-cycle credits and extra credits as their own lines, and the total is their sum", () => {
+    // 2,200 + 180 added = 2,380 available; 2,511 used = 131 over at $0.10.
+    expect(bill({ ...NO_EXTRA, everyCycle: 180 }, 2511)).toEqual({
+      lines: [
+        { label: "Growth", cents: 20000 },
+        { label: "180 added credits", cents: 1800 },
+        { label: "131 extra credits", cents: 1310 },
+      ],
+      totalCents: 23110,
+    });
+  });
+
+  it("does not bill one-time or rolled-over credits again (they were paid for before)", () => {
+    expect(bill({ everyCycle: 0, oneTime: 500, rolledOver: 180 }, 2800)).toEqual({
+      lines: [{ label: "Growth", cents: 20000 }],
+      totalCents: 20000,
+    });
   });
 });
 

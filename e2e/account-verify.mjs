@@ -410,6 +410,43 @@ try {
   carried = await rolloverGrants(oldEnd);
   ok("a second load does not roll the credits over again", carried.length === 1);
 
+  /* ── 9d · A bill is stored at cycle close ONLY for a shop with a Shopify subscription ── */
+  const billsOf = () => prisma.shopBill.findMany({ where: { shopId: shop.id, billDate: oldEnd } });
+  ok("no bill is stored while Shopify billing is not connected", (await billsOf()).length === 0);
+  await seed({
+    billing: { plan: "starter", status: "active", cycleStart: oldStart, cycleEnd: oldEnd, shopifySubscriptionId: `${MARK}-sub`, billEmails: [] },
+  });
+  const usedClosed = (
+    await prisma.event.findMany({
+      where: { quizId: { in: shopQuizIds }, eventType: "quiz_engaged", ts: { gte: oldStart, lt: oldEnd } },
+      select: { quizId: true, sessionId: true },
+      distinct: ["quizId", "sessionId"],
+    })
+  ).length;
+  const overClosed = Math.max(0, usedClosed - 400);
+  const expectedTotal = 5000 + overClosed * 15;
+  await open("/studio/account");
+  let written = await billsOf();
+  billIds.push(...written.map((b) => b.id));
+  ok(
+    `a connected shop's closed cycle is stored as one bill (${usedClosed} used of 400 → ${expectedTotal}¢)`,
+    written.length === 1 &&
+      written[0].plan === "starter" &&
+      written[0].creditsAvailable === 400 &&
+      written[0].creditsUsed === usedClosed &&
+      written[0].creditsOver === overClosed &&
+      written[0].totalCents === expectedTotal,
+    JSON.stringify(written.map((b) => [b.plan, b.creditsAvailable, b.creditsUsed, b.creditsOver, b.totalCents])),
+  );
+  const billRow = await page.locator("section", { has: page.locator("#acct-bills") }).locator("tbody tr").first().innerText();
+  ok("Past bills shows the stored bill", /Starter/.test(billRow) && billRow.includes(`$${(expectedTotal / 100).toFixed(2)}`), billRow.replace(/\s+/g, " "));
+  await open("/studio/account");
+  written = await billsOf();
+  ok("a second load does not store the bill again", written.length === 1);
+  await prisma.shopBill.deleteMany({ where: { id: { in: billIds } } });
+  billIds.length = 0;
+  await prisma.shopBilling.update({ where: { shopId: shop.id }, data: { shopifySubscriptionId: null } });
+
   /* ── 9c · Bill emails: the receipt action and the once-per-cycle claim ── */
   await seed({ billing: { plan: "growth", status: "active", cycleStart, cycleEnd } });
   await prisma.shopBilling.update({ where: { shopId: shop.id }, data: { billEmails: [], alertNearSentFor: null } });

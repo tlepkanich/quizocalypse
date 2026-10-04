@@ -3,6 +3,7 @@ import { z } from "zod";
 import prisma from "../../db.server";
 import { sendEmail } from "../email.server";
 import { formatMonthDay, formatMonthDayYear } from "../formatDate";
+import { reportError } from "../log.server";
 import { receiptEmail, type BillEmailLinks } from "./billEmailMessages";
 import { checkNewBillEmail, parseBillEmails } from "./billEmails";
 import {
@@ -14,6 +15,7 @@ import {
   type SelfServePlanKey,
 } from "./catalog";
 import {
+  billForCycle,
   creditFigures,
   cycleAfter,
   daysLeftIn,
@@ -167,8 +169,11 @@ async function loadCycleCredits(billing: ShopBilling): Promise<CycleCredits> {
     Trial credits never roll over (assumed — the handoff does not say). The
     `cycleEnd` guard makes two concurrent loads close a cycle only once.
     A booked cancel (`cancelAt`) is not acted on here: taking quizzes off the
-    store is its own task. No ShopBill is written while billing is not
-    connected — nothing was charged. */
+    store is its own task.
+
+    The closed cycle's bill is stored (and its receipt sent) ONLY for a shop
+    with a Shopify subscription (owner, 2026-10-04): without one nothing was
+    charged, and a bill row must not record money that never moved. */
 async function closeCycle(billing: ShopBilling): Promise<ShopBilling> {
   const cycle: CycleWindow = { start: billing.cycleStart, end: billing.cycleEnd };
   const plan = selfServePlan(billing.plan);
@@ -183,8 +188,9 @@ async function closeCycle(billing: ShopBilling): Promise<ShopBilling> {
           used: figures.used,
         });
   const next = cycleAfter(cycle);
+  const bill = billing.shopifySubscriptionId ? billForCycle(plan, credits, figures) : null;
 
-  return prisma.$transaction(async (tx) => {
+  const { current, billId } = await prisma.$transaction(async (tx) => {
     const closed = await tx.shopBilling.updateMany({
       where: { id: billing.id, cycleEnd: billing.cycleEnd },
       data: {
@@ -195,13 +201,48 @@ async function closeCycle(billing: ShopBilling): Promise<ShopBilling> {
         cycleEnd: next.end,
       },
     });
-    if (closed.count === 1 && rollover > 0) {
-      await tx.creditGrant.create({
-        data: { shopId: billing.shopId, source: "rollover", credits: rollover, cycleStart: next.start },
-      });
+    let billId: string | null = null;
+    if (closed.count === 1) {
+      if (rollover > 0) {
+        await tx.creditGrant.create({
+          data: { shopId: billing.shopId, source: "rollover", credits: rollover, cycleStart: next.start },
+        });
+      }
+      if (bill) {
+        const stored = await tx.shopBill.create({
+          data: {
+            shopId: billing.shopId,
+            billDate: billing.cycleEnd,
+            plan: plan.key,
+            creditsAvailable: figures.available,
+            creditsUsed: figures.used,
+            creditsOver: figures.over,
+            lines: bill.lines,
+            totalCents: bill.totalCents,
+          },
+        });
+        billId = stored.id;
+      }
     }
-    return tx.shopBilling.findUniqueOrThrow({ where: { id: billing.id } });
+    return { current: await tx.shopBilling.findUniqueOrThrow({ where: { id: billing.id } }), billId };
   });
+  // "A receipt on every bill." Fire-and-forget: closing a cycle also runs on
+  // the shopper's path (the credit-alert check), and must not wait on email.
+  if (billId && billing.emailReceipt) void sendReceiptOnBillDate(billing.shopId, billId);
+  return current;
+}
+
+/** NEVER throws and never rejects. */
+async function sendReceiptOnBillDate(shopId: string, billId: string): Promise<void> {
+  try {
+    const shop = await prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { id: true, shopDomain: true, source: true },
+    });
+    if (shop) await sendBillReceipt(shop, billId);
+  } catch (err) {
+    reportError(err, { scope: "billing", msg: "receipt on bill date failed", shopId });
+  }
 }
 
 /** The shop's plan state, brought up to `now`. A shop with no record starts a
@@ -318,23 +359,24 @@ export async function loadAccountForShop(
 const BillLines = z.array(z.object({ label: z.string(), cents: z.number() })).catch([]);
 
 /** Send one bill's receipt to every saved address. Returns how many
-    addresses are saved and how many sends went through; null when the bill is
-    not this shop's. The bill writer calls this on the bill date (when
+    addresses are saved and which ones the receipt reached; null when the
+    bill is not this shop's. Closing a cycle calls this on the bill date (when
     `emailReceipt` is on); Past bills calls it on demand. */
 export async function sendBillReceipt(
   shop: Pick<Shop, "id" | "shopDomain" | "source">,
   billId: string,
-): Promise<{ saved: number; sent: number } | null> {
+): Promise<{ billDate: string; saved: number; sentTo: string[] } | null> {
   const [bill, billing] = await Promise.all([
     prisma.shopBill.findFirst({ where: { id: billId, shopId: shop.id } }),
     prisma.shopBilling.findUnique({ where: { shopId: shop.id }, select: { billEmails: true } }),
   ]);
   if (!bill) return null;
   const emails = parseBillEmails(billing?.billEmails);
-  if (emails.length === 0) return { saved: 0, sent: 0 };
+  const billDate = formatMonthDayYear(bill.billDate);
+  if (emails.length === 0) return { billDate, saved: 0, sentTo: [] };
   const content = receiptEmail({
     shopDomain: shop.shopDomain,
-    billDate: formatMonthDayYear(bill.billDate),
+    billDate,
     planName: selfServePlan(bill.plan).name,
     lines: BillLines.parse(bill.lines),
     totalCents: bill.totalCents,
@@ -345,8 +387,11 @@ export async function sendBillReceipt(
     links: billEmailLinks(),
   });
   const results = await Promise.allSettled(emails.map((to) => sendEmail({ to, ...content }, "billing")));
-  const sent = results.filter((result) => result.status === "fulfilled" && result.value.sent).length;
-  return { saved: emails.length, sent };
+  const sentTo = emails.filter((_, i) => {
+    const result = results[i];
+    return result?.status === "fulfilled" && result.value.sent;
+  });
+  return { billDate, saved: emails.length, sentTo };
 }
 
 /* ── Intents: bill emails, their three switches, and a bill's receipt ────── */
@@ -381,11 +426,11 @@ export async function runAccountIntentForShop(
     const receipt = await sendBillReceipt(shop, intent.billId);
     if (!receipt) return { ok: false, status: 404, message: "That bill isn't on this account." };
     if (receipt.saved === 0) return { ok: false, status: 422, message: "Save an email under Bill emails first." };
-    if (receipt.sent === 0) return { ok: false, status: 502, message: "The receipt wasn't sent. Try again." };
-    return {
-      ok: true,
-      message: receipt.sent === 1 ? "Receipt sent to 1 address." : `Receipt sent to ${receipt.sent} addresses.`,
-    };
+    if (receipt.sentTo.length === 0) {
+      return { ok: false, status: 502, message: "The receipt wasn't sent. Try again." };
+    }
+    const reached = receipt.sentTo.length === 1 ? receipt.sentTo[0] : `${receipt.sentTo.length} addresses`;
+    return { ok: true, message: `Receipt for ${receipt.billDate} sent to ${reached}.` };
   }
 
   const billing = await ensureBillingForShop(shop.id, now);

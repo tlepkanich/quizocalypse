@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AccountData, AccountIntentResult } from "../../../lib/billing/account.server";
 import { PLANS, aiRateRange, nextPlanUp, type SelfServePlan } from "../../../lib/billing/catalog";
 import {
+  billForCycle,
   creditFigures,
   creditSignal,
   creditsCents,
@@ -90,22 +91,12 @@ function PlanCard({ data, plan, figures }: CardProps) {
           </b>
           <p className="acct-bill-when">{data.dates.billDateLong}</p>
           <div className="acct-bill-how">
-            <span>
-              {plan.name}
-              <i>{fmtUsd(plan.price * 100)}</i>
-            </span>
-            {data.credits.everyCycle > 0 ? (
-              <span>
-                {fmtNum(data.credits.everyCycle)} added credits
-                <i>{fmtUsd(figures.everyCycleCents)}</i>
+            {billForCycle(plan, data.credits, figures).lines.map((line) => (
+              <span key={line.label}>
+                {line.label}
+                <i>{fmtUsd(line.cents)}</i>
               </span>
-            ) : null}
-            {figures.over > 0 ? (
-              <span>
-                {fmtNum(figures.over)} extra credits
-                <i>{fmtUsd(figures.overCents)}</i>
-              </span>
-            ) : null}
+            ))}
             {data.inTrial ? <span>Cancel before then and you pay nothing.</span> : null}
           </div>
         </div>

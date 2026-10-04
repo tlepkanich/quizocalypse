@@ -133,6 +133,30 @@ export function creditSignal(figures: CreditFigures, inTrial: boolean): "over" |
   return !inTrial && figures.share >= NEAR_OUT_SHARE ? "near" : null;
 }
 
+/** One priced item on a bill. */
+export type BillLine = { label: string; cents: number };
+
+export interface CycleBill {
+  /** The plan, added credits if any, extra credits if over — in that order. */
+  lines: BillLine[];
+  /** USD cents before tax. */
+  totalCents: number;
+}
+
+/** The bill for a cycle: the plan, the credits added every cycle, and the
+    credits used past what was available. The page's bill box shows it while
+    the cycle runs ("so far" while over); the stored bill is the same thing
+    on the cycle's last day. One-time credits are paid for when bought, so
+    they are not on it. */
+export function billForCycle(plan: SelfServePlan, credits: CycleCredits, figures: CreditFigures): CycleBill {
+  const lines: BillLine[] = [{ label: plan.name, cents: plan.price * 100 }];
+  if (credits.everyCycle > 0) {
+    lines.push({ label: `${fmtNum(credits.everyCycle)} added credits`, cents: figures.everyCycleCents });
+  }
+  if (figures.over > 0) lines.push({ label: `${fmtNum(figures.over)} extra credits`, cents: figures.overCents });
+  return { lines, totalCents: figures.nextBillCents };
+}
+
 export type CreditAlert = "near" | "out";
 
 /** What the alert emails need to know about a shop's switches and what has
