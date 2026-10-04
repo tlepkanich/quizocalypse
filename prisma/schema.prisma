@@ -90,6 +90,8 @@ model Shop {
   categories     Category[]
   quizzes        Quiz[]
   savedTemplates SavedTemplate[]
+  billing        ShopBilling?
+  creditGrants   CreditGrant[]
 }
 
 // Builder Re-work Step 2: a merchant-saved "battle card" template (a serialized
@@ -533,4 +535,96 @@ model QuizOfferGrant {
 
   @@unique([quizId, sessionId])
   @@index([quizId, email])
+}
+
+// Account & Billing (docs/design/settings/billing/BILLING-HANDOFF.md, "What
+// must be recorded"). Plan keys, prices, credits and AI rates live in ONE
+// list, app/lib/billing/catalog.ts — these tables store keys and counts only.
+//
+// Plan state per shop, plus the bill-email settings. One row per shop, made
+// on the first open of Account (a free trial on the default plan).
+model ShopBilling {
+  id     String @id @default(cuid())
+  shopId String @unique
+  // A plan key from catalog.ts ("starter" | "growth").
+  plan   String
+  // "trial" | "active". A booked cancel is `cancelAt`, not a status.
+  status String
+  // The current cycle. `cycleEnd` is EXCLUSIVE: it is the next bill date (in
+  // a trial, the day the trial ends and the first bill is due).
+  cycleStart DateTime
+  cycleEnd   DateTime
+  // Credits added on every bill until removed.
+  everyCycleCredits Int @default(0)
+  // A downgrade booked for the next bill date.
+  pendingPlan String?
+  // Set when the plan is cancelled: it stays on until this date.
+  cancelAt    DateTime?
+  // The Shopify AppSubscription this row mirrors. Null until Shopify billing
+  // is connected — while null, nothing is charged and no ShopBill is written.
+  shopifySubscriptionId String?
+  // Saved bill-email addresses (string[], lower-cased) and the three switches.
+  billEmails     Json?
+  emailReceipt   Boolean  @default(true)
+  emailAlertNear Boolean  @default(true)
+  emailAlertOut  Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+}
+
+// Credits a shop holds in ONE cycle beyond the plan's own and the every-cycle
+// credits (both read from ShopBilling): a one-time purchase, or what rolled
+// over from the cycle before. `cycleStart` names the cycle they can be spent
+// in; they expire when that cycle ends.
+model CreditGrant {
+  id         String   @id @default(cuid())
+  shopId     String
+  // "one_time" | "rollover"
+  source     String
+  credits    Int
+  cycleStart DateTime
+  createdAt  DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, cycleStart])
+}
+
+// One row per use of a per-use AI feature on a live quiz (catalog.ts
+// AI_FEATURES). `milliCredits` is the rate at the time of the use, in
+// thousandths of a credit, so a later rate change never rewrites history.
+// Quiz engagements are NOT stored here: they are the `quiz_engaged` rows of
+// Event, the same rows Home and Analytics count. No FK on purpose (the
+// AiUsage precedent): a usage ledger must survive quiz and shop-row churn.
+model CreditUse {
+  id           String   @id @default(cuid())
+  shopId       String
+  quizId       String
+  feature      String
+  sessionId    String?
+  milliCredits Int
+  ts           DateTime @default(now())
+
+  @@index([shopId, ts])
+}
+
+// Our own record of a bill, in USD before tax (an app cannot read the
+// merchant's Shopify invoice). Written when a cycle closes on a shop whose
+// Shopify billing is connected. No FK: a bill outlives the shop row.
+model ShopBill {
+  id               String   @id @default(cuid())
+  shopId           String
+  billDate         DateTime
+  plan             String
+  creditsAvailable Int
+  creditsUsed      Int
+  creditsOver      Int
+  // [{ label: string, cents: number }] — the plan, added credits, extra credits.
+  lines            Json
+  totalCents       Int
+  createdAt        DateTime @default(now())
+
+  @@index([shopId, billDate])
 }

@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { formatDate, formatDateTime, formatTimeAgo } from "./formatDate";
+import {
+  formatDate,
+  formatDateTime,
+  formatMonthDay,
+  formatMonthDayYear,
+  formatTimeAgo,
+} from "./formatDate";
 
 describe("formatDate", () => {
   it("formats an ISO string as M/D/YYYY in UTC", () => {
@@ -56,5 +62,18 @@ describe("formatDateTime", () => {
   });
   it("returns empty string for null input", () => {
     expect(formatDateTime(null)).toBe("");
+  });
+});
+
+describe("formatMonthDay / formatMonthDayYear", () => {
+  it("prints the UTC date, whatever the time of day", () => {
+    expect(formatMonthDay("2026-10-19T00:00:00Z")).toBe("Oct 19");
+    expect(formatMonthDay("2026-10-19T23:59:59Z")).toBe("Oct 19");
+    expect(formatMonthDayYear(new Date("2026-01-05T12:00:00Z"))).toBe("Jan 5, 2026");
+  });
+
+  it("prints nothing for a missing or invalid date", () => {
+    expect(formatMonthDay(null)).toBe("");
+    expect(formatMonthDayYear("not a date")).toBe("");
   });
 });

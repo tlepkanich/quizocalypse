@@ -26,6 +26,22 @@ export function formatDate(input: string | number | Date | null | undefined): st
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** `Oct 19` in UTC — stable across server/client timezones. */
+export function formatMonthDay(input: string | number | Date | null | undefined): string {
+  const d = toDate(input);
+  if (!d) return "";
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+/** `Oct 19, 2026` in UTC — stable across server/client timezones. */
+export function formatMonthDayYear(input: string | number | Date | null | undefined): string {
+  const d = toDate(input);
+  if (!d) return "";
+  return `${formatMonthDay(d)}, ${d.getUTCFullYear()}`;
+}
+
 /** `M/D/YYYY, h:mm AM/PM` in UTC — stable across server/client timezones. */
 export function formatDateTime(input: string | number | Date | null | undefined): string {
   const d = toDate(input);

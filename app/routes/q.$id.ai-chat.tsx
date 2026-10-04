@@ -6,6 +6,7 @@ import { runAskAIChat, type AskAIMessage } from "../lib/claude";
 import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
 import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
+import { recordCreditUse } from "../lib/billing/creditUse.server";
 import { corsPreflight, withCors } from "../lib/publicCors";
 import { reportError } from "../lib/log.server";
 import type { IndexedProduct } from "../lib/recommendationEngine";
@@ -157,6 +158,9 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
         ...(brandGuidelines ? { brandGuidelines } : {}),
       }),
     );
+    // Billing — one AI reply is one charged use. Fire-and-forget:
+    // recordCreditUse never rejects.
+    void recordCreditUse({ shopId: quiz.shopId, quizId: id, feature: "ask_ai" });
     return json({ reply: result.reply });
   } catch (err) {
     reportError(err, { scope: "ai-chat", msg: "shopper chat failed", quizId: id, shopId: quiz.shopId });

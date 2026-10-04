@@ -87,6 +87,7 @@
   --qz-accent-wash: #EFECFD;   /* selected rows, active nav, focus tint */
   --qz-accent-grad: #5B45D6;   /* Quartz has no gradients — flat on purpose */
   --qz-accent-line: #D5CDF8;   /* border on accent-washed surfaces */
+  --qz-accent-cell: #FAF9FF;   /* fill of a selected tile (Change plan: your plan) */
   /* Trap (a) — --qz-color-primary was referenced 42× in this sheet and never
      defined; every site fell back to a hardcoded literal that would NOT move
      with the accent. Defined here as the accent alias; preview subtrees still
@@ -97,6 +98,7 @@
   --qz-ok:          #0F6B45;
   --qz-warn:        #8A5300;
   --qz-crit:        #A5241C;
+  --qz-crit-2:      #8A1D17;  /* hover on a destructive confirm */
   --qz-draft-wash:  #F5F4F8;  --qz-draft-ink:  #645E78;
   --qz-live-wash:   #E7F3ED;  --qz-live-ink:   #0F6B45;
   /* HOME-3 — the teal SIGNAL (owner-approved 2026-09-30, "Teal B"): the one
@@ -104,6 +106,9 @@
      (hue 189°) so it never reads as the ok green (155°). 5.59:1 on white,
      4.82:1 on its wash. Use ONLY for that signal. */
   --qz-teal:        #0B7285;  --qz-teal-wash:  #E2F1F5;
+  /* Account & Billing — the same signal, for credits that cost money if
+     ignored: hover (-2) and text on the wash (-ink). */
+  --qz-teal-2:      #095E6E;  --qz-teal-ink:   #0A4A57;
   /* repo-only derived wash (was an additive :root patch further down) */
   --qz-warn-wash:   color-mix(in srgb, var(--qz-warn) 14%, var(--qz-paper));
 
@@ -1493,21 +1498,16 @@ body[data-qz] ::selection { background: var(--qz-ink); color: var(--qz-cream); }
 }
 .qz-rail.is-collapsed .qz-rail-collapse { align-self: center; }
 
-/* Footer: divider, then the account row. Collapsed, the row stacks so the
-   theme toggle sits icon-only below the avatar. */
-.qz-rail-foot { border-top: 1px solid var(--qz-rule); padding-top: 14px; }
-.qz-rail-account { display: flex; align-items: center; gap: 10px; padding: 0 2px; }
-.qz-rail-account > .qz-rail-label { flex: 1 1 auto; font-size: 13.5px; font-weight: 500; }
+/* Footer: divider, then the Account row (a nav row that carries the Wiskr
+   mark, linking to /studio/account) and Sign out. */
+.qz-rail-foot { display: grid; gap: 2px; border-top: 1px solid var(--qz-rule); padding-top: 14px; }
+.qz-rail-item.qz-rail-acct { gap: 9px; padding: 7px 12px 7px 10px; }
 /* Avatar — HOME-3 (handoff §13.3): the Wiskr mark, same 22px footprint,
    no fill, no letter. */
 .qz-rail-avatar {
   width: 22px; height: 22px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.qz-rail.is-collapsed .qz-rail-account { flex-direction: column; gap: 8px; padding: 0; }
-/* The account label would still hold flex space when merely invisible, so it
-   is display-removed in the collapsed column (no fade — pragmatic). */
-.qz-rail.is-collapsed .qz-rail-account > .qz-rail-label { display: none; }
 
 /* ── QD-3 / P2 Edit 6+12 Home CSS — REMOVED (QRTZ-S1, 2026-08-11) ──────────
    The old Home dashboard (action cards, inspiration gallery, hero banner +
@@ -9626,8 +9626,6 @@ body[data-qz] .qz-cust-row:focus-visible {
   .qz-rail .qz-rail-item[aria-current="page"]::before { display: none; }
   .qz-rail .qz-rail-soon { display: none; }
   .qz-rail .qz-rail-collapse { display: none; }
-  .qz-rail .qz-rail-account { flex-direction: column; gap: 8px; padding: 0; }
-  .qz-rail .qz-rail-account > .qz-rail-label { display: none; }
 }
 
 /* — QzStat: meld stat order (meld.mjs MELD_SCALE) — the figure leads at
@@ -13199,3 +13197,269 @@ body[data-qz] .qz-lg-aqbox :is(.qz-lg-aqfi, .qz-lg-aqai):focus-visible {
 .qz-lg-aqfoot .qz-lg-btn:disabled {
   border-color: var(--qz-rule); background: var(--qz-cream-2); color: var(--qz-ink-25); cursor: default;
 }
+
+/* ── Account & Billing — /studio/account and /studio/account/plan ──────────
+   Built to docs/design/settings/billing (BILLING-HANDOFF.md + the mock).
+   Prefixed `acct-`. The shell is Home's: the Crest ground, one 840px column,
+   22px cards on --qz-edge (the `hm3-card` / `hm3-lbl` classes themselves, so
+   this page never has its own card values). Inner boxes: 12px radius, a 1px
+   --qz-rule border, --qz-ls-cell-bg fill, no shadow. Teal only when money is
+   on the line; red only on destructive confirms and the email error; green
+   only on the Active chip. Light only, desktop only, nothing animates. */
+.acct {
+  flex: 1 1 auto; display: flex; justify-content: center; align-items: flex-start;
+  padding: 26px 32px 56px; background: var(--qz-ground-crest);
+  font-size: 14px; line-height: 1.45; color: var(--qz-ink);
+}
+.acct-col { width: 100%; max-width: 840px; display: flex; flex-direction: column; gap: 18px; }
+/* Zero specificity, so every acct- class below can set its own margin. */
+:where(.acct) :where(h1, h2, p, dl, dd, ul) { margin: 0; }
+:where(.acct) ul { padding: 0; list-style: none; }
+.acct-num, .acct table, .acct dd { font-variant-numeric: tabular-nums; }
+.acct-ic {
+  display: block; flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor;
+  stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+}
+.acct-pad { padding: 22px 26px 24px; }
+.acct-sechead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
+.acct-sechead h2 { font-size: 17px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; }
+.acct-aside { margin-left: auto; font-size: 13px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.acct-sub { font-size: 13.5px; color: var(--qz-ink-3); font-variant-numeric: tabular-nums; }
+
+/* Buttons and links (pill controls, Home's shapes). */
+.acct-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px;
+  padding: 11px 20px; border: 0; border-radius: 999px; background: var(--qz-accent);
+  color: var(--qz-on-accent); cursor: pointer; font: inherit; font-size: 14.5px; font-weight: 600;
+  line-height: 1; white-space: nowrap; text-decoration: none; font-variant-numeric: tabular-nums;
+}
+.acct-btn:hover { background: var(--qz-accent-2); }
+.acct-btn:focus-visible, .acct-link:focus-visible, .acct-back:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+.acct-btn.is-sm { min-height: 34px; padding: 9px 16px; font-size: 13.5px; }
+.acct-btn.is-quiet { background: var(--qz-paper); color: var(--qz-ink); box-shadow: inset 0 0 0 1px var(--qz-rule); }
+.acct-btn.is-quiet:hover { background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+.acct-btn.is-quiet:focus-visible { box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-shadow-focus); }
+.acct-btn.is-crit { background: var(--qz-crit); }
+.acct-btn.is-crit:hover { background: var(--qz-crit-2); }
+.acct-btn.is-teal { background: var(--qz-teal); }
+.acct-btn.is-teal:hover { background: var(--qz-teal-2); }
+.acct-link {
+  display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; border-radius: 4px;
+  background: none; cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600;
+  color: var(--qz-accent-2); text-decoration: none;
+}
+.acct-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.acct-link .acct-ic { width: 13px; height: 13px; stroke-width: 2; }
+.acct-tag {
+  flex: none; display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
+}
+.acct-tag.is-live { background: var(--qz-live-wash); color: var(--qz-ok); }
+.acct-tag.is-trial { background: var(--qz-accent-wash); color: var(--qz-accent-2); }
+.acct-tag.is-quiet { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+
+/* Page headers. */
+.acct-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; padding: 18px 22px 18px 26px; }
+.acct-head h1 { font-size: 30px; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; }
+.acct-head-back { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.acct-back {
+  flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 999px;
+  background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-rule); color: var(--qz-ink);
+}
+.acct-back:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+.acct-back .acct-ic { width: 17px; height: 17px; stroke-width: 2; }
+.acct-head-now { font-size: 13.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.acct-head-now b { color: var(--qz-ink); font-weight: 700; }
+
+/* Your plan + the bill box. */
+.acct-plan { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 20px 28px; align-items: stretch; padding: 22px 26px 24px; }
+.acct-plan-me { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.acct-plan-name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+.acct-plan-name b { margin-right: 2px; font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+.acct-plan-acts { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin-top: auto; padding-top: 8px; }
+.acct-bill { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px 15px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); }
+.acct-bill > b { font-size: 27px; font-weight: 800; line-height: 1.1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.acct-bill > b small { font-size: 12.5px; font-weight: 600; letter-spacing: 0; color: var(--qz-ink-4); }
+.acct-bill-when { font-size: 13.5px; font-weight: 600; color: var(--qz-ink); }
+.acct-bill-how { display: grid; gap: 1px; font-size: 12.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.acct-bill-how span { display: flex; justify-content: space-between; gap: 12px; }
+.acct-bill-how i { font-style: normal; }
+
+/* Credits: the figure, the meter, the signal. */
+.acct-fig { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-top: 14px; }
+.acct-fig b { font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.acct-fig span { font-size: 14.5px; color: var(--qz-ink-3); font-variant-numeric: tabular-nums; }
+.acct-fig.is-over b { color: var(--qz-teal); }
+.acct-meter { display: flex; height: 12px; margin-top: 14px; border-radius: 999px; overflow: hidden; background: var(--qz-rule-2); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qz-ink) 5%, transparent); }
+.acct-meter i { display: block; height: 100%; }
+.acct-meter .is-used { background: var(--qz-accent); }
+.acct-meter .is-over { background: var(--qz-teal); box-shadow: inset 2px 0 0 var(--qz-paper); }
+.acct-meter-ax { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.acct-signal { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 16px; padding: 12px 14px 12px 16px; border-radius: 12px; background: var(--qz-teal-wash); color: var(--qz-teal-ink); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.acct-signal p { flex: 1 1 280px; min-width: 0; }
+.acct-signal b { font-weight: 700; }
+
+/* Used / Current cycle. */
+.acct-ledger { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 36px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--qz-rule-2); }
+.acct-lg dl { margin-top: 6px; }
+.acct-lg dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2); }
+.acct-lg dl > div:last-child { border-bottom: 0; }
+.acct-lg dt { min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); }
+.acct-lg dt small { display: block; font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.acct-lg dd { flex: none; font-size: 14px; font-weight: 600; }
+.acct-lg .is-total dt { font-weight: 700; color: var(--qz-ink); }
+.acct-lg .is-total dd { font-size: 15px; font-weight: 800; }
+/* AI features: one line per feature, nested under the AI total. */
+.acct-lg dl > div.has-sub { padding-bottom: 5px; border-bottom: 0; }
+.acct-lg dl > div.is-sub { margin-left: 2px; padding: 4px 0 4px 12px; border-bottom: 0; border-left: 2px solid var(--qz-rule); }
+.acct-lg dl > div.is-sub.is-last { margin-bottom: 10px; }
+.acct-lg dl > div.is-sub.is-last + div { border-top: 1px solid var(--qz-rule-2); }
+.acct-lg .is-sub dt { font-size: 13px; }
+.acct-lg .is-sub dt small { display: inline; margin-left: 7px; }
+.acct-lg .is-sub dd { font-size: 13px; font-weight: 500; color: var(--qz-ink-3); }
+
+/* The "i" beside Credits: opens on hover, focus or click. */
+.acct-h2i { display: flex; align-items: center; gap: 8px; }
+.acct-info { position: relative; display: inline-flex; }
+.acct-info-btn {
+  width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 999px;
+  background: var(--qz-cream-2); box-shadow: inset 0 0 0 1px var(--qz-rule); color: var(--qz-ink-3);
+  cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; line-height: 1;
+}
+.acct-info-btn:hover, .acct-info.is-open .acct-info-btn { background: var(--qz-accent-wash); box-shadow: inset 0 0 0 1px var(--qz-accent-line); color: var(--qz-accent-2); }
+.acct-info-btn:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-shadow-focus); }
+.acct-info-pop {
+  position: absolute; top: calc(100% + 8px); left: -12px; z-index: 5; display: none; gap: 8px;
+  width: min(360px, calc(100vw - 64px)); padding: 13px 15px; border-radius: 12px; background: var(--qz-paper);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--qz-ink) 10%, transparent), var(--qz-lift-2);
+}
+.acct-info:hover .acct-info-pop, .acct-info:focus-within .acct-info-pop, .acct-info.is-open .acct-info-pop { display: grid; }
+.acct-info.is-shut .acct-info-pop { display: none; }
+.acct-info-pop > span { display: grid; grid-template-columns: 98px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.acct-info-pop b { font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.acct-info-pop i { font-size: 13px; font-style: normal; color: var(--qz-ink-3); }
+
+/* Tables: By quiz and Past bills. */
+.acct-twrap { margin-top: 8px; overflow-x: auto; }
+.acct table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.acct th { padding: 10px 12px 9px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; text-align: left; color: var(--qz-ink-4); white-space: nowrap; }
+.acct td { padding: 11px 12px 11px 0; border-top: 1px solid var(--qz-rule-2); white-space: nowrap; color: var(--qz-ink-3); }
+.acct td:first-child { color: var(--qz-ink); font-weight: 600; }
+.acct td.is-r, .acct th.is-r { text-align: right; }
+.acct td.is-total { color: var(--qz-ink); font-weight: 700; }
+.acct-byq { margin-top: 12px; padding-top: 18px; border-top: 1px solid var(--qz-rule-2); }
+.acct-byq .acct-twrap { margin-top: 2px; }
+.acct-byq td:first-child { white-space: normal; min-width: 180px; }
+.acct-byq tr.is-sum td { border-top-color: var(--qz-rule); color: var(--qz-ink); font-weight: 700; }
+.acct-none { color: var(--qz-ink-25); }
+.acct-how { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--qz-rule-2); font-size: 12.5px; color: var(--qz-ink-4); max-width: 74ch; }
+.acct-empty { margin-top: 12px; padding: 18px 16px; border: 1px dashed var(--qz-rule); border-radius: 12px; font-size: 13.5px; color: var(--qz-ink-4); text-align: center; }
+.acct-hist-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; padding-top: 13px; border-top: 1px solid var(--qz-rule-2); font-size: 12.5px; color: var(--qz-ink-4); }
+
+/* Bill emails. */
+.acct-mail-to { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.acct-field { flex: 1 1 260px; min-width: 0; max-width: 380px; display: grid; gap: 6px; }
+.acct-field label { font-size: 13px; font-weight: 600; color: var(--qz-ink-3); }
+.acct-field input {
+  width: 100%; height: 38px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--qz-paper);
+  box-shadow: inset 0 0 0 1px var(--qz-ink-25); color: var(--qz-ink); font: inherit; font-size: 14px;
+}
+.acct-field input::placeholder { color: var(--qz-ink-4); }
+.acct-field input:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+.acct-field input:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-shadow-focus); }
+.acct-mail-err { margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--qz-crit); }
+.acct-mail-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.acct-mail-list li { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 4px 4px 14px; border-radius: 999px; background: var(--qz-accent-wash); color: var(--qz-ink); font-size: 13.5px; font-weight: 600; }
+.acct-mail-list li span { min-width: 0; overflow-wrap: anywhere; }
+.acct-mail-list button { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 999px; background: transparent; color: var(--qz-ink-4); cursor: pointer; }
+.acct-mail-list button:hover { background: var(--qz-paper); color: var(--qz-crit); }
+.acct-mail-list button:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+.acct-mail-list button .acct-ic { width: 13px; height: 13px; stroke-width: 2.2; }
+.acct-mail-none { margin-top: 12px; font-size: 13px; color: var(--qz-ink-4); }
+.acct-sws { margin-top: 16px; border-top: 1px solid var(--qz-rule-2); }
+.acct-swrow { display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--qz-rule-2); cursor: pointer; }
+.acct-swrow:last-child { border-bottom: 0; padding-bottom: 0; }
+.acct-swrow > span { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
+.acct-swrow > span small { display: block; font-size: 12.5px; font-weight: 400; color: var(--qz-ink-4); }
+.acct-sw { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 34px; height: 20px; margin: 0; border-radius: 999px; background: var(--qz-ink-25); cursor: pointer; }
+.acct-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px; background: var(--qz-paper); box-shadow: var(--qz-lift-1); }
+.acct-sw:checked { background: var(--qz-accent); }
+.acct-sw:checked::after { transform: translateX(14px); }
+.acct-sw:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+
+/* Change plan: the three plans. */
+.acct-plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+.acct-pl { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-paper); }
+.acct-pl.is-current { border-color: var(--qz-accent-line); background: var(--qz-accent-cell); box-shadow: inset 0 0 0 1px var(--qz-accent-line); }
+.acct-pl-name { font-size: 15px; font-weight: 700; }
+.acct-pl-price { display: flex; align-items: baseline; gap: 5px; }
+.acct-pl-price b { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.acct-pl-price span { font-size: 13px; color: var(--qz-ink-4); }
+.acct-pl-cr { font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.acct-pl-cr small { display: block; font-size: 12.5px; font-weight: 400; color: var(--qz-ink-4); }
+.acct-pl ul { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--qz-rule-2); font-size: 13px; color: var(--qz-ink-3); }
+.acct-pl li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; align-items: start; }
+.acct-pl li .acct-ic { width: 14px; height: 14px; margin-top: 2px; stroke-width: 2.2; color: var(--qz-accent); }
+.acct-pl .acct-btn, .acct-pl-now { margin-top: auto; }
+.acct-pl-now { display: flex; align-items: center; justify-content: center; min-height: 34px; border-radius: 999px; background: var(--qz-accent-wash); color: var(--qz-accent-2); font-size: 13.5px; font-weight: 600; }
+.acct-note { margin-top: 14px; font-size: 12.5px; color: var(--qz-ink-4); }
+
+/* Change plan: more credits. */
+.acct-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--qz-cream-2); }
+.acct-seg button { display: inline-flex; align-items: center; height: 32px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent; color: var(--qz-ink-3); cursor: pointer; font: inherit; font-size: 13.5px; font-weight: 600; line-height: 1; }
+.acct-seg button:hover { color: var(--qz-ink); }
+.acct-seg button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-accent-2); box-shadow: inset 0 0 0 1px var(--qz-accent-line); }
+.acct-seg button:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+.acct-mc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 16px; }
+.acct-mc-row .acct-sub { flex: 1 1 240px; min-width: 0; }
+/* The amount: a slider for the rough number, a field for the exact one. */
+.acct-amt { margin-top: 16px; padding: 18px 20px 14px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); }
+.acct-amt-top { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 10px 20px; }
+.acct-amt-num { display: flex; align-items: baseline; gap: 8px; }
+.acct-amt-num input {
+  width: 5.2em; height: 46px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--qz-paper);
+  box-shadow: inset 0 0 0 1px var(--qz-ink-25); color: var(--qz-ink); font: inherit; font-size: 27px; font-weight: 800;
+  letter-spacing: -.035em; font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield;
+}
+.acct-amt-num input::-webkit-outer-spin-button, .acct-amt-num input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.acct-amt-num input:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+.acct-amt-num input:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-shadow-focus); }
+.acct-amt-num label { font-size: 14.5px; font-weight: 600; color: var(--qz-ink-3); }
+.acct-amt-cost { text-align: right; font-variant-numeric: tabular-nums; }
+.acct-amt-cost b { display: block; font-size: 27px; font-weight: 800; line-height: 1.1; letter-spacing: -.035em; }
+.acct-amt-cost span { font-size: 12.5px; color: var(--qz-ink-4); }
+.acct-slide { position: relative; margin-top: 16px; }
+.acct-slide input { --p: 20%; display: block; width: 100%; height: 24px; margin: 0; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; border-radius: 999px; }
+.acct-slide input::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--qz-accent) var(--p), var(--qz-rule) var(--p)); }
+.acct-slide input::-moz-range-track { height: 8px; border-radius: 999px; background: var(--qz-rule); }
+.acct-slide input::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--qz-accent); }
+.acct-slide input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -7px; border: 0; border-radius: 999px; background: var(--qz-paper); box-shadow: 0 0 0 2px var(--qz-accent), var(--qz-lift-1); }
+.acct-slide input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 999px; background: var(--qz-paper); box-shadow: 0 0 0 2px var(--qz-accent), var(--qz-lift-1); }
+.acct-slide input:focus-visible { outline: none; box-shadow: var(--qz-shadow-focus); }
+/* The mark where the next plan costs the same. */
+.acct-slide-mark { position: absolute; top: 3px; left: calc(11px + (100% - 22px) * var(--at)); width: 2px; height: 18px; margin-left: -1px; border-radius: 1px; background: var(--qz-ink-25); pointer-events: none; }
+.acct-slide-ax { position: relative; display: flex; justify-content: space-between; gap: 12px; height: 18px; margin-top: 2px; font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.acct-slide-ax b { position: absolute; top: 0; left: calc(11px + (100% - 22px) * var(--at)); transform: translateX(-50%); font-weight: 600; color: var(--qz-ink-3); white-space: nowrap; }
+.acct-mc-buy { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; margin-top: 16px; }
+.acct-mc-buy p { flex: 1 1 280px; min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); font-variant-numeric: tabular-nums; }
+.acct-mc-have { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; padding: 12px 16px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.acct-nudge { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 16px; padding: 13px 14px 13px 16px; border-radius: 12px; background: var(--qz-accent-wash); font-size: 13.5px; color: var(--qz-ink); font-variant-numeric: tabular-nums; }
+.acct-nudge p { flex: 1 1 280px; min-width: 0; }
+.acct-nudge b { font-weight: 700; }
+.acct-cancel { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 20px; padding: 16px 22px 16px 26px; }
+.acct-cancel p { flex: 1 1 300px; min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); }
+
+/* The confirm dialog (QzModal sm): every plan or credit action is confirmed here. */
+.qz-modal.acct-dlg { gap: 14px; padding: 24px 26px 22px; border-radius: 22px; }
+.qz-modal.acct-dlg .qz-modal-title { font-size: 21px; line-height: 1.25; text-wrap: balance; }
+.acct-dlg .qz-modal-body { display: flex; flex-direction: column; gap: 14px; }
+:where(.acct-dlg) :where(p, dl, dd, ul) { margin: 0; }
+.acct-dlg dl { border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); }
+.acct-dlg dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--qz-rule-2); }
+.acct-dlg dl > div:last-child { border-bottom: 0; }
+.acct-dlg dt { font-size: 13px; color: var(--qz-ink-4); }
+.acct-dlg dd { font-size: 14px; font-weight: 700; text-align: right; color: var(--qz-ink); font-variant-numeric: tabular-nums; }
+.acct-dlg dd s { font-weight: 500; color: var(--qz-ink-4); text-decoration: none; }
+.acct-dlg ul { display: grid; gap: 6px; padding: 0; list-style: none; font-size: 13.5px; }
+.acct-dlg li { display: grid; grid-template-columns: 6px minmax(0, 1fr); gap: 10px; }
+.acct-dlg li::before { content: ""; width: 6px; height: 6px; margin-top: 7px; border-radius: 999px; background: var(--qz-ink-25); }

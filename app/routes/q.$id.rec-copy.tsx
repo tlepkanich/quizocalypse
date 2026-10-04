@@ -15,6 +15,7 @@ import { parseBrandGuidelinesSafe } from "../lib/brandGuidelines";
 import { rateLimit } from "../lib/rateLimiters";
 import { recCopyCacheKey, resolveRecCopy } from "../lib/recCopyCache.server";
 import { checkAiBudget, withAiSpendRecording } from "../lib/aiBudget.server";
+import { recordCreditUse } from "../lib/billing/creditUse.server";
 import { corsPreflight, withCors } from "../lib/publicCors";
 
 // LOGIC v2 L2-12b — the per-shopper runtime rec-copy endpoint (rec-page-spec-V2
@@ -205,6 +206,10 @@ async function actionImpl({ request, params }: ActionFunctionArgs) {
         }),
       ),
     );
+    // Billing — one results page shown with AI copy is one charged use. A
+    // reused (cached) answer costs the same as a fresh one, so this records
+    // on both. Fire-and-forget: recordCreditUse never rejects.
+    void recordCreditUse({ shopId: quiz.shopId, quizId: id, feature: "rec_copy", sessionId });
     return json({ ok: true, copy, cached });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

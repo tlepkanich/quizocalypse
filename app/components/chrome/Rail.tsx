@@ -137,19 +137,23 @@ export function Rail({ signals }: { signals?: RailSignals } = {}) {
       </button>
 
       <div className="qz-rail-foot">
-        <div className="qz-rail-account">
-          {/* The Wiskr mark marks the row that belongs to the person using the app. */}
+        {/* Account & Billing — the row that belongs to the person using the
+            app: the Wiskr mark, linking to /studio/account. No `end`, so it
+            stays active on /studio/account/plan too. */}
+        <NavLink
+          to="/studio/account"
+          className="qz-rail-item qz-rail-acct"
+          title={collapsed ? "Account" : undefined}
+        >
           <span className="qz-rail-avatar" aria-hidden="true">
             <FoxMark size={22} />
           </span>
-          <span className="qz-rail-label">My account</span>
-          {/* Quartz: dark mode is CUT (owner, 2026-08-09) — the theme toggle
-              that sat here was removed; the admin is pinned to light. */}
-        </div>
+          <span className="qz-rail-label">Account</span>
+        </NavLink>
         {/* BIC-2 A2(b) — sign out (POST /studio/logout clears both studio
             cookies). Reuses the nav item styling; the inline resets only strip
             the native button chrome (no colors — DS tokens via the class). */}
-        <Form method="post" action="/studio/logout" style={{ margin: "8px 0 0" }}>
+        <Form method="post" action="/studio/logout" style={{ margin: 0 }}>
           <button
             type="submit"
             className="qz-rail-item"
