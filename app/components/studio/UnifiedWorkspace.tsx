@@ -53,6 +53,7 @@ import { HealthPill } from "../onboarding/questionsLogicV3/HealthPill";
 import { HealthPopover } from "../onboarding/questionsLogicV3/HealthPopover";
 import { IconX } from "../onboarding/questionsLogicV3/icons";
 import { Step3Results } from "../builder/Step3Results";
+import { PublishedHistoryModal } from "./PublishedHistoryModal";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { QzDrawer } from "../qz-overlays";
@@ -324,6 +325,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
   const navigate = useNavigate();
   const [openingHistory, setOpeningHistory] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyTrigger = useRef<HTMLButtonElement>(null);
   const historyDocRef = useRef(doc);
   historyDocRef.current = doc;
 
@@ -1832,22 +1835,23 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           <span className="qz-bt-sp" />
           {undoRedo}
           {chrome === "standalone" && isDecider && <button
-            type="button" className="qz-bt-tbtn"
+            type="button" ref={historyTrigger} className="qz-bt-tbtn" aria-haspopup="dialog"
             disabled={openingHistory || isAiPaused || isPublishing}
             onClick={async () => {
               setOpeningHistory(true);
               // A merchant can keep editing while the first PUT is in flight.
-              // Flush again if the document changed before leaving the builder.
+              // Flush again if the document changed before opening history.
               let snapshot;
               let outcome;
               do {
                 snapshot = historyDocRef.current;
                 outcome = await flush();
               } while (outcome === "saved" && snapshot !== historyDocRef.current);
-              if (outcome === "saved") navigate(`/studio/${data.quizId}/versions`);
+              if (outcome === "saved") setHistoryOpen(true);
               setOpeningHistory(false);
             }}
           >{openingHistory ? "Saving…" : "History"}</button>}
+          {historyOpen && <PublishedHistoryModal quizId={data.quizId} onClose={() => setHistoryOpen(false)} returnFocus={() => historyTrigger.current?.focus()} />}
           {/* QZY-6 — AI is a persistent top-bar companion, never a tab. */}
           <button
             type="button"

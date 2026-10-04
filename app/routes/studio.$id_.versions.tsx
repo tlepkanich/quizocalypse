@@ -13,7 +13,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
   if (!params.id) throw new Response("Missing quiz id", { status: 400 });
-  return json(await quizVersionsForShop(shop.id, params.id));
+  try {
+    return json(await quizVersionsForShop(shop.id, params.id));
+  } catch (error) {
+    if (error instanceof Response) return json({ error: await error.text() }, { status: error.status });
+    throw error;
+  }
 }
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireStudioAccess(request);
@@ -23,12 +28,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
   return json(result, { status: result.status });
 }
 export default function PublishedHistory() {
-  const { quiz, versions } = useLoaderData<typeof loader>();
+  const data = useLoaderData<typeof loader>();
   const restore = useFetcher<typeof action>();
   const revalidator = useRevalidator();
-  const [pending, setPending] = useState<(typeof versions)[number] | null>(null);
+  const [pending, setPending] = useState<{ id: string; version: number } | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const busy = restore.state !== "idle";
+  if ("error" in data) return <QzPage><p role="alert">{data.error}</p><Link to="/studio/quizzes">Back to quizzes</Link></QzPage>;
+  const { quiz, versions } = data;
   const editor = `/studio/${quiz.id}`;
   return <QzPage>
     <Link to={editor}>← Back to builder</Link>
