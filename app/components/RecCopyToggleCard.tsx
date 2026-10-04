@@ -1,4 +1,5 @@
 import { useFetcher } from "@remix-run/react";
+import { CreditTag } from "./CreditTag";
 import { QzCard } from "./qz";
 
 // LOGIC v2 L2-12d — the per-shop kill switch for the runtime rec-copy feature
@@ -15,9 +16,10 @@ export function RecCopyToggleCard({ enabled }: { enabled: boolean }) {
       <div className="qz-col qz-gap-12">
         <div>
           <div className="qz-label">Shopper AI</div>
-          <h2 className="qz-h2" style={{ margin: "6px 0 0" }}>
-            Personalized recommendation copy
-          </h2>
+          <div className="qz-row" style={{ flexWrap: "wrap", gap: "6px 10px", marginTop: 6 }}>
+            <h2 className="qz-h2">AI-written personalization</h2>
+            <CreditTag feature="rec_copy" />
+          </div>
         </div>
         <label className="qz-rp2-field qz-rp2-check" style={{ alignItems: "flex-start" }}>
           <input

@@ -54,7 +54,7 @@ ok("found a mapped deciding answer", Boolean(mapped), mapped?.id);
 // ── the toggle card renders (default ON) ─────────────────────────────────────
 await page.goto(`${BASE}/studio/integrations`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(700);
-ok("toggle card renders", await page.getByText("Personalized recommendation copy").first().isVisible().catch(() => false));
+ok("toggle card renders", await page.getByText("AI-written personalization").first().isVisible().catch(() => false));
 const box = page.locator('input[type="checkbox"]').first();
 ok("toggle checkbox present + checked by default", await box.isChecked().catch(() => false));
 

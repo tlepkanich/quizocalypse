@@ -1,3 +1,4 @@
+import type { AiFeatureKey } from "../../lib/billing/catalog";
 import type { ContentBlock, ContentBlockType, Quiz, QuizNode } from "../../lib/quizSchema";
 import {
   addAskAINode,
@@ -35,6 +36,8 @@ export interface ModuleMeta {
   label: string;
   glyph: string;
   hint: string;
+  /** Set on a screen that runs AI charged per use; its row shows the credit tag. */
+  aiFeature?: AiFeatureKey;
 }
 
 // Templated insertion palette (mirrors the canvas ModulePicker, Studio-styled).
@@ -43,7 +46,7 @@ export const INSERTABLE_MODULES: ModuleMeta[] = [
   { kind: "message", label: "Message", glyph: "“", hint: "A chat-style note" },
   { kind: "branch", label: "Branch", glyph: "⑂", hint: "Route by answer or A/B split" },
   { kind: "email_gate", label: "Email capture", glyph: "✉", hint: "Capture an email before results" },
-  { kind: "ask_ai", label: "Ask AI", glyph: "✶", hint: "Conversational follow-up" },
+  { kind: "ask_ai", label: "Ask AI", glyph: "✶", hint: "Conversational follow-up", aiFeature: "ask_ai" },
   { kind: "product_cards", label: "Products", glyph: "▦", hint: "Showcase picked products" },
   { kind: "integration", label: "Integration", glyph: "⇄", hint: "Fire a webhook / Klaviyo" },
   { kind: "result", label: "Result", glyph: "★", hint: "Recommendations page" },

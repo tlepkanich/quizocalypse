@@ -15,6 +15,7 @@ import { NODE_LABEL } from "./panels/nodeMeta";
 import { QuestionBankDrawer } from "./QuestionBankDrawer";
 import { LogicFlowMap } from "../logic/LogicFlowMap";
 import { QzPopover } from "../qz-overlays";
+import { CreditTag } from "../CreditTag";
 import type { BuilderCategory } from "../builder/stepProps";
 
 // Per-answer divergence chips ("answer → destination") — shown under question
@@ -726,6 +727,7 @@ export function FlowRail({
                     onClick={() => insert(m.kind)}
                   >
                     {m.glyph} {m.label}
+                    {m.aiFeature ? <CreditTag feature={m.aiFeature} /> : null}
                   </button>
                 ))}
                 <button className="qz-btn qz-btn-ghost qz-btn-sm" onClick={() => setAdding(false)}>

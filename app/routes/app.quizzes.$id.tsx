@@ -15,6 +15,7 @@ import {
   QzTextarea,
   QzSelect,
 } from "../components/qz";
+import { CreditTag } from "../components/CreditTag";
 import {
   ReactFlow,
   Background,
@@ -1233,6 +1234,7 @@ function FlowBuilder({
                         }}
                       >
                         {label}
+                        {kind === "ask_ai" ? <> <CreditTag feature="ask_ai" /></> : null}
                       </button>
                     ))}
                   </div>
@@ -4312,7 +4314,13 @@ function ModulePickerPopover({
                 e.currentTarget.style.background = "var(--qz-paper)";
               }}
             >
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{item.label}</div>
+              <div
+                className="qz-row"
+                style={{ flexWrap: "wrap", gap: "6px 10px", fontWeight: 600, fontSize: 14 }}
+              >
+                {item.label}
+                {item.kind === "ask_ai" ? <CreditTag feature="ask_ai" /> : null}
+              </div>
               <div
                 className="qz-muted"
                 style={{ fontSize: 12, marginTop: 2 }}

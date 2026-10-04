@@ -165,3 +165,11 @@ export function aiRateRange(): string {
   const high = Math.max(...rates);
   return `${low === high ? low : `${low}–${high}`} credit`;
 }
+
+/** The credit tag's text: "AI · 0.2 credit per results page". The one source
+    for every control that turns a per-use AI feature on. No dollar amounts —
+    the price of a credit depends on the plan. */
+export function creditTagText(key: AiFeatureKey): string {
+  const feature = aiFeature(key);
+  return `AI · ${feature.rate} credit per ${feature.per}`;
+}

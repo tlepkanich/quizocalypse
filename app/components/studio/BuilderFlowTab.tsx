@@ -15,6 +15,7 @@ import {
   type InsertKind,
 } from "./studioDoc";
 import { currentLayout } from "./BuilderBlocksPalette";
+import { CreditTag } from "../CreditTag";
 import { QzPopover } from "../qz-overlays";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -395,6 +396,7 @@ export function BuilderFlowTab({
               onClick={() => insert(m.kind)}
             >
               {m.glyph} {m.label}
+              {m.aiFeature ? <CreditTag feature={m.aiFeature} /> : null}
             </button>
           ))}
           <button
