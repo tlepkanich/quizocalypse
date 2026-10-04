@@ -392,16 +392,17 @@ function ByQuizTable({ data, figures }: { data: AccountData; figures: CreditFigu
 
 type SwitchKey = keyof AccountData["switches"];
 
-/** A fetcher for an Account intent that says its result in a toast, once. */
-function useAccountFetcher() {
+/** A fetcher for an Account intent that says its result in a toast, once.
+    A refusal is said too when the caller has no place of its own to show it. */
+function useAccountFetcher({ sayRefusals = false }: { sayRefusals?: boolean } = {}) {
   const fetcher = useFetcher<AccountIntentResult>();
   const toast = useQzToast();
   const said = useRef<AccountIntentResult | undefined>(undefined);
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data || said.current === fetcher.data) return;
     said.current = fetcher.data;
-    if (fetcher.data.ok) toast(fetcher.data.message);
-  }, [fetcher.state, fetcher.data, toast]);
+    if (fetcher.data.ok || sayRefusals) toast(fetcher.data.message);
+  }, [fetcher.state, fetcher.data, toast, sayRefusals]);
   return fetcher;
 }
 
@@ -506,6 +507,8 @@ function BillEmailsCard({ data, plan }: { data: AccountData; plan: SelfServePlan
 /* ── Past bills ──────────────────────────────────────────────────────────── */
 
 function PastBillsCard({ data }: { data: AccountData }) {
+  const receiptFetcher = useAccountFetcher({ sayRefusals: true });
+  const sendingBillId = receiptFetcher.state !== "idle" ? receiptFetcher.formData?.get("billId") : null;
   return (
     <section className="hm3-card acct-pad" aria-labelledby="acct-bills">
       <div className="acct-sechead">
@@ -521,6 +524,9 @@ function PastBillsCard({ data }: { data: AccountData }) {
                 <th className="is-r">Available credits</th>
                 <th className="is-r">Credits used</th>
                 <th className="is-r">Total cost</th>
+                <th className="is-r">
+                  <span className="qz-sr-only">Receipt</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -531,6 +537,18 @@ function PastBillsCard({ data }: { data: AccountData }) {
                   <td className="is-r">{fmtNum(bill.creditsAvailable)}</td>
                   <td className="is-r">{fmtNum(bill.creditsUsed)}</td>
                   <td className="is-r is-total">{fmtUsd(bill.totalCents)}</td>
+                  <td className="is-r">
+                    <button
+                      type="button"
+                      className="acct-link"
+                      disabled={sendingBillId === bill.id}
+                      onClick={() =>
+                        receiptFetcher.submit({ intent: "email-receipt", billId: bill.id }, { method: "post" })
+                      }
+                    >
+                      Email receipt
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -1,7 +1,9 @@
 import type { Shop, ShopBilling } from "@prisma/client";
 import { z } from "zod";
 import prisma from "../../db.server";
+import { sendEmail } from "../email.server";
 import { formatMonthDay, formatMonthDayYear } from "../formatDate";
+import { receiptEmail, type BillEmailLinks } from "./billEmailMessages";
 import { checkNewBillEmail, parseBillEmails } from "./billEmails";
 import {
   AI_FEATURES,
@@ -17,6 +19,7 @@ import {
   daysLeftIn,
   lastDayOf,
   rolloverAtCycleEnd,
+  type CreditFigures,
   type CycleCredits,
   type CycleUsage,
   type CycleWindow,
@@ -205,7 +208,7 @@ async function closeCycle(billing: ShopBilling): Promise<ShopBilling> {
     free trial on the default plan (owner, 2026-10-04). */
 async function ensureBillingForShop(shopId: string, now: Date): Promise<ShopBilling> {
   const trialStart = startOfUtcDay(now);
-  let billing = await prisma.shopBilling.upsert({
+  const billing = await prisma.shopBilling.upsert({
     where: { shopId },
     update: {},
     create: {
@@ -216,8 +219,45 @@ async function ensureBillingForShop(shopId: string, now: Date): Promise<ShopBill
       cycleEnd: new Date(trialStart.getTime() + TRIAL_DAYS * DAY_MS),
     },
   });
-  while (now.getTime() >= billing.cycleEnd.getTime()) billing = await closeCycle(billing);
-  return billing;
+  return rollToNow(billing, now);
+}
+
+async function rollToNow(billing: ShopBilling, now: Date): Promise<ShopBilling> {
+  let current = billing;
+  while (now.getTime() >= current.cycleEnd.getTime()) current = await closeCycle(current);
+  return current;
+}
+
+/** The current cycle's figures for a shop whose plan record exists. Null for
+    a shop that has never opened Account: its trial has not started, and
+    nothing but the first open of Account may start it. */
+export async function loadCycleFiguresIfStarted(
+  shopId: string,
+  now: Date = new Date(),
+): Promise<{ billing: ShopBilling; figures: CreditFigures } | null> {
+  const stored = await prisma.shopBilling.findUnique({ where: { shopId } });
+  if (!stored) return null;
+  const billing = await rollToNow(stored, now);
+  const cycle: CycleWindow = { start: billing.cycleStart, end: billing.cycleEnd };
+  const [usage, credits] = await Promise.all([loadCycleUsage(shopId, cycle), loadCycleCredits(billing)]);
+  return { billing, figures: creditFigures(selfServePlan(billing.plan), credits, usage.totals) };
+}
+
+/** Links for the bill emails, from the app's own configured URL. Never from a
+    request's Host header: the alert check runs on public endpoints, and a
+    forged host must not end up as a link in a merchant's inbox. */
+export function billEmailLinks(): BillEmailLinks {
+  let origin: string | null = null;
+  try {
+    const url = new URL(process.env.SHOPIFY_APP_URL ?? "");
+    if (url.protocol === "https:" || url.protocol === "http:") origin = url.origin;
+  } catch {
+    origin = null; // not configured — the emails name the page in words
+  }
+  return {
+    account: origin ? `${origin}/studio/account` : null,
+    changePlan: origin ? `${origin}/studio/account/plan` : null,
+  };
 }
 
 function shopifyBillingUrl(shop: Pick<Shop, "shopDomain" | "source">): string | null {
@@ -273,7 +313,43 @@ export async function loadAccountForShop(
   };
 }
 
-/* ── Intents: bill emails and their three switches ───────────────────────── */
+/* ── The receipt for one bill ────────────────────────────────────────────── */
+
+const BillLines = z.array(z.object({ label: z.string(), cents: z.number() })).catch([]);
+
+/** Send one bill's receipt to every saved address. Returns how many
+    addresses are saved and how many sends went through; null when the bill is
+    not this shop's. The bill writer calls this on the bill date (when
+    `emailReceipt` is on); Past bills calls it on demand. */
+export async function sendBillReceipt(
+  shop: Pick<Shop, "id" | "shopDomain" | "source">,
+  billId: string,
+): Promise<{ saved: number; sent: number } | null> {
+  const [bill, billing] = await Promise.all([
+    prisma.shopBill.findFirst({ where: { id: billId, shopId: shop.id } }),
+    prisma.shopBilling.findUnique({ where: { shopId: shop.id }, select: { billEmails: true } }),
+  ]);
+  if (!bill) return null;
+  const emails = parseBillEmails(billing?.billEmails);
+  if (emails.length === 0) return { saved: 0, sent: 0 };
+  const content = receiptEmail({
+    shopDomain: shop.shopDomain,
+    billDate: formatMonthDayYear(bill.billDate),
+    planName: selfServePlan(bill.plan).name,
+    lines: BillLines.parse(bill.lines),
+    totalCents: bill.totalCents,
+    creditsAvailable: bill.creditsAvailable,
+    creditsUsed: bill.creditsUsed,
+    creditsOver: bill.creditsOver,
+    shopifyBillingUrl: shopifyBillingUrl(shop),
+    links: billEmailLinks(),
+  });
+  const results = await Promise.allSettled(emails.map((to) => sendEmail({ to, ...content }, "billing")));
+  const sent = results.filter((result) => result.status === "fulfilled" && result.value.sent).length;
+  return { saved: emails.length, sent };
+}
+
+/* ── Intents: bill emails, their three switches, and a bill's receipt ────── */
 
 const SWITCH_COLUMN = { receipt: "emailReceipt", near: "emailAlertNear", out: "emailAlertOut" } as const;
 
@@ -285,20 +361,33 @@ const AccountIntent = z.discriminatedUnion("intent", [
     key: z.enum(["receipt", "near", "out"]),
     on: z.enum(["true", "false"]),
   }),
+  z.object({ intent: z.literal("email-receipt"), billId: z.string().min(1) }),
 ]);
 
 export type AccountIntentResult =
   | { ok: true; message: string }
-  | { ok: false; status: 400 | 422; message: string };
+  | { ok: false; status: 400 | 404 | 422 | 502; message: string };
 
 export async function runAccountIntentForShop(
-  shop: Pick<Shop, "id">,
+  shop: Pick<Shop, "id" | "shopDomain" | "source">,
   form: FormData,
   now: Date = new Date(),
 ): Promise<AccountIntentResult> {
   const parsed = AccountIntent.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { ok: false, status: 400, message: "That request isn't valid." };
   const intent = parsed.data;
+
+  if (intent.intent === "email-receipt") {
+    const receipt = await sendBillReceipt(shop, intent.billId);
+    if (!receipt) return { ok: false, status: 404, message: "That bill isn't on this account." };
+    if (receipt.saved === 0) return { ok: false, status: 422, message: "Save an email under Bill emails first." };
+    if (receipt.sent === 0) return { ok: false, status: 502, message: "The receipt wasn't sent. Try again." };
+    return {
+      ok: true,
+      message: receipt.sent === 1 ? "Receipt sent to 1 address." : `Receipt sent to ${receipt.sent} addresses.`,
+    };
+  }
+
   const billing = await ensureBillingForShop(shop.id, now);
   const saved = parseBillEmails(billing.billEmails);
 

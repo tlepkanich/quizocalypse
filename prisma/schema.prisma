@@ -570,6 +570,10 @@ model ShopBilling {
   emailReceipt   Boolean  @default(true)
   emailAlertNear Boolean  @default(true)
   emailAlertOut  Boolean  @default(true)
+  // Each alert goes out once per cycle: the `cycleStart` of the cycle it was
+  // last sent in. A new cycle has a new start, so no reset is needed.
+  alertNearSentFor DateTime?
+  alertOutSentFor  DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

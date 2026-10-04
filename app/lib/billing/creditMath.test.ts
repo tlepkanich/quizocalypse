@@ -4,6 +4,7 @@ import {
   apportion,
   breakEvenMark,
   clampAmount,
+  creditAlertToSend,
   creditFigures,
   creditSignal,
   creditsCents,
@@ -106,6 +107,43 @@ describe("creditSignal", () => {
   it("never shows nearly-out in a trial, but still shows over", () => {
     expect(creditSignal(at(390), true)).toBeNull();
     expect(creditSignal(at(401), true)).toBe("over");
+  });
+});
+
+describe("creditAlertToSend", () => {
+  const at = (used: number) => creditFigures(PLANS.starter, NO_EXTRA, usage(used, 0, 0));
+  const fresh = { nearOn: true, outOn: true, nearSent: false, outSent: false };
+
+  it("is quiet under 80%, sends the 80% alert from 80%, and the run-out alert at 0 left", () => {
+    expect(creditAlertToSend(at(319), false, fresh)).toBeNull();
+    expect(creditAlertToSend(at(320), false, fresh)).toBe("near");
+    expect(creditAlertToSend(at(399), false, fresh)).toBe("near");
+    // "When credits reach 0" — one credit before the page's "over".
+    expect(creditAlertToSend(at(400), false, fresh)).toBe("out");
+    expect(creditAlertToSend(at(900), false, fresh)).toBe("out");
+  });
+
+  it("sends each alert once per cycle", () => {
+    expect(creditAlertToSend(at(350), false, { ...fresh, nearSent: true })).toBeNull();
+    expect(creditAlertToSend(at(400), false, { ...fresh, nearSent: true })).toBe("out");
+    expect(creditAlertToSend(at(400), false, { ...fresh, nearSent: true, outSent: true })).toBeNull();
+  });
+
+  it("does not send the 80% alert after the run-out alert (a top-up took the shop back under)", () => {
+    const toppedUp = creditFigures(PLANS.starter, { ...NO_EXTRA, oneTime: 50 }, usage(400, 0, 0));
+    expect(toppedUp.share).toBeGreaterThanOrEqual(0.8);
+    expect(creditAlertToSend(toppedUp, false, { ...fresh, outSent: true })).toBeNull();
+  });
+
+  it("never sends the 80% alert in a trial, but still sends the run-out alert", () => {
+    expect(creditAlertToSend(at(390), true, fresh)).toBeNull();
+    expect(creditAlertToSend(at(400), true, fresh)).toBe("out");
+  });
+
+  it("follows the two switches", () => {
+    expect(creditAlertToSend(at(350), false, { ...fresh, nearOn: false })).toBeNull();
+    expect(creditAlertToSend(at(400), false, { ...fresh, outOn: false })).toBe("near");
+    expect(creditAlertToSend(at(400), false, { ...fresh, nearOn: false, outOn: false })).toBeNull();
   });
 });
 

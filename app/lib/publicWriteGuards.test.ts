@@ -5,6 +5,7 @@ import { logger } from "./log.server";
 import { action as capturesAction } from "../routes/captures";
 import { action as sessionsAction, loader as sessionsLoader } from "../routes/sessions";
 import { action as eventsAction } from "../routes/events";
+import { checkCreditAlerts } from "./billing/creditAlerts.server";
 
 // HII-1 — the three storefront write boundaries each guard their Prisma write so
 // a DB failure becomes a controlled, logged, CORS+JSON 500 instead of an
@@ -22,6 +23,10 @@ vi.mock("../db.server", () => ({
     event: { createMany: vi.fn() },
   },
 }));
+
+// The credit-alert check has its own tests (billing/creditAlerts.server.test.ts);
+// here only WHEN the events route calls it matters.
+vi.mock("./billing/creditAlerts.server", () => ({ checkCreditAlerts: vi.fn().mockResolvedValue(undefined) }));
 
 const p = prisma as unknown as {
   quiz: { findUnique: Mock; findMany: Mock };
@@ -190,6 +195,26 @@ describe("events.tsx write guard", () => {
     expect(res.status).toBe(500);
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
     expect(((await res.json()) as { error?: string }).error).toBeTruthy();
+  });
+
+  it("checks the shop's credit alerts once after a stored quiz_engaged, and not for other events", async () => {
+    p.event.createMany.mockResolvedValue({ count: 1 });
+    await eventsAction(postArgs("events", EVENTS)); // quiz_started only
+    expect(checkCreditAlerts).not.toHaveBeenCalled();
+
+    const engaged = { quiz_id: "q1", session_id: "sess1", event_type: "quiz_engaged" };
+    const unknownQuiz = { quiz_id: "nope", session_id: "sess2", event_type: "quiz_engaged" };
+    const res = await eventsAction(postArgs("events", { events: [engaged, engaged, unknownQuiz] }));
+    expect(res.status).toBe(202);
+    expect(checkCreditAlerts).toHaveBeenCalledTimes(1);
+    expect(checkCreditAlerts).toHaveBeenCalledWith("s1");
+  });
+
+  it("does not check credit alerts when the events were not stored", async () => {
+    p.event.createMany.mockRejectedValue(new Error("db down"));
+    const engaged = { quiz_id: "q1", session_id: "sess1", event_type: "quiz_engaged" };
+    await eventsAction(postArgs("events", { events: [engaged] }));
+    expect(checkCreditAlerts).not.toHaveBeenCalled();
   });
 });
 

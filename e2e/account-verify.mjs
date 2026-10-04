@@ -5,8 +5,13 @@
 // dialogs, which must change nothing while Shopify billing is not connected.
 //
 // Seed/restore: the shop's ShopBilling row is saved and put back (or deleted
-// if there was none). Every seeded Event, CreditUse and CreditGrant row is
-// removed at the end. Usage rows carry the "acct-probe" session marker.
+// if there was none). Every seeded Event, CreditUse, CreditGrant and ShopBill
+// row is removed at the end. Usage rows carry the "acct-probe" session marker.
+//
+// Bill emails: the probe never posts to /events and never records an AI use,
+// so it never runs the credit-alert check — no alert email leaves, even on a
+// machine with an email transport. The receipt check runs with NO saved
+// address, so it sends nothing either.
 //
 //   BASE=http://localhost:3000 node --env-file=.env e2e/account-verify.mjs
 import { chromium } from "playwright";
@@ -46,6 +51,7 @@ if (quizzes.length === 0) {
 }
 const savedBilling = await prisma.shopBilling.findUnique({ where: { shopId: shop.id } });
 const grantIds = [];
+const billIds = [];
 
 /** A cycle that started 12 days ago: 18 days left, like the mock. */
 const cycleStart = new Date(today.getTime() - 12 * DAY);
@@ -404,6 +410,53 @@ try {
   carried = await rolloverGrants(oldEnd);
   ok("a second load does not roll the credits over again", carried.length === 1);
 
+  /* ── 9c · Bill emails: the receipt action and the once-per-cycle claim ── */
+  await seed({ billing: { plan: "growth", status: "active", cycleStart, cycleEnd } });
+  await prisma.shopBilling.update({ where: { shopId: shop.id }, data: { billEmails: [], alertNearSentFor: null } });
+  const bill = await prisma.shopBill.create({
+    data: {
+      shopId: shop.id,
+      billDate: cycleStart,
+      plan: "growth",
+      creditsAvailable: 2380,
+      creditsUsed: 2511,
+      creditsOver: 131,
+      lines: [
+        { label: "Growth", cents: 20000 },
+        { label: "131 extra credits", cents: 1310 },
+      ],
+      totalCents: 21310,
+    },
+  });
+  billIds.push(bill.id);
+  await open("/studio/account");
+  const receiptButton = page.getByRole("button", { name: "Email receipt" });
+  ok("a past bill has the Email receipt action", (await receiptButton.count()) === 1);
+  const [receiptResponse] = await Promise.all([
+    page.waitForResponse((r) => r.request().method() === "POST" && r.url().includes("/studio/account")),
+    receiptButton.click(),
+  ]);
+  const receiptResult = await receiptResponse.json().catch(() => ({}));
+  ok(
+    "with no saved address, Email receipt says to save one first",
+    receiptResponse.status() === 422 && receiptResult.message === "Save an email under Bill emails first.",
+    `${receiptResponse.status()} · ${receiptResult.message}`,
+  );
+  await shot("12-past-bills-receipt");
+  // The alert's claim, on real Postgres: one winner per cycle, NULL included.
+  const probeBilling = await prisma.shopBilling.findUnique({ where: { shopId: shop.id } });
+  const claimNearAlert = () =>
+    prisma.shopBilling.updateMany({
+      where: {
+        id: probeBilling.id,
+        cycleStart: probeBilling.cycleStart,
+        OR: [{ alertNearSentFor: null }, { alertNearSentFor: { not: probeBilling.cycleStart } }],
+      },
+      data: { alertNearSentFor: probeBilling.cycleStart },
+    });
+  ok("the first alert claim in a cycle wins", (await claimNearAlert()).count === 1);
+  ok("a second claim in the same cycle loses", (await claimNearAlert()).count === 0);
+
   /* ── 10 · /studio/settings is unchanged ── */
   await open("/studio/settings");
   ok("/studio/settings still renders", (await page.locator("h1", { hasText: "Settings" }).count()) > 0);
@@ -411,6 +464,7 @@ try {
   ok("no page errors", pageErrors.length === 0, pageErrors.slice(0, 4).join(" · "));
 } finally {
   await clearUsage();
+  await prisma.shopBill.deleteMany({ where: { id: { in: billIds } } });
   if (savedBilling) {
     const { id, ...row } = savedBilling;
     const rest = { ...row, billEmails: row.billEmails ?? Prisma.DbNull };

@@ -3,6 +3,7 @@ import prisma from "../db.server";
 import { reportError } from "../lib/log.server";
 import { EventsBatch } from "../lib/analytics";
 import { rateLimit } from "../lib/rateLimiters";
+import { checkCreditAlerts } from "../lib/billing/creditAlerts.server";
 
 const CORS = {
   "access-control-allow-origin": "*",
@@ -96,6 +97,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       headers: { ...CORS, "content-type": "application/json" },
     });
   }
+
+  // Billing — a stored `quiz_engaged` is one credit, so a credit alert may be
+  // due. Fire-and-forget: checkCreditAlerts never rejects, and it runs at most
+  // once a minute per shop.
+  const engagedShopIds = new Set(
+    parsed.data.events
+      .filter((e) => e.event_type === "quiz_engaged")
+      .map((e) => shopByQuiz.get(e.quiz_id))
+      .filter((shopId): shopId is string => shopId !== undefined),
+  );
+  for (const shopId of engagedShopIds) void checkCreditAlerts(shopId);
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 202,

@@ -1,6 +1,7 @@
 import prisma from "../../db.server";
 import { reportError } from "../log.server";
 import { featureMilliCredits, type AiFeatureKey } from "./catalog";
+import { checkCreditAlerts } from "./creditAlerts.server";
 
 // Account & Billing — the per-use AI usage ledger (CreditUse). One row per
 // use of a feature in catalog.ts AI_FEATURES, written by the two shopper
@@ -10,8 +11,9 @@ import { featureMilliCredits, type AiFeatureKey } from "./catalog";
 // (a cache hit costs nothing); this counts USES a shop is charged for (a
 // reused answer costs the same as a fresh one — a decided billing rule).
 
-/** Record one use. NEVER throws and never rejects: the shopper already has
-    their answer, and a ledger outage must not break the quiz. */
+/** Record one use, then check whether a credit alert is due. NEVER throws
+    and never rejects: the shopper already has their answer, and a ledger
+    outage must not break the quiz. */
 export async function recordCreditUse(use: {
   shopId: string;
   quizId: string;
@@ -28,6 +30,7 @@ export async function recordCreditUse(use: {
         milliCredits: featureMilliCredits(use.feature),
       },
     });
+    await checkCreditAlerts(use.shopId);
   } catch (err) {
     reportError(err, {
       scope: "billing",

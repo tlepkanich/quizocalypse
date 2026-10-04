@@ -133,6 +133,33 @@ export function creditSignal(figures: CreditFigures, inTrial: boolean): "over" |
   return !inTrial && figures.share >= NEAR_OUT_SHARE ? "near" : null;
 }
 
+export type CreditAlert = "near" | "out";
+
+/** What the alert emails need to know about a shop's switches and what has
+    already gone out in this cycle. */
+export interface CreditAlertState {
+  nearOn: boolean;
+  outOn: boolean;
+  nearSent: boolean;
+  outSent: boolean;
+}
+
+/** The alert email to send now, or null (BILLING-HANDOFF.md, "Emails").
+    - "out": the moment credits reach 0 — one credit before the page's "over".
+    - "near": usage reaches 80%. Like the page's signal, never in a trial.
+    Each goes out once per cycle. After a run-out alert the 80% alert has
+    nothing new to say, so it is not sent. */
+export function creditAlertToSend(
+  figures: CreditFigures,
+  inTrial: boolean,
+  state: CreditAlertState,
+): CreditAlert | null {
+  const out = figures.available > 0 && figures.left === 0;
+  if (out && state.outOn && !state.outSent) return "out";
+  const near = !inTrial && figures.share >= NEAR_OUT_SHARE;
+  return near && state.nearOn && !state.nearSent && !state.outSent ? "near" : null;
+}
+
 /** True when the plan, added credits and overage together already cost more
     than the next self-serve plan: "Growth would have cost $200.00 this cycle." */
 export function nextPlanWasCheaper(figures: CreditFigures, next: Plan | null): boolean {
