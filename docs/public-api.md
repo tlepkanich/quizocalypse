@@ -234,7 +234,7 @@ baked copy:
 | `method` | 405 | non-POST |
 | `rate_limited` | 429 | per-IP limit (5/min) |
 | `server_error` | 500 | DB lookup failure |
-| `disabled` | 200 | per-shop kill switch (`Shop.aiRecCopyEnabled=false`) |
+| `disabled` | 200 | the shop has not turned AI-written personalization on (`Shop.aiRecCopyEnabled` is opt-in, default `false`) |
 | `budget` | 200 | shop over its daily AI ceiling (`AI_BUDGET_RUNTIME_DAILY_USD`, default $2/day) |
 | `not_decider` | 200 | legacy points-model quiz |
 | `why_off` | 200 | merchant turned "why" copy off for this target |

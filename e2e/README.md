@@ -204,7 +204,7 @@ pin, never republish), plus the "O3 Probe Terrain Finder" SavedTemplate.
 | `l2-11-verify.mjs` | Config-time grounded AI why-copy panel (sparse persist, lock, stale hash) | LIVE `cmr3ku9kb…`; real AI | restore |
 | `l212b-verify.mjs` | Runtime per-shopper rec-copy endpoint + client race | LIVE `cmr3ku9kb…`; real AI | publish/restore |
 | `l212c-verify.mjs` | Tier-2 AI path-quality review endpoint | LIVE `cmr3ku9kb…`; real AI | restore |
-| `l212d-verify.mjs` | Rec-copy kill-switch toggle (Shop.aiRecCopyEnabled) + FALSE-path | LIVE `cmr3ku9kb…` | toggles back ON |
+| `l212d-verify.mjs` | Rec-copy kill-switch toggle (Shop.aiRecCopyEnabled) + FALSE-path | LIVE `cmr3ku9kb…` | restores the starting state |
 
 (`l2-5-verify.mjs` / `l2-6-verify.mjs` were deleted in BIC-2 C4 — they drove
 the v2.x decider Step-3/Rules UIs retired by QL3-P5. `l2-7-verify.mjs` was

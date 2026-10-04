@@ -68,7 +68,7 @@ export default function Settings() {
       />
 
       <div style={{ maxWidth: 720 }} className="qz-col qz-gap-24">
-        <RecCopyToggleCard enabled={shop?.aiRecCopyEnabled ?? true} />
+        <RecCopyToggleCard enabled={shop?.aiRecCopyEnabled ?? false} />
 
         <QzCard>
           <div className="qz-col qz-gap-12">

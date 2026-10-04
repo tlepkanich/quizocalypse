@@ -93,8 +93,9 @@ async function actionImpl({ request, params }: ActionFunctionArgs) {
   }
   if (!quiz?.publishedJson) return no("not_found", 404);
 
-  // Kill switch — checked LIVE (never baked) and BEFORE any cache/AI work.
-  if (quiz.shop && quiz.shop.aiRecCopyEnabled === false) return no("disabled");
+  // Opt-in switch — checked LIVE (never baked) and BEFORE any cache/AI work.
+  // Anything but an explicit `true` is off.
+  if (!quiz.shop?.aiRecCopyEnabled) return no("disabled");
 
   // BIC-2 A3 — per-shop daily spend ceiling on the PUBLIC surface. Over budget
   // → the same cheap 200 refusal shape as "disabled" (the runtime degrades to

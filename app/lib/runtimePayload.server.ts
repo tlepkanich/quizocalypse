@@ -26,7 +26,7 @@ export async function buildRuntimePayload(id: string, request: Request) {
       status: true,
       version: true,
       publishedJson: true,
-      // L2-12 — the per-shop runtime-AI kill switch; read live (never baked
+      // L2-12 — the per-shop runtime-AI switch (opt-in); read live (never baked
       // into publishedJson) so a flip takes effect without a republish.
       shop: { select: { aiRecCopyEnabled: true } },
     },
@@ -118,7 +118,7 @@ export async function buildRuntimePayload(id: string, request: Request) {
       // skip the rec-copy fetch entirely when the shop's switch is off. The
       // ENDPOINT re-checks the live column regardless (this value can lag the
       // 60s CDN window and a hand-rolled POST bypasses it).
-      aiCopyEnabled: quiz.shop?.aiRecCopyEnabled ?? true,
+      aiCopyEnabled: quiz.shop?.aiRecCopyEnabled ?? false,
       // Results handoff §9 — the fixed consent wording's store name. Present
       // only when publish baked it (decider docs), so every other payload is
       // unchanged.

@@ -184,6 +184,17 @@ describe("gate sequence — cheap refusals before any spend", () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["the switch is off", { shopId: "s1", shop: { aiRecCopyEnabled: false, brandGuidelines: null } }],
+    ["the shop row is missing", { shopId: "s1", shop: null }],
+  ])("opt-in: %s → cheap 200 {code:'disabled'}, no generation", async (_label, row) => {
+    p.quiz.findFirst.mockResolvedValue({ ...quizRow(deciderDoc()), ...row });
+    const res = await recCopyAction(post(VALID()));
+    expect(res.status).toBe(200);
+    expect(await codeOf(res)).toBe("disabled");
+    expect(generate).not.toHaveBeenCalled();
+  });
+
   it("unknown / unpublished quiz → 404 {code:'not_found'}", async () => {
     p.quiz.findFirst.mockResolvedValue(null);
     const res = await recCopyAction(post(VALID()));

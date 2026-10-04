@@ -128,3 +128,37 @@ describe("/q/:id.embed.json public payload (credential + code redaction)", () =>
     expect(text).not.toContain("QUIZ-EMBED1");
   });
 });
+
+// AI-written personalization is opt-in: the loader key the runtime reads is
+// true ONLY when the shop turned the switch on.
+describe("runtime payload aiCopyEnabled (opt-in)", () => {
+  it.each([
+    ["the shop turned it on", { aiRecCopyEnabled: true }, true],
+    ["the shop left it off", { aiRecCopyEnabled: false }, false],
+    ["the shop row is missing", null, false],
+  ])("%s → %s", async (_label, shop, expected) => {
+    const { Quiz } = await import("./quizSchema");
+    const { loader: embedLoader } = await import("../routes/q.$id[.]embed[.]json");
+    const doc = Quiz.parse({
+      quiz_id: "e2",
+      scope: { collection_ids: [] },
+      nodes: [
+        { id: "intro", type: "intro", position: { x: 0, y: 0 }, data: { headline: "Hi" } },
+        { id: "end", type: "end", position: { x: 1, y: 0 }, data: { headline: "Bye" } },
+      ],
+      edges: [],
+    });
+    p.quiz.findFirst.mockResolvedValue({
+      id: "e2",
+      name: "Embed",
+      status: "published",
+      version: 1,
+      publishedJson: { ...doc, product_index: [], shop_domain: "s.myshopify.com" },
+      shop,
+    });
+    const request = new Request("https://app.example/q/e2.embed.json");
+    const res = await embedLoader({ request, params: { id: "e2" }, context: {} } as unknown as LoaderFunctionArgs);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { aiCopyEnabled: boolean }).aiCopyEnabled).toBe(expected);
+  });
+});

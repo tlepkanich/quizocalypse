@@ -2,8 +2,8 @@ import { useFetcher } from "@remix-run/react";
 import { CreditTag } from "./CreditTag";
 import { QzCard } from "./qz";
 
-// LOGIC v2 L2-12d — the per-shop kill switch for the runtime rec-copy feature
-// (Shop.aiRecCopyEnabled). Shared by the standalone (studio.integrations) and
+// LOGIC v2 L2-12d — the per-shop switch for the runtime rec-copy feature
+// (Shop.aiRecCopyEnabled). Opt-in: off unless the merchant turns it on. Shared by the standalone (studio.integrations) and
 // embedded (app.settings) settings pages; both host a `toggle-rec-copy` action
 // that writes the column. Read LIVE by the /q loader + re-checked by the
 // endpoint, so a flip takes effect with NO republish.
@@ -33,12 +33,15 @@ export function RecCopyToggleCard({ enabled }: { enabled: boolean }) {
               )
             }
           />
-          <span>
+          <span style={{ display: "block" }}>
             Generate a fresh “why we recommend this” paragraph for each shopper
-            <span className="qz-dim" style={{ display: "block", fontSize: 11.5, maxWidth: "56ch" }}>
-              On (default): decider quizzes personalize the result copy per shopper at quiz time,
-              grounded in the matched product. Off: shoppers see your saved copy — zero per-shopper
-              AI cost. Flips instantly; no republish needed.
+            <span
+              className="qz-dim"
+              style={{ display: "block", fontSize: 11.5, fontWeight: 400, maxWidth: "56ch" }}
+            >
+              Off unless you turn it on. On: AI writes a “why we recommend this” paragraph for each
+              shopper. Your product recommendations come from your quiz logic either way and use no
+              credits.
             </span>
           </span>
         </label>

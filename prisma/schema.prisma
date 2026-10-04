@@ -66,12 +66,14 @@ model Shop {
   shopifyConnectToken  String?
   shopifyConnectedAt   DateTime?
 
-  // LOGIC v2 L2-12 (owner GO 2026-07-03, "kill switch default on" = feature
-  // ENABLED by default): gates ONLY the public per-shopper rec-copy endpoint
-  // (q.$id.rec-copy — runtime AI spend on the shopper hot path). Never gates
-  // the admin ✦ why-copy generate or the Tier-2 quality review — those are
-  // merchant-initiated, visible-error spends.
-  aiRecCopyEnabled Boolean @default(true)
+  // LOGIC v2 L2-12 — AI-written personalization. OPT-IN since 2026-10-04
+  // (BILLING-HANDOFF: every per-use AI feature starts off; the 2026-07-03
+  // call was "default on"). Shops that existed then keep their value. Gates
+  // ONLY the public per-shopper rec-copy endpoint (q.$id.rec-copy — runtime
+  // AI spend on the shopper hot path).
+  // Never gates the admin ✦ why-copy generate or the Tier-2 quality review —
+  // those are merchant-initiated, visible-error spends.
+  aiRecCopyEnabled Boolean @default(false)
 
   // HOME-3 — Home's per-shop state (app/lib/homeState.ts parses it): the
   // first-open dialog's one-time timestamp + the last dismissed reminder.

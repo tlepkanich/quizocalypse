@@ -1,11 +1,12 @@
 // LOGIC v2 L2-12d live-verify — the merchant kill-switch toggle for the runtime
 // rec-copy feature (Shop.aiRecCopyEnabled), on the standalone deploy. This is
 // ALSO the deferred kill-switch FALSE-path proof (L2-12a/b):
-//   • the toggle card renders on /studio/integrations (default ON).
+//   • the toggle card renders on /studio/integrations and shows the saved state
+//     (opt-in since 2026-10-04: OFF unless the merchant turned it on).
 //   • toggle OFF → the /q loader flips aiCopyEnabled:false AND the rec-copy
 //     endpoint returns {ok:false, code:"disabled"} immediately (before cache).
 //   • toggle ON → the /q loader flips true AND rec-copy generates again.
-//   • restored ON (the default). Legacy /q.json byte-identical.
+//   • restored to the state it started in. Legacy /q.json byte-identical.
 import { chromium } from "playwright";
 import { createHash } from "node:crypto";
 
@@ -51,15 +52,14 @@ const deciderQ = (doc.nodes ?? []).find((n) => n.type === "question" && n.data?.
 const mapped = (deciderQ?.data?.answers ?? []).find((a) => a.target_id);
 ok("found a mapped deciding answer", Boolean(mapped), mapped?.id);
 
-// ── the toggle card renders (default ON) ─────────────────────────────────────
+// ── the toggle card renders and shows the saved state ───────────────────────
+const before = await readAiCopyEnabled(DECIDER);
+ok("loader aiCopyEnabled is a boolean", typeof before === "boolean", String(before));
 await page.goto(`${BASE}/studio/integrations`, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(700);
 ok("toggle card renders", await page.getByText("AI-written personalization").first().isVisible().catch(() => false));
 const box = page.locator('input[type="checkbox"]').first();
-ok("toggle checkbox present + checked by default", await box.isChecked().catch(() => false));
-
-const before = await readAiCopyEnabled(DECIDER);
-ok("loader aiCopyEnabled starts true (default)", before === true, String(before));
+ok("toggle checkbox shows the saved state", (await box.isChecked().catch(() => null)) === before, String(before));
 
 // ── toggle OFF → kill-switch FALSE path ──────────────────────────────────────
 const off = await toggle(false);
@@ -87,7 +87,11 @@ await page.waitForTimeout(1200);
 ok("UI click OFF persisted", (await readAiCopyEnabled(DECIDER)) === false);
 await page.locator('input[type="checkbox"]').first().click();
 await page.waitForTimeout(1200);
-ok("UI click ON restored (default)", (await readAiCopyEnabled(DECIDER)) === true);
+ok("UI click ON persisted", (await readAiCopyEnabled(DECIDER)) === true);
+
+// ── leave the shop as we found it ────────────────────────────────────────────
+await toggle(before);
+ok("restored the starting state", (await readAiCopyEnabled(DECIDER)) === before, String(before));
 
 // ── byte baseline ────────────────────────────────────────────────────────────
 const legacyAfter = sha(await (await ctx.request.get(`${BASE}/q/${LEGACY}.json`)).text());
