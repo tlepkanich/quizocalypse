@@ -1,0 +1,1051 @@
+<meta charset="utf-8">
+<title>Wiskr Billing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap">
+<style>
+  /* Layout: the shipped /studio shell (rail + one 840px column of solid-white cards on
+     the Crest print). Two pages. Account (the rail's old "My account"): your plan and
+     next bill, the credit meter, bill emails, past bills. Change plan (reached from it): the
+     three plans, and buying more credits once or every cycle. Shopify takes the money,
+     so every money action ends in a hand-off to Shopify. Static, light only. */
+  :root {
+    color-scheme: light;
+    /* Quartz tokens — values from app/styles/quizocalypse.css on origin/main. */
+    --qz-paper: #FFFFFF;
+    --qz-cream-2: #F5F4F8;
+    --qz-ink: #201C2E;
+    --qz-ink-3: #4E4860;
+    --qz-ink-4: #645E78;
+    --qz-ink-25: #B4AFC4;
+    --qz-rule: #E4E1EC;
+    --qz-rule-2: #EFEDF4;
+    --qz-accent: #5B45D6;
+    --qz-accent-2: #4A36B8;
+    --qz-accent-wash: #EFECFD;
+    --qz-accent-line: #D5CDF8;
+    --qz-accent-cell: #FAF9FF;
+    --qz-on-accent: #FFFFFF;
+    --qz-ok: #0F6B45;
+    --qz-live-wash: #E7F3ED;
+    --qz-crit: #A5241C;
+    --qz-crit-2: #8A1D17;
+    --qz-teal: #0B7285;
+    --qz-teal-2: #095E6E;
+    --qz-teal-ink: #0A4A57;
+    --qz-teal-wash: #E2F1F5;
+    --qz-ls-cell-bg: #FBFAFD;
+    --qz-lift-1: 0 1px 2px rgba(32, 28, 46, .05);
+    --qz-lift-2: 0 12px 30px -10px rgba(32, 28, 46, .26), 0 1px 2px rgba(32, 28, 46, .07);
+    --qz-focus: 0 0 0 3px rgba(91, 69, 214, .28);
+    --qz-font-body: "Figtree", -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+    /* The card edge the owner picked on Oct 1 (Lift, Tight preset) and the print at 65%. */
+    --qz-edge: 0 0 0 1px rgba(32, 28, 46, .14), 0 1px 2px rgba(32, 28, 46, .08), 0 5.6px 11.2px -2.8px rgba(44, 30, 120, .28);
+    --rail-edge: 1px 0 0 rgba(32, 28, 46, .14);
+    --gap: 18px;
+    --k: .65;
+    /* Preview-bar chrome (not product). */
+    --pv-bg: #201C2E;
+    --pv-fg: #EFECF5;
+    --pv-dim: #928CA4;
+    --pv-soft: #B7B1C6;
+    --pv-well: #2C2639;
+    --pv-line: #3A3348;
+    --pv-h: 46px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--qz-paper); }
+  body { font-family: var(--qz-font-body); font-size: 14px; line-height: 1.45; color: var(--qz-ink); -webkit-font-smoothing: antialiased; }
+  button, input, select { font-family: inherit; }
+  :focus-visible { outline: none; box-shadow: var(--qz-focus); }
+  h1, h2, h3, p, dl, dd, ul { margin: 0; }
+  ul { padding: 0; list-style: none; }
+  .ic { display: block; flex: none; width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  .num { font-variant-numeric: tabular-nums; }
+  [hidden] { display: none !important; }
+
+  /* ── Preview controls — deliberately not product chrome ─────────────── */
+  .pv { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; min-height: var(--pv-h); padding: 8px 16px; background: var(--pv-bg); color: var(--pv-fg); }
+  .pv-name { margin: 0 6px 0 0; font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .pv-name span { color: var(--pv-dim); font-weight: 500; }
+  .pv-grp { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--pv-dim); }
+  .pv-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 7px; background: var(--pv-well); border: 1px solid var(--pv-line); }
+  .pv-seg button { border: 0; background: transparent; color: var(--pv-soft); cursor: pointer; font-size: 12.5px; font-weight: 600; line-height: 1; padding: 6px 10px; border-radius: 5px; }
+  .pv-seg button[aria-pressed="true"] { background: var(--pv-fg); color: var(--pv-bg); }
+  .pv-note { margin: 0 0 0 auto; font-size: 11.5px; color: var(--pv-dim); }
+
+  /* ── The app shell — the shipped rail and Home ground ────────────────── */
+  .app { position: relative; display: flex; align-items: stretch; min-height: calc(100vh - var(--pv-h)); background: var(--qz-paper); }
+  .rail { flex: none; width: 176px; position: sticky; top: var(--pv-h); z-index: 2; align-self: flex-start; height: calc(100vh - var(--pv-h)); display: flex; flex-direction: column; padding: 16px 10px; background: var(--qz-paper); box-shadow: var(--rail-edge); }
+  .wm { display: inline-flex; align-items: center; padding: 4px 8px 20px; text-decoration: none; }
+  .wm img { width: 67px; height: 20px; display: block; }
+  .rail-nav { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; }
+  .ri { position: relative; display: flex; align-items: center; gap: 11px; padding: 9px 12px; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--qz-ink-3); font-size: 14px; font-weight: 500; line-height: 1; text-decoration: none; text-align: left; }
+  .ri .ic { width: 17px; height: 17px; stroke-width: 1.5; opacity: .85; }
+  .ri:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+  .ri[aria-current="page"] { background: var(--qz-accent-wash); color: var(--qz-accent-2); font-weight: 600; }
+  .ri[aria-current="page"] .ic { opacity: 1; }
+  .ri[aria-current="page"]::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 0 2px 2px 0; background: var(--qz-accent); }
+  .rail-collapse { align-self: flex-end; width: 28px; height: 28px; margin: 8px 2px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: transparent; color: var(--qz-ink-4); cursor: pointer; }
+  .rail-collapse:hover { background: var(--qz-cream-2); color: var(--qz-ink); }
+  .rail-foot { display: grid; gap: 2px; padding-top: 14px; border-top: 1px solid var(--qz-rule); }
+  .ri-acct { gap: 9px; padding: 7px 12px 7px 10px; }
+  .avatar { flex: none; width: 22px; height: 22px; display: block; }
+
+  .main { position: relative; flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; align-items: flex-start; padding: 26px 32px 56px; background: var(--qz-paper); }
+  /* The full-strength Crest tile; the shipped print is this layer at 10%. */
+  .main::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: __TILE__ 0 0 / 360px 240px repeat; opacity: calc(.10 * var(--k)); }
+  @media print, (forced-colors: active) { .main::before { display: none; } }
+  .col { position: relative; z-index: 1; width: 100%; max-width: 840px; display: flex; flex-direction: column; gap: var(--gap); }
+
+  /* ── Shared shapes (Home: 22px cards on the ring edge, pill controls) ── */
+  .card { background: var(--qz-paper); border: 0; border-radius: 22px; box-shadow: var(--qz-edge); }
+  .pad { padding: 22px 26px 24px; }
+  .lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--qz-ink-4); }
+  .sechead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; }
+  .sechead h2 { font-size: 17px; font-weight: 700; line-height: 1.25; letter-spacing: -.01em; }
+  .sechead .aside { margin-left: auto; font-size: 13px; color: var(--qz-ink-4); }
+  .sub { font-size: 13.5px; color: var(--qz-ink-3); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 11px 20px; border: 0; border-radius: 999px; background: var(--qz-accent); color: var(--qz-on-accent); cursor: pointer; font-size: 14.5px; font-weight: 600; line-height: 1; white-space: nowrap; text-decoration: none; font-variant-numeric: tabular-nums; }
+  .btn:hover { background: var(--qz-accent-2); }
+  .btn-sm { min-height: 34px; padding: 9px 16px; font-size: 13.5px; }
+  .btn-quiet { background: var(--qz-paper); color: var(--qz-ink); box-shadow: inset 0 0 0 1px var(--qz-rule); }
+  .btn-quiet:hover { background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+  .btn-quiet:focus-visible { box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-focus); }
+  .btn-crit { background: var(--qz-crit); }
+  .btn-crit:hover { background: var(--qz-crit-2); }
+  .btn-teal { background: var(--qz-teal); }
+  .btn-teal:hover { background: var(--qz-teal-2); }
+  .link { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; border-radius: 4px; background: none; cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--qz-accent-2); text-decoration: none; }
+  .link:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .link .ic { width: 13px; height: 13px; stroke-width: 2; }
+  .link-quiet { color: var(--qz-ink-4); font-weight: 500; }
+  .tag { flex: none; display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+  .tag.is-live { background: var(--qz-live-wash); color: var(--qz-ok); }
+  .tag.is-trial { background: var(--qz-accent-wash); color: var(--qz-accent-2); }
+  .tag.is-quiet { background: var(--qz-cream-2); color: var(--qz-ink-4); }
+  .seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--qz-cream-2); }
+  .seg a, .seg button { display: inline-flex; align-items: center; height: 32px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent; color: var(--qz-ink-3); cursor: pointer; font-size: 13.5px; font-weight: 600; line-height: 1; text-decoration: none; }
+  .seg a:hover, .seg button:hover { color: var(--qz-ink); }
+  .seg a[aria-current="page"], .seg button[aria-pressed="true"] { background: var(--qz-paper); color: var(--qz-accent-2); box-shadow: inset 0 0 0 1px var(--qz-accent-line); }
+
+  /* ── Page headers ───────────────────────────────────────────────────── */
+  .head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; padding: 18px 22px 18px 26px; }
+  .head h1 { font-size: 30px; font-weight: 700; line-height: 1.1; letter-spacing: -.02em; }
+  .head-back { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .back { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 999px; background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-rule); color: var(--qz-ink); cursor: pointer; }
+  .back:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+  .back .ic { width: 17px; height: 17px; stroke-width: 2; }
+  .head-now { font-size: 13.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+  .head-now b { color: var(--qz-ink); font-weight: 700; }
+
+  /* ── Your plan + next bill ──────────────────────────────────────────── */
+  .plan-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 300px); gap: 20px 28px; align-items: stretch; padding: 22px 26px 24px; }
+  .plan-me { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .plan-name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; }
+  .plan-name b { margin-right: 2px; font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.03em; }
+  .plan-acts { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin-top: auto; padding-top: 8px; }
+  .bill { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px 15px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); }
+  .bill b { font-size: 27px; font-weight: 800; line-height: 1.1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+  .bill b small { font-size: 12.5px; font-weight: 600; letter-spacing: 0; color: var(--qz-ink-4); }
+  .bill-when { font-size: 13.5px; font-weight: 600; color: var(--qz-ink); }
+  .bill-how { display: grid; gap: 1px; font-size: 12.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+  .bill-how span { display: flex; justify-content: space-between; gap: 12px; }
+  .bill-how i { font-style: normal; }
+
+  /* ── Credits ────────────────────────────────────────────────────────── */
+  .cr-fig { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-top: 14px; }
+  .cr-fig b { font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .cr-fig span { font-size: 14.5px; color: var(--qz-ink-3); font-variant-numeric: tabular-nums; }
+  .cr-fig.is-over b { color: var(--qz-teal); }
+  .meter { display: flex; height: 12px; margin-top: 14px; border-radius: 999px; overflow: hidden; background: var(--qz-rule-2); box-shadow: inset 0 0 0 1px rgba(32, 28, 46, .05); }
+  .meter i { display: block; height: 100%; }
+  .meter .m-used { background: var(--qz-accent); }
+  .meter .m-over { background: var(--qz-teal); box-shadow: inset 2px 0 0 var(--qz-paper); }
+  .meter-ax { display: flex; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+
+  /* The signal: teal, used only when money is on the line. */
+  .signal { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 16px; padding: 12px 14px 12px 16px; border-radius: 12px; background: var(--qz-teal-wash); color: var(--qz-teal-ink); font-size: 13.5px; }
+  .signal p { flex: 1 1 280px; min-width: 0; }
+  .signal b { font-weight: 700; }
+
+  .ledger { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 36px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--qz-rule-2); }
+  .lg dl { margin-top: 6px; }
+  .lg dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--qz-rule-2); }
+  .lg dl > div:last-child { border-bottom: 0; }
+  .lg dt { min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); }
+  .lg dt small { display: block; font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+  .lg dd { flex: none; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .lg .tot dt { font-weight: 700; color: var(--qz-ink); }
+  .lg .tot dd { font-size: 15px; font-weight: 800; }
+  /* AI features: one line per feature, nested under the AI total. */
+  .lg dl > div.has-sub { padding-bottom: 5px; border-bottom: 0; }
+  .lg dl > div.sub { margin-left: 2px; padding: 4px 0 4px 12px; border-bottom: 0; border-left: 2px solid var(--qz-rule); }
+  .lg dl > div.sub.is-last { margin-bottom: 10px; }
+  .lg dl > div.sub.is-last + div { border-top: 1px solid var(--qz-rule-2); }
+  .lg .sub dt { font-size: 13px; }
+  .lg .sub dt small { display: inline; margin-left: 7px; }
+  .lg .sub dd { font-size: 13px; font-weight: 500; color: var(--qz-ink-3); }
+
+  /* The "i" beside Credits: what a credit buys. Opens on hover, focus or tap. */
+  .h2i { display: flex; align-items: center; gap: 8px; }
+  .info { position: relative; display: inline-flex; }
+  .info-btn { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 999px; background: var(--qz-cream-2); box-shadow: inset 0 0 0 1px var(--qz-rule); color: var(--qz-ink-3); cursor: pointer; font-size: 12px; font-weight: 700; font-style: normal; line-height: 1; }
+  .info-btn:hover, .info.is-open .info-btn { background: var(--qz-accent-wash); box-shadow: inset 0 0 0 1px var(--qz-accent-line); color: var(--qz-accent-2); }
+  .info-btn:focus-visible { box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-focus); }
+  .info-pop { position: absolute; top: calc(100% + 8px); left: -12px; z-index: 5; display: none; gap: 8px; width: min(360px, calc(100vw - 64px)); padding: 13px 15px; border-radius: 12px; background: var(--qz-paper); box-shadow: 0 0 0 1px rgba(32, 28, 46, .1), var(--qz-lift-2); }
+  .info:hover .info-pop, .info:focus-within .info-pop, .info.is-open .info-pop { display: grid; }
+  .info-pop span { display: grid; grid-template-columns: 98px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+  .info-pop b { font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .info-pop i { font-size: 13px; font-style: normal; color: var(--qz-ink-3); }
+
+  .byq { margin-top: 12px; padding-top: 18px; border-top: 1px solid var(--qz-rule-2); }
+  .byq .twrap { margin-top: 2px; }
+  .byq td:first-child { white-space: normal; min-width: 180px; }
+  .byq tr.sum td { border-top-color: var(--qz-rule); color: var(--qz-ink); font-weight: 700; }
+  .none { color: var(--qz-ink-25); }
+
+  /* ── In the builder: the credit tag on a control that costs credits ── */
+  .ctag { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; border-radius: 999px; background: var(--qz-cream-2); box-shadow: inset 0 0 0 1px var(--qz-rule); color: var(--qz-ink-3); font-size: 11.5px; font-weight: 600; line-height: 1.3; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ctag .ic { width: 12px; height: 12px; stroke-width: 2; }
+  .where { font-size: 12.5px; color: var(--qz-ink-4); }
+  .ex { margin-top: 14px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-paper); }
+  .ex-row { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-bottom: 1px solid var(--qz-rule-2); }
+  .ex-row:last-child { border-bottom: 0; }
+  .ex-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--qz-cream-2); color: var(--qz-ink-3); }
+  .ex-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+  .ex-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 14px; font-weight: 600; }
+  .ex-main small { font-size: 12.5px; color: var(--qz-ink-4); max-width: 62ch; }
+  .rules { display: grid; gap: 9px; margin-top: 14px; font-size: 13.5px; color: var(--qz-ink-3); }
+  .rules li { display: grid; grid-template-columns: 6px minmax(0, 1fr); gap: 11px; }
+  .rules li::before { content: ""; width: 6px; height: 6px; margin-top: 7px; border-radius: 999px; background: var(--qz-ink-25); }
+  .rules b { color: var(--qz-ink); font-weight: 700; }
+
+  .how { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--qz-rule-2); font-size: 12.5px; color: var(--qz-ink-4); max-width: 74ch; }
+
+  /* ── Bill emails ────────────────────────────────────────────────────── */
+  .mail-to { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .field { flex: 1 1 260px; min-width: 0; max-width: 380px; display: grid; gap: 6px; }
+  .field label { font-size: 13px; font-weight: 600; color: var(--qz-ink-3); }
+  .field input { width: 100%; height: 38px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-ink-25); color: var(--qz-ink); font-size: 14px; }
+  .field input::placeholder { color: var(--qz-ink-4); }
+  .field input:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+  .field input:focus-visible { box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-focus); }
+  .mail-err { margin-top: 8px; font-size: 12.5px; font-weight: 600; color: var(--qz-crit); }
+  .mail-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .mail-list li { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 4px 4px 4px 14px; border-radius: 999px; background: var(--qz-accent-wash); color: var(--qz-ink); font-size: 13.5px; font-weight: 600; }
+  .mail-list li span { min-width: 0; overflow-wrap: anywhere; }
+  .mail-list button { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 999px; background: transparent; color: var(--qz-ink-4); cursor: pointer; }
+  .mail-list button:hover { background: var(--qz-paper); color: var(--qz-crit); }
+  .mail-list button .ic { width: 13px; height: 13px; stroke-width: 2.2; }
+  .mail-none { margin-top: 12px; font-size: 13px; color: var(--qz-ink-4); }
+  .sws { margin-top: 16px; border-top: 1px solid var(--qz-rule-2); }
+  .swrow { display: flex; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid var(--qz-rule-2); cursor: pointer; }
+  .swrow:last-child { border-bottom: 0; padding-bottom: 0; }
+  .swrow span { flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 600; }
+  .swrow span small { display: block; font-size: 12.5px; font-weight: 400; color: var(--qz-ink-4); }
+  .sw { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 34px; height: 20px; margin: 0; border-radius: 999px; background: var(--qz-ink-25); cursor: pointer; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 999px; background: var(--qz-paper); box-shadow: var(--qz-lift-1); }
+  .sw:checked { background: var(--qz-accent); }
+  .sw:checked::after { transform: translateX(14px); }
+
+  /* ── Past bills ─────────────────────────────────────────────────────── */
+  .twrap { margin-top: 8px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { padding: 10px 12px 9px 0; font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; text-align: left; color: var(--qz-ink-4); white-space: nowrap; }
+  td { padding: 11px 12px 11px 0; border-top: 1px solid var(--qz-rule-2); white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--qz-ink-3); }
+  td:first-child { color: var(--qz-ink); font-weight: 600; }
+  td.r, th.r { text-align: right; }
+  td.tot { color: var(--qz-ink); font-weight: 700; }
+  td.act { width: 1%; padding-left: 12px; padding-right: 0; text-align: right; }
+  .empty { margin-top: 12px; padding: 18px 16px; border: 1px dashed var(--qz-rule); border-radius: 12px; font-size: 13.5px; color: var(--qz-ink-4); text-align: center; }
+  .hist-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; padding-top: 13px; border-top: 1px solid var(--qz-rule-2); font-size: 12.5px; color: var(--qz-ink-4); }
+
+  /* ── Change plan: the three plans ───────────────────────────────────── */
+  .plans-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+  .pl { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-paper); }
+  .pl.is-current { border-color: var(--qz-accent-line); background: var(--qz-accent-cell); box-shadow: inset 0 0 0 1px var(--qz-accent-line); }
+  .pl-top b { font-size: 15px; font-weight: 700; }
+  .pl-price { display: flex; align-items: baseline; gap: 5px; }
+  .pl-price b { font-size: 30px; font-weight: 800; line-height: 1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+  .pl-price span { font-size: 13px; color: var(--qz-ink-4); }
+  .pl-cr { font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pl-cr small { display: block; font-size: 12.5px; font-weight: 400; color: var(--qz-ink-4); }
+  .pl ul { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--qz-rule-2); font-size: 13px; color: var(--qz-ink-3); }
+  .pl li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; align-items: start; }
+  .pl li .ic { width: 14px; height: 14px; margin-top: 2px; stroke-width: 2.2; color: var(--qz-accent); }
+  .pl .btn, .pl .pl-now { margin-top: auto; }
+  .pl-now { display: flex; align-items: center; justify-content: center; min-height: 34px; border-radius: 999px; background: var(--qz-accent-wash); color: var(--qz-accent-2); font-size: 13.5px; font-weight: 600; }
+  .note { margin-top: 14px; font-size: 12.5px; color: var(--qz-ink-4); }
+
+  /* ── Change plan: more credits ──────────────────────────────────────── */
+  .mc-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 16px; }
+  .mc-row .sub { flex: 1 1 240px; min-width: 0; }
+  /* The amount: a slider for the rough number, a field for the exact one. */
+  .amt { margin-top: 16px; padding: 18px 20px 14px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); }
+  .amt-top { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 10px 20px; }
+  .amt-num { display: flex; align-items: baseline; gap: 8px; }
+  .amt-num input { width: 5.2em; height: 46px; padding: 0 12px; border: 0; border-radius: 12px; background: var(--qz-paper); box-shadow: inset 0 0 0 1px var(--qz-ink-25); color: var(--qz-ink); font-size: 27px; font-weight: 800; letter-spacing: -.035em; font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+  .amt-num input::-webkit-outer-spin-button, .amt-num input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .amt-num input:hover { box-shadow: inset 0 0 0 1px var(--qz-ink-3); }
+  .amt-num input:focus-visible { box-shadow: inset 0 0 0 1px var(--qz-accent), var(--qz-focus); }
+  .amt-num label { font-size: 14.5px; font-weight: 600; color: var(--qz-ink-3); }
+  .amt-cost { text-align: right; font-variant-numeric: tabular-nums; }
+  .amt-cost b { display: block; font-size: 27px; font-weight: 800; line-height: 1.1; letter-spacing: -.035em; }
+  .amt-cost span { font-size: 12.5px; color: var(--qz-ink-4); }
+  .slide { position: relative; margin-top: 16px; }
+  .slide input { --p: 20%; display: block; width: 100%; height: 24px; margin: 0; background: transparent; cursor: pointer; -webkit-appearance: none; appearance: none; border-radius: 999px; }
+  .slide input::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--qz-accent) var(--p), var(--qz-rule) var(--p)); }
+  .slide input::-moz-range-track { height: 8px; border-radius: 999px; background: var(--qz-rule); }
+  .slide input::-moz-range-progress { height: 8px; border-radius: 999px; background: var(--qz-accent); }
+  .slide input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -7px; border: 0; border-radius: 999px; background: var(--qz-paper); box-shadow: 0 0 0 2px var(--qz-accent), 0 2px 5px rgba(44, 30, 120, .3); }
+  .slide input::-moz-range-thumb { width: 22px; height: 22px; border: 0; border-radius: 999px; background: var(--qz-paper); box-shadow: 0 0 0 2px var(--qz-accent), 0 2px 5px rgba(44, 30, 120, .3); }
+  .slide input:focus-visible { box-shadow: var(--qz-focus); }
+  /* The mark where the next plan costs the same. */
+  .slide-mark { position: absolute; top: 3px; left: calc(11px + (100% - 22px) * var(--at)); width: 2px; height: 18px; margin-left: -1px; border-radius: 1px; background: var(--qz-ink-25); pointer-events: none; }
+  .slide-ax { position: relative; display: flex; justify-content: space-between; gap: 12px; height: 18px; margin-top: 2px; font-size: 12px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+  .slide-ax b { position: absolute; top: 0; left: calc(11px + (100% - 22px) * var(--at)); transform: translateX(-50%); font-weight: 600; color: var(--qz-ink-3); white-space: nowrap; }
+  .mc-buy { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 20px; margin-top: 16px; }
+  .mc-buy p { flex: 1 1 280px; min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); }
+  .mc-have { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; padding: 12px 16px; border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+  .nudge { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 16px; padding: 13px 14px 13px 16px; border-radius: 12px; background: var(--qz-accent-wash); font-size: 13.5px; color: var(--qz-ink); font-variant-numeric: tabular-nums; }
+  .nudge p { flex: 1 1 280px; min-width: 0; }
+  .nudge b { font-weight: 700; }
+
+  .cancel { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 20px; padding: 16px 22px 16px 26px; }
+  .cancel p { flex: 1 1 300px; min-width: 0; font-size: 13.5px; color: var(--qz-ink-3); }
+
+  /* ── Dialog: every money action is confirmed here, then finished in Shopify ── */
+  dialog { width: min(440px, calc(100vw - 32px)); padding: 0; border: 0; border-radius: 22px; background: var(--qz-paper); color: var(--qz-ink); box-shadow: 0 0 0 1px rgba(32, 28, 46, .08), var(--qz-lift-2); }
+  dialog::backdrop { background: rgba(32, 28, 46, .42); }
+  .dlg { display: flex; flex-direction: column; gap: 14px; padding: 24px 26px 22px; }
+  .dlg h2 { font-size: 21px; font-weight: 700; line-height: 1.25; letter-spacing: -.02em; text-wrap: balance; }
+  .dlg p { font-size: 14px; color: var(--qz-ink-3); }
+  .dlg dl { border: 1px solid var(--qz-rule); border-radius: 12px; background: var(--qz-ls-cell-bg); }
+  .dlg dl > div { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--qz-rule-2); }
+  .dlg dl > div:last-child { border-bottom: 0; }
+  .dlg dt { font-size: 13px; color: var(--qz-ink-4); }
+  .dlg dd { font-size: 14px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .dlg dd s { font-weight: 500; color: var(--qz-ink-4); text-decoration: none; }
+  .dlg ul { display: grid; gap: 6px; font-size: 13.5px; color: var(--qz-ink-3); }
+  .dlg li { display: grid; grid-template-columns: 6px minmax(0, 1fr); gap: 10px; }
+  .dlg li::before { content: ""; width: 6px; height: 6px; margin-top: 7px; border-radius: 999px; background: var(--qz-ink-25); }
+  .dlg-acts { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+
+  .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); z-index: 60; max-width: calc(100% - 32px); padding: 10px 14px; border-radius: 8px; background: var(--qz-ink); color: var(--qz-on-accent); box-shadow: var(--qz-lift-2); font-size: 13px; line-height: 1.45; opacity: 0; pointer-events: none; transform: translateX(-50%); }
+  .toast.on { opacity: 1; }
+
+  /* The admin is desktop-only; these keep the mock readable on a phone. */
+  @media (max-width: 900px) {
+    .rail { width: 60px; }
+    .rail .ri span, .rail-collapse, .wm { display: none; }
+    .rail .ri { width: 40px; height: 40px; padding: 0; justify-content: center; }
+    .rail .ri[aria-current="page"]::before { display: none; }
+    .pv-note { display: none; }
+  }
+  @media (max-width: 720px) {
+    .rail { display: none; }
+    .main { padding: 18px 16px 40px; }
+    .pad { padding: 18px 18px 20px; }
+    .head { padding: 16px 18px; }
+    .head h1 { font-size: 26px; }
+    .plan-top { grid-template-columns: minmax(0, 1fr); padding: 18px 18px 20px; }
+    .ledger { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+    .plans-grid { grid-template-columns: minmax(0, 1fr); }
+    .slide-ax b { display: none; }
+    .cr-fig b { font-size: 34px; }
+  }
+</style>
+
+<div class="pv" role="region" aria-label="Preview controls">
+  <p class="pv-name">Wiskr Billing <span>· mock</span></p>
+  <div class="pv-grp"><span id="lblView">Page</span>
+    <div class="pv-seg" id="pvView" role="group" aria-labelledby="lblView">
+      <button type="button" data-view="billing" aria-pressed="true">Account</button>
+      <button type="button" data-view="change" aria-pressed="false">Change plan</button>
+      <button type="button" data-view="builder" aria-pressed="false" title="How a credit-costing feature is marked where a merchant turns it on.">Credit tag</button>
+    </div>
+  </div>
+  <div class="pv-grp"><span id="lblPlan">On plan</span>
+    <div class="pv-seg" id="pvPlan" role="group" aria-labelledby="lblPlan">
+      <button type="button" data-plan="starter" aria-pressed="false">Starter</button>
+      <button type="button" data-plan="growth" aria-pressed="true">Growth</button>
+    </div>
+  </div>
+  <div class="pv-grp"><span id="lblUse">Credits</span>
+    <div class="pv-seg" id="pvUse" role="group" aria-labelledby="lblUse">
+      <button type="button" data-use="normal" aria-pressed="true">Normal</button>
+      <button type="button" data-use="near" aria-pressed="false" title="80% or more of the cycle's credits are used.">Nearly out</button>
+      <button type="button" data-use="over" aria-pressed="false" title="Credits ran out; extra credits are adding up.">Over</button>
+      <button type="button" data-use="trial" aria-pressed="false" title="Inside the 14-day free trial.">Free trial</button>
+    </div>
+  </div>
+  <p class="pv-note">Example store · today is Oct 1, 2026</p>
+</div>
+
+<div class="app" id="app">
+  <aside class="rail" aria-label="Studio navigation">
+    <a class="wm" href="#" aria-label="Wiskr — home"><img src="__WORDMARK__" alt=""></a>
+    <nav class="rail-nav" aria-label="Studio sections">
+      <a class="ri" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg><span>Home</span></a>
+      <a class="ri" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"></path><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"></path><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"></path></svg><span>Quizzes</span></a>
+      <a class="ri" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="M18 17V9"></path><path d="M13 17V5"></path><path d="M8 17v-3"></path></svg><span>Analytics</span></a>
+      <a class="ri" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"></path><circle cx="13.5" cy="6.5" r=".5" style="fill: currentColor;"></circle><circle cx="17.5" cy="10.5" r=".5" style="fill: currentColor;"></circle><circle cx="6.5" cy="12.5" r=".5" style="fill: currentColor;"></circle><circle cx="8.5" cy="7.5" r=".5" style="fill: currentColor;"></circle></svg><span>Brand Identity</span></a>
+      <a class="ri" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22v-5"></path><path d="M15 8V2"></path><path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z"></path><path d="M9 8V2"></path></svg><span>Integrations</span></a>
+      <a class="ri" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"></path><circle cx="12" cy="12" r="3"></circle></svg><span>Settings</span></a>
+      <a class="ri" href="#"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"></path><rect x="2" y="4" width="20" height="16" rx="2"></rect></svg><span>Email</span></a>
+    </nav>
+    <button type="button" class="rail-collapse" aria-label="Collapse navigation"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" style="width: 16px; height: 16px;"><path d="m11 17-5-5 5-5"></path><path d="m18 17-5-5 5-5"></path></svg></button>
+    <div class="rail-foot">
+      <a class="ri ri-acct" href="#" aria-current="page"><img class="avatar" src="__FOX__" alt="" aria-hidden="true"><span>Account</span></a>
+      <button type="button" class="ri"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path></svg><span>Sign out</span></button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- ═════════ Page 1 · Account (the rail's old "My account") ═════════ -->
+    <div class="col" id="viewBilling">
+
+      <header class="card head">
+        <h1>Account</h1>
+        <p class="head-now">northlightskin.myshopify.com</p>
+      </header>
+
+      <!-- Your plan and the next bill -->
+      <section class="card" aria-labelledby="hPlan">
+        <div class="plan-top">
+          <div class="plan-me">
+            <p class="lbl" id="hPlan">Your plan</p>
+            <div class="plan-name"><b id="planName">Growth</b><span class="tag is-live" id="planTag">Active</span><span class="tag is-quiet" id="planTag2" hidden></span></div>
+            <p class="sub num" id="planLine">$200 a month · 2,200 credits each cycle</p>
+            <div class="plan-acts">
+              <button type="button" class="btn btn-sm" data-view="change">Change plan</button>
+            </div>
+          </div>
+          <div class="bill">
+            <p class="lbl" id="billLbl">Next bill</p>
+            <b id="billAmt">$200.00</b>
+            <p class="bill-when" id="billWhen">Oct 19, 2026</p>
+            <div class="bill-how" id="billHow"><span>Growth<i>$200.00</i></span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Credits -->
+      <section class="card pad" aria-labelledby="hCr">
+        <div class="sechead">
+          <div class="h2i">
+            <h2 id="hCr">Credits</h2>
+            <span class="info" id="crInfo">
+              <button type="button" class="info-btn" aria-label="What a credit is" aria-expanded="false" aria-controls="crInfoPop">i</button>
+              <span class="info-pop" id="crInfoPop" role="tooltip">
+                <span><b>1 credit</b><i>1 quiz engagement: a shopper starts a quiz</i></span>
+                <span><b id="infoAi">0.1–0.2 credit</b><i>1 use of an AI feature on a quiz. Each feature has its own rate.</i></span>
+              </span>
+            </span>
+          </div>
+          <p class="aside num" id="crCycle">Sep 19 – Oct 18 · 18 days left</p>
+        </div>
+        <div class="cr-fig" id="crFig"><b id="crBig">1,016</b><span id="crOf">left of 2,380 this cycle</span></div>
+        <div class="meter" id="meter" role="img" aria-label="1,364 of 2,380 credits used"><i class="m-used" style="width: 57.3%;"></i></div>
+        <div class="meter-ax"><span id="axL">57% used</span><span id="axR">2,380</span></div>
+
+        <div class="signal" id="signal" hidden>
+          <p id="signalText"></p>
+          <button type="button" class="btn btn-sm btn-teal" data-view="change">Get more credits</button>
+        </div>
+
+        <div class="ledger">
+          <div class="lg">
+            <p class="lbl">Used</p>
+            <dl id="usedRows"></dl>
+          </div>
+          <div class="lg">
+            <p class="lbl">Current cycle</p>
+            <dl id="cycleRows"></dl>
+          </div>
+        </div>
+        <div class="byq">
+          <p class="lbl">By quiz</p>
+          <div class="twrap">
+            <table>
+              <thead><tr id="byqHead"></tr></thead>
+              <tbody id="byqBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <p class="how">Product recommendations come from your quiz logic and use no credits. Credits you don’t use roll over once and last 30 more days.</p>
+      </section>
+
+      <!-- Bill emails -->
+      <section class="card pad" aria-labelledby="hMail">
+        <div class="sechead"><h2 id="hMail">Bill emails</h2></div>
+        <form class="mail-to" id="mailForm" novalidate>
+          <div class="field">
+            <label for="billEmail">Send to</label>
+            <input type="email" id="billEmail" placeholder="name@yourstore.com" autocomplete="off" spellcheck="false">
+          </div>
+          <button type="submit" class="btn btn-sm btn-quiet">Save</button>
+        </form>
+        <p class="mail-err" id="mailErr" role="alert" hidden></p>
+        <ul class="mail-list" id="mailList" aria-label="Saved bill emails"></ul>
+        <p class="mail-none" id="mailNone" hidden>No email saved. Receipts and alerts aren’t being sent.</p>
+        <div class="sws">
+          <label class="swrow"><span>Receipt on every bill<small>Your plan, credits used and the total, on each bill date.</small></span><input type="checkbox" class="sw" id="swReceipt" checked></label>
+          <label class="swrow"><span>Alert at 80% of your credits<small>Time to add credits or upgrade.</small></span><input type="checkbox" class="sw" id="sw80" checked></label>
+          <label class="swrow"><span>Alert when your credits run out<small id="sw100Sub">From then on, each extra credit is $0.10.</small></span><input type="checkbox" class="sw" id="sw100" checked></label>
+        </div>
+      </section>
+
+      <!-- Past bills -->
+      <section class="card pad" aria-labelledby="hHist">
+        <div class="sechead"><h2 id="hHist">Past bills</h2></div>
+        <div class="twrap" id="histWrap">
+          <table>
+            <thead><tr><th>Bill date</th><th>Plan</th><th class="r">Available credits</th><th class="r">Credits used</th><th class="r">Total cost</th><th class="act" aria-label="Receipt"></th></tr></thead>
+            <tbody id="histBody"></tbody>
+          </table>
+        </div>
+        <p class="empty" id="histEmpty" hidden>No bills yet. Your first bill is on Oct 10, 2026.</p>
+        <div class="hist-foot">
+          <span>Credits used past what was available are a separate line on that bill.</span>
+          <a class="link" href="#" data-say="Opens Billing in the Shopify admin, in a new tab.">Invoices in Shopify <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10"></path><path d="M7 17 17 7"></path></svg></a>
+        </div>
+      </section>
+    </div>
+
+    <!-- ═════════ Page 2 · Account → Change plan ═════════ -->
+    <div class="col" id="viewChange" hidden>
+
+      <header class="card head">
+        <div class="head-back">
+          <button type="button" class="back" data-view="billing" aria-label="Back to Account"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg></button>
+          <h1>Change plan</h1>
+        </div>
+        <p class="head-now" id="headNow">You’re on <b>Growth</b> · 1,016 credits left</p>
+      </header>
+
+      <!-- The three plans -->
+      <section class="card pad" aria-labelledby="hPlans">
+        <div class="sechead">
+          <h2 id="hPlans">Plans</h2>
+          <p class="aside">You confirm every change in Shopify.</p>
+        </div>
+        <div class="plans-grid" id="plansGrid"></div>
+        <p class="note" id="plansNote"></p>
+      </section>
+
+      <!-- More credits, without changing plan -->
+      <section class="card pad" aria-labelledby="hMore">
+        <div class="sechead">
+          <h2 id="hMore">More credits</h2>
+          <p class="aside num" id="mcRate">$0.10 a credit on Growth</p>
+        </div>
+        <div class="mc-row">
+          <div class="seg" id="mcMode" role="group" aria-label="How often">
+            <button type="button" data-mode="once" aria-pressed="true">One time</button>
+            <button type="button" data-mode="cycle" aria-pressed="false">Every cycle</button>
+          </div>
+          <p class="sub" id="mcModeSub">A single top-up, added today.</p>
+        </div>
+        <div class="amt">
+          <div class="amt-top">
+            <div class="amt-num"><input type="number" id="amtNum" inputmode="numeric" value="500" min="100" max="5000" step="1"><label for="amtNum">more credits</label></div>
+            <div class="amt-cost"><b id="amtCost">$50.00</b><span id="amtPer">one time</span></div>
+          </div>
+          <div class="slide" id="slide">
+            <input type="range" id="amtRange" aria-label="How many more credits" min="100" max="5000" step="100" value="500">
+            <i class="slide-mark" id="slideMark" aria-hidden="true"></i>
+          </div>
+          <div class="slide-ax" id="slideAx"><span id="axMin">100</span><b id="axMark">Same price as Enterprise</b><span id="axMax">5,000</span></div>
+        </div>
+        <div class="mc-have" id="mcHave" hidden></div>
+        <div class="mc-buy">
+          <p id="mcSum"></p>
+          <button type="button" class="btn" id="mcBtn">Buy 1,000 credits · $100.00</button>
+        </div>
+        <div class="nudge" id="nudge">
+          <p id="nudgeText"></p>
+          <button type="button" class="btn btn-sm" id="nudgeBtn">Upgrade to Growth</button>
+        </div>
+      </section>
+
+      <!-- Cancel lives here, last on the page -->
+      <section class="card cancel" aria-label="Cancel plan">
+        <p id="cancelText">Growth stays on until Oct 18 if you cancel. After that your quizzes come off your store.</p>
+        <button type="button" class="btn btn-sm btn-quiet" id="cancelBtn">Cancel plan</button>
+      </section>
+    </div>
+
+    <!-- ═════════ Spec board · the credit tag, where a feature is turned on ═════════ -->
+    <div class="col" id="viewBuilder" hidden>
+
+      <header class="card head">
+        <h1>Credit tag</h1>
+        <p class="head-now">Marks every AI feature that is charged per use, where a merchant turns it on</p>
+      </header>
+
+      <section class="card pad" aria-labelledby="hTag1">
+        <div class="sechead"><h2 id="hTag1">On a switch</h2><p class="aside where">Integrations → Shopper AI</p></div>
+        <div class="ex">
+          <label class="ex-row">
+            <span class="ex-main">
+              <span class="ex-name">AI-written personalization <span class="ctag"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path><path d="M19 15v4"></path><path d="M17 17h4"></path></svg><span data-tag="rec_copy">AI · 0.2 credit per results page</span></span></span>
+              <small>Off unless you turn it on. On: AI writes a “why we recommend this” paragraph for each shopper. Your product recommendations come from your quiz logic either way and use no credits.</small>
+            </span>
+            <input type="checkbox" class="sw" id="swRecCopy">
+          </label>
+        </div>
+      </section>
+
+      <section class="card pad" aria-labelledby="hTag2">
+        <div class="sechead"><h2 id="hTag2">On a screen type</h2><p class="aside where">Builder → Add a screen</p></div>
+        <div class="ex">
+          <div class="ex-row"><span class="ex-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4.5"></path><path d="M12 17.5h.01"></path></svg></span><span class="ex-main"><span class="ex-name">Question</span><small>Ask the shopper something and use the answer.</small></span></div>
+          <div class="ex-row"><span class="ex-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"></path><rect x="2" y="4" width="20" height="16" rx="2"></rect></svg></span><span class="ex-main"><span class="ex-name">Email capture</span><small>Collect an email before the results.</small></span></div>
+          <div class="ex-row"><span class="ex-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></span><span class="ex-main"><span class="ex-name">Ask AI <span class="ctag"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path><path d="M19 15v4"></path><path d="M17 17h4"></path></svg><span data-tag="ask_ai">0.1 credit per reply</span></span></span><small>The shopper types a question and AI answers from your catalog.</small></span></div>
+          <div class="ex-row"><span class="ex-ico"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"></rect><rect x="14" y="3" width="7" height="9" rx="1.5"></rect><path d="M3 16h7"></path><path d="M14 16h7"></path><path d="M3 20h4"></path><path d="M14 20h4"></path></svg></span><span class="ex-main"><span class="ex-name">Product cards</span><small>Show products part-way through the quiz.</small></span></div>
+        </div>
+      </section>
+
+      <section class="card pad" aria-labelledby="hTag3">
+        <div class="sechead"><h2 id="hTag3">Rules</h2></div>
+        <ul class="rules">
+          <li><span><b>Which features:</b> only AI that runs every time a shopper uses the quiz. Product recommendations are set up once in the logic, so they carry no tag and use no credits.</span></li>
+          <li><span><b>Opt-in:</b> every tagged feature starts off. The merchant turns it on, and the tag is on the control when they do.</span></li>
+          <li><span><b>Where:</b> on the control that turns the feature on, and again at the top of that feature’s own settings. Nowhere else.</span></li>
+          <li><span><b>Wording and look:</b> “AI”, the rate, and what counts as one use, for example “AI · 0.2 credit per results page”. No dollar amounts, because the price of a credit depends on the plan. A grey pill, the same on every feature; it states a cost and is not a warning.</span></li>
+          <li><span><b>One list:</b> the tag, the “i” on Account and the usage record all read the same list of features and rates, so a new AI feature shows up in all three.</span></li>
+        </ul>
+      </section>
+    </div>
+
+  </main>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <div class="dlg">
+    <h2 id="dlgTitle"></h2>
+    <p id="dlgLead"></p>
+    <dl id="dlgRows"></dl>
+    <ul id="dlgList" hidden></ul>
+    <div class="dlg-acts">
+      <button type="button" class="btn btn-sm btn-quiet" id="dlgNo">Not now</button>
+      <button type="button" class="btn btn-sm" id="dlgYes">Continue in Shopify</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── Example data. Credit amounts, the per-credit rates, the 0.2 AI rate, the pack
+        sizes and the plan features are placeholders for the owner to set. ── */
+  var CYCLE = { range: 'Sep 19 – Oct 18', end: 'Oct 18', next: 'Oct 19', daysLeft: 18, days: 30 };
+  var TRIAL = { ends: 'Oct 10', daysLeft: 9 };
+  var PLANS = {
+    starter: { key: 'starter', name: 'Starter', price: 50, credits: 400, rate: 0.15, add: { min: 50, max: 2000, step: 50, def: 250 }, creditsLabel: '400 credits each cycle',
+      feats: ['2 live quizzes', 'AI on your quizzes', 'Klaviyo and Shopify sync', 'Analytics'] },
+    growth: { key: 'growth', name: 'Growth', price: 200, credits: 2200, rate: 0.10, add: { min: 100, max: 5000, step: 100, def: 500 }, creditsLabel: '2,200 credits each cycle',
+      feats: ['Everything in Starter', 'Unlimited quizzes', 'A/B testing', 'Custom CSS'] },
+    enterprise: { key: 'enterprise', name: 'Enterprise', price: 500, plus: true, credits: 7250, creditsLabel: '7,250+ credits, or unlimited',
+      feats: ['Everything in Growth', 'A dedicated account manager', 'Monthly strategy call', 'Quiz review and tuning'] }
+  };
+  var ORDER = ['starter', 'growth', 'enterprise'];
+  /* The AI features a shopper can trigger on a live quiz. Each has its own rate (credits
+     per use; placeholder values). key = the name the usage ledger records it under;
+     share = the mock's split of AI uses. A use is charged even when the answer was reused. */
+  var AI_FEATURES = [
+    { key: 'rec_copy', name: 'AI-written personalization', short: 'AI personalization', unit: 'results pages', per: 'results page', rate: 0.2, share: 0.7 },
+    { key: 'ask_ai', name: 'Ask AI', short: 'Ask AI', unit: 'replies', per: 'reply', rate: 0.1, share: 0.3 }
+  ];
+  /* The shop's live quizzes: w = share of engagements; a feature key = that quiz uses it. */
+  var QUIZZES = {
+    starter: [{ name: 'Find your skincare routine', w: 0.7, rec_copy: true, ask_ai: true }, { name: 'Which serum is right for you?', w: 0.3, rec_copy: true }],
+    growth: [{ name: 'Find your skincare routine', w: 0.55, rec_copy: true, ask_ai: true }, { name: 'Which serum is right for you?', w: 0.3, rec_copy: true }, { name: 'Holiday gift finder', w: 0.15, ask_ai: true }]
+  };
+  /* Whole numbers that add up to the total, shared out by weight. */
+  function split(total, ws) {
+    var sum = ws.reduce(function (a, b) { return a + b; }, 0), last = 0, left = total;
+    ws.forEach(function (w, i) { if (w > 0) last = i; });
+    var out = ws.map(function (w, i) { var v = i === last || !w ? 0 : Math.round(total * w / sum); left -= v; return v; });
+    out[last] = left;
+    return out;
+  }
+  /* eng = shoppers who started a quiz (1 credit each); ai = AI answers (0.2 credit each). */
+  var USE = {
+    starter: { normal: { roll: 60, eng: 180, ai: 160 }, near: { roll: 60, eng: 330, ai: 290 }, over: { roll: 60, eng: 1870, ai: 1700 }, trial: { roll: 0, eng: 41, ai: 35 } },
+    growth: { normal: { roll: 180, eng: 1180, ai: 920 }, near: { roll: 180, eng: 1776, ai: 1380 }, over: { roll: 180, eng: 2210, ai: 1770 }, trial: { roll: 0, eng: 83, ai: 65 } }
+  };
+  /* Past bills: [bill date, plan, available credits, credits used, plan price, rate]. */
+  var HIST = {
+    starter: [['Sep 19, 2026', 'Starter', 418, 358, 50, 0.15], ['Aug 20, 2026', 'Starter', 400, 382, 50, 0.15], ['Jul 21, 2026', 'Starter', 400, 436, 50, 0.15]],
+    growth: [['Sep 19, 2026', 'Growth', 2200, 2020, 200, 0.10], ['Aug 20, 2026', 'Growth', 2204, 2412, 200, 0.10], ['Jul 21, 2026', 'Starter', 400, 396, 50, 0.15]]
+  };
+
+  var state = { view: 'billing', plan: 'growth', use: 'normal', addon: 0, topup: 0, pending: null, ending: false,
+    mode: 'once', amount: 500, emails: ['accounts@northlightskin.com'] };
+  var $ = function (id) { return document.getElementById(id); };
+  var n = function (v) { return Math.round(v).toLocaleString('en-US'); };
+  var usd = function (v) { return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var CHECK = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>';
+  var CROSS = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
+
+  function figures() {
+    var p = PLANS[state.plan], u = USE[state.plan][state.use];
+    var uses = split(u.ai, AI_FEATURES.map(function (ft) { return ft.share; }));
+    var feats = AI_FEATURES.map(function (ft, i) { return { ft: ft, uses: uses[i], credits: Math.round(uses[i] * ft.rate) }; });
+    var aiCr = feats.reduce(function (a, x) { return a + x.credits; }, 0), used = u.eng + aiCr;
+    var avail = p.credits + state.addon + state.topup + u.roll;
+    var extra = Math.max(0, used - avail);
+    return { p: p, u: u, feats: feats, aiCr: aiCr, used: used, avail: avail, left: Math.max(0, avail - used), extra: extra, extraUsd: extra * p.rate,
+      addonUsd: state.addon * p.rate, monthly: p.price + state.addon * p.rate, pct: used / avail };
+  }
+
+  function render() {
+    var f = figures(), p = f.p, trial = state.use === 'trial', over = f.extra > 0;
+    var nextKey = ORDER[ORDER.indexOf(p.key) + 1], next = PLANS[nextKey];
+
+    $('viewBilling').hidden = state.view !== 'billing';
+    $('viewChange').hidden = state.view !== 'change';
+    $('viewBuilder').hidden = state.view !== 'builder';
+
+    /* ── Billing · plan + bill ── */
+    $('planName').textContent = p.name;
+    $('planTag').className = 'tag ' + (trial ? 'is-trial' : 'is-live');
+    $('planTag').textContent = trial ? 'Free trial · ' + TRIAL.daysLeft + ' days left' : 'Active';
+    var t2 = state.ending ? 'Ends ' + (trial ? 'today' : CYCLE.end) : state.pending ? PLANS[state.pending].name + ' from ' + CYCLE.next : '';
+    $('planTag2').hidden = !t2;
+    $('planTag2').textContent = t2;
+    $('planLine').textContent = usd(f.monthly).replace('.00', '') + ' a month · ' + n(p.credits + state.addon) + ' credits each cycle';
+    $('billLbl').textContent = state.ending ? 'Last bill' : trial ? 'First bill' : 'Next bill';
+    $('billAmt').innerHTML = usd(f.monthly + f.extraUsd) + (over ? ' <small>so far</small>' : '');
+    $('billWhen').textContent = (trial ? TRIAL.ends : CYCLE.next) + ', 2026';
+    var lines = [[p.name, usd(p.price)]];
+    if (state.addon) lines.push([n(state.addon) + ' added credits', usd(f.addonUsd)]);
+    if (over) lines.push([n(f.extra) + ' extra credits', usd(f.extraUsd)]);
+    $('billHow').innerHTML = lines.map(function (l) { return '<span>' + l[0] + '<i>' + l[1] + '</i></span>'; }).join('') +
+      (trial ? '<span>Cancel before then and you pay nothing.</span>' : '');
+    $('cancelBtn').textContent = state.ending ? 'Keep ' + p.name : trial ? 'Cancel trial' : 'Cancel plan';
+    $('cancelText').textContent = state.ending ? (trial ? 'Your trial is cancelled.' : p.name + ' is cancelled and ends on ' + CYCLE.end + '.') + ' Changed your mind?'
+      : trial ? 'Cancel before ' + TRIAL.ends + ' and you pay nothing. Your quizzes come off your store when you cancel.'
+      : p.name + ' stays on until ' + CYCLE.end + ' if you cancel. After that your quizzes come off your store.';
+
+    /* ── Billing · credits ── */
+    $('crCycle').textContent = trial ? 'Free trial · ends ' + TRIAL.ends + ' · ' + TRIAL.daysLeft + ' days left' : CYCLE.range + ' · ' + CYCLE.daysLeft + ' days left';
+    $('crFig').className = 'cr-fig' + (over ? ' is-over' : '');
+    $('crBig').textContent = over ? n(f.extra) : n(f.left);
+    $('crOf').textContent = over ? 'over your ' + n(f.avail) + ' credits this cycle' : 'left of ' + n(f.avail) + (trial ? ' in your trial' : ' this cycle');
+    var m = $('meter');
+    m.setAttribute('aria-label', n(f.used) + ' of ' + n(f.avail) + ' credits used');
+    m.innerHTML = over
+      ? '<i class="m-used" style="width: ' + (f.avail / f.used * 100).toFixed(1) + '%;"></i><i class="m-over" style="width: ' + (f.extra / f.used * 100).toFixed(1) + '%;"></i>'
+      : '<i class="m-used" style="width: ' + (f.pct * 100).toFixed(1) + '%;"></i>';
+    $('axL').textContent = over ? 'All ' + n(f.avail) + ' used' : Math.round(f.pct * 100) + '% used';
+    $('axR').textContent = over ? '+' + n(f.extra) + ' extra' : n(f.avail);
+
+    var near = !over && !trial && f.pct >= 0.8;
+    $('signal').hidden = !(near || over);
+    if (near) {
+      $('signalText').innerHTML = '<b>' + Math.round(f.pct * 100) + '% of this cycle’s credits are used.</b> When they run out your quizzes keep running, and each extra credit is ' + usd(p.rate) + '.';
+    } else if (over) {
+      var cheaper = next && !next.plus && (f.monthly + f.extraUsd) > next.price;
+      $('signalText').innerHTML = '<b>Your quizzes are still running.</b> You’re ' + n(f.extra) + ' credits over, which adds ' + usd(f.extraUsd) + ' to your ' + CYCLE.next + ' bill so far.' +
+        (cheaper ? ' ' + next.name + ' would have cost ' + usd(next.price) + ' this cycle.' : '');
+    }
+
+    /* Used: engagements, then each AI feature on its own line. */
+    $('usedRows').innerHTML =
+      '<div><dt>Quiz engagements<small>' + n(f.u.eng) + ' shoppers started a quiz · 1 credit each</small></dt><dd>' + n(f.u.eng) + '</dd></div>' +
+      '<div class="has-sub"><dt>AI features, charged per use<small>' + n(f.u.ai) + ' uses</small></dt><dd>' + n(f.aiCr) + '</dd></div>' +
+      f.feats.map(function (x, i) {
+        return '<div class="sub' + (i === f.feats.length - 1 ? ' is-last' : '') + '"><dt>' + x.ft.name + '<small>' + n(x.uses) + ' ' + x.ft.unit + ' · ' + x.ft.rate + ' credit each</small></dt><dd>' + n(x.credits) + '</dd></div>';
+      }).join('') +
+      '<div class="tot"><dt>Used so far</dt><dd>' + n(f.used) + '</dd></div>';
+
+    /* By quiz: the same credits, one row per quiz, one column per thing that costs. */
+    var qs = QUIZZES[state.plan], dash = '<span class="none">—</span>';
+    var engQ = split(f.u.eng, qs.map(function (q) { return q.w; }));
+    var featQ = f.feats.map(function (x) { return split(x.credits, qs.map(function (q) { return q[x.ft.key] ? q.w : 0; })); });
+    $('byqHead').innerHTML = '<th>Quiz</th><th class="r">Engagements</th>' + f.feats.map(function (x) { return '<th class="r">' + x.ft.short + '</th>'; }).join('') + '<th class="r">Credits</th>';
+    $('byqBody').innerHTML = qs.map(function (q, i) {
+      var tot = engQ[i];
+      return '<tr><td>' + q.name + '</td><td class="r">' + n(engQ[i]) + '</td>' + f.feats.map(function (x, j) {
+        if (!q[x.ft.key]) return '<td class="r">' + dash + '</td>';
+        tot += featQ[j][i];
+        return '<td class="r">' + n(featQ[j][i]) + '</td>';
+      }).join('') + '<td class="r tot">' + n(tot) + '</td></tr>';
+    }).join('') + '<tr class="sum"><td>All quizzes</td><td class="r">' + n(f.u.eng) + '</td>' +
+      f.feats.map(function (x) { return '<td class="r">' + n(x.credits) + '</td>'; }).join('') + '<td class="r tot">' + n(f.used) + '</td></tr>';
+
+    /* The "i" and the builder tags read the same rate list. */
+    var rates = AI_FEATURES.map(function (ft) { return ft.rate; }), lo = Math.min.apply(null, rates), hi = Math.max.apply(null, rates);
+    $('infoAi').textContent = (lo === hi ? lo : lo + '–' + hi) + ' credit';
+    AI_FEATURES.forEach(function (ft) {
+      document.querySelectorAll('[data-tag="' + ft.key + '"]').forEach(function (el) { el.textContent = 'AI · ' + ft.rate + ' credit per ' + ft.per; });
+    });
+    var rows = [['Included in ' + p.name, '', p.credits]];
+    if (state.addon) rows.push(['Added every cycle', '', state.addon]);
+    if (state.topup) rows.push(['Bought one time', '', state.topup]);
+    if (f.u.roll) rows.push(['Rolled over from last cycle', 'Use by ' + CYCLE.end, f.u.roll]);
+    $('cycleRows').innerHTML = rows.map(function (r) {
+      return '<div><dt>' + r[0] + (r[1] ? '<small>' + r[1] + '</small>' : '') + '</dt><dd>' + n(r[2]) + '</dd></div>';
+    }).join('') + '<div class="tot"><dt>Total</dt><dd>' + n(f.avail) + '</dd></div>';
+
+    /* ── Billing · emails + past bills ── */
+    $('mailList').innerHTML = state.emails.map(function (e, i) {
+      return '<li><span>' + esc(e) + '</span><button type="button" data-rm="' + i + '" aria-label="Remove ' + esc(e) + '">' + CROSS + '</button></li>';
+    }).join('');
+    $('mailList').hidden = !state.emails.length;
+    $('mailNone').hidden = !!state.emails.length;
+    $('sw100Sub').textContent = 'From then on, each extra credit is ' + usd(p.rate) + '.';
+    $('histWrap').hidden = trial;
+    $('histEmpty').hidden = !trial;
+    $('histBody').innerHTML = HIST[state.plan].map(function (r, i) {
+      var total = r[4] + Math.max(0, r[3] - r[2]) * r[5];
+      return '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td><td class="r">' + n(r[2]) + '</td><td class="r">' + n(r[3]) + '</td><td class="r tot">' + usd(total) + '</td>' +
+        '<td class="act"><button type="button" class="link" data-receipt="' + i + '">Email receipt</button></td></tr>';
+    }).join('');
+
+    /* ── Change plan · plans ── */
+    $('headNow').innerHTML = 'You’re on <b>' + p.name + '</b> · ' + (over ? n(f.extra) + ' credits over' : n(f.left) + ' credits left');
+    $('plansGrid').innerHTML = ORDER.map(function (k) {
+      var q = PLANS[k], cur = k === p.key, up = ORDER.indexOf(k) > ORDER.indexOf(p.key);
+      var act = cur ? '<span class="pl-now">Your plan</span>'
+        : q.plus ? '<button type="button" class="btn btn-sm btn-quiet" data-go="' + k + '">Talk to us</button>'
+        : up ? '<button type="button" class="btn btn-sm" data-go="' + k + '">Upgrade</button>'
+        : '<button type="button" class="btn btn-sm btn-quiet" data-go="' + k + '">Downgrade</button>';
+      return '<article class="pl' + (cur ? ' is-current' : '') + '">' +
+        '<div class="pl-top"><b>' + q.name + '</b></div>' +
+        '<div class="pl-price"><b>$' + q.price + (q.plus ? '+' : '') + '</b><span>a month</span></div>' +
+        '<p class="pl-cr">' + q.creditsLabel + '<small>' + (q.plus ? 'Set with you' : 'More credits at ' + usd(q.rate) + ' each') + '</small></p>' +
+        '<ul>' + q.feats.map(function (t) { return '<li>' + CHECK + '<span>' + t + '</span></li>'; }).join('') + '</ul>' + act + '</article>';
+    }).join('');
+    $('plansNote').textContent = trial
+      ? 'Change plans during your trial at no cost. Your first bill, on ' + TRIAL.ends + ', is for the plan you’re on that day.'
+      : 'Upgrades start today and you pay only for the days left in this cycle. Downgrades start on your next bill date, ' + CYCLE.next + '.';
+
+    /* ── Change plan · more credits ── */
+    var pack = state.amount, cost = pack * p.rate, once = state.mode === 'once', a = p.add;
+    $('mcRate').textContent = usd(p.rate) + ' a credit on ' + p.name;
+    $('mcModeSub').textContent = once ? 'A single top-up, added today.' : 'Added to your plan on every bill, until you remove it.';
+    document.querySelectorAll('#mcMode button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)); });
+    var range = $('amtRange'), num = $('amtNum');
+    range.min = num.min = a.min; range.max = num.max = a.max; range.step = a.step;
+    range.value = pack;
+    range.style.setProperty('--p', ((pack - a.min) / (a.max - a.min) * 100).toFixed(2) + '%');
+    range.setAttribute('aria-valuetext', n(pack) + ' credits, ' + usd(cost) + (once ? '' : ' a month'));
+    if (document.activeElement !== num) num.value = pack;
+    $('amtCost').textContent = usd(cost);
+    $('amtPer').textContent = once ? 'one time' : 'a month, added to your plan';
+    /* Where this plan plus the added credits costs the same as the next plan. */
+    var even = (next.price - f.monthly) / p.rate, at = (even - a.min) / (a.max - a.min), marked = at > 0.12 && at < 0.88;
+    $('slideMark').hidden = !marked;
+    $('axMark').hidden = !marked;
+    $('slide').style.setProperty('--at', at.toFixed(4));
+    $('slideAx').style.setProperty('--at', at.toFixed(4));
+    $('axMark').textContent = n(even) + ' · same price as ' + next.name;
+    $('axMin').textContent = n(a.min);
+    $('axMax').textContent = n(a.max);
+    $('mcHave').hidden = !state.addon;
+    $('mcHave').innerHTML = '<span>You add <b>' + n(state.addon) + ' credits</b> every cycle · ' + usd(f.addonUsd) + ' a month</span><button type="button" class="link" id="addonRm">Remove</button>';
+    $('mcSum').textContent = once
+      ? n(pack) + ' credits today, charged once. What you don’t use rolls over like the rest.'
+      : 'Your plan becomes ' + usd(p.price + (state.addon + pack) * p.rate) + ' a month with ' + n(p.credits + state.addon + pack) + ' credits each cycle.';
+    $('mcBtn').textContent = once ? 'Buy ' + n(pack) + ' credits · ' + usd(cost) : 'Add ' + n(pack) + ' every cycle · ' + usd(cost) + ' a month';
+    if (next.plus) {
+      $('nudgeText').innerHTML = '<b>Need this many every cycle?</b> Enterprise starts at 7,250 credits and a lower price per credit.';
+      $('nudgeBtn').textContent = 'Talk to us';
+    } else {
+      var withPack = f.monthly + cost;
+      $('nudgeText').innerHTML = '<b>' + next.name + ' is ' + usd(next.price).replace('.00', '') + ' a month for ' + n(next.credits) + ' credits.</b> That’s ' + usd(next.price / next.credits) + ' a credit instead of ' + usd(p.rate) + '.' +
+        (withPack >= next.price ? ' ' + p.name + ' with these credits comes to ' + usd(withPack) + '.' : '');
+      $('nudgeBtn').textContent = 'Upgrade to ' + next.name;
+    }
+    $('nudgeBtn').dataset.go = nextKey;
+
+    press('#pvView', 'view'); press('#pvPlan', 'plan'); press('#pvUse', 'use');
+  }
+  function press(sel, key) {
+    document.querySelectorAll(sel + ' button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset[key] === state[key])); });
+  }
+  function go(view) { state.view = view; render(); window.scrollTo(0, 0); }
+
+  /* ── Dialogs: opened by a click only. Shopify takes it from "Continue". ── */
+  var dlg = $('dlg'), onYes = null;
+  function openDlg(o) {
+    $('dlgTitle').textContent = o.title;
+    $('dlgLead').textContent = o.lead;
+    $('dlgRows').innerHTML = (o.rows || []).map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + r[1] + '</dd></div>'; }).join('');
+    $('dlgRows').hidden = !(o.rows && o.rows.length);
+    $('dlgList').innerHTML = (o.list || []).map(function (t) { return '<li>' + t + '</li>'; }).join('');
+    $('dlgList').hidden = !(o.list && o.list.length);
+    $('dlgNo').textContent = o.no;
+    $('dlgYes').textContent = o.yes || 'Continue in Shopify';
+    $('dlgYes').className = 'btn btn-sm' + (o.crit ? ' btn-crit' : '');
+    onYes = o.done;
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', '');
+  }
+  function closeDlg() { if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); }
+  $('dlgNo').addEventListener('click', closeDlg);
+  $('dlgYes').addEventListener('click', function () { closeDlg(); if (onYes) say(onYes()); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) closeDlg(); });
+
+  function changePlan(k) {
+    var f = figures(), p = f.p, q = PLANS[k], trial = state.use === 'trial';
+    if (q.plus) { say('Opens a short form to the Wiskr team. No plan change happens here.'); return; }
+    var up = ORDER.indexOf(k) > ORDER.indexOf(p.key);
+    var rows = [
+      ['Price', '<s>$' + p.price + '</s> → $' + q.price + ' a month'],
+      ['Credits each cycle', '<s>' + n(p.credits) + '</s> → ' + n(q.credits)],
+      ['More credits', '<s>' + usd(p.rate) + '</s> → ' + usd(q.rate) + ' each']
+    ];
+    if (trial) rows.push(['Starts', 'Today, still in your free trial'], ['First bill', usd(q.price) + ' on ' + TRIAL.ends]);
+    else if (up) rows.push(['Starts', 'Today'], ['You pay today', 'About ' + usd((q.price - p.price) * CYCLE.daysLeft / CYCLE.days)]);
+    else rows.push(['Starts', CYCLE.next + ', your next bill date'], ['Until then', 'You keep ' + p.name]);
+    openDlg({
+      title: (up ? 'Upgrade to ' : 'Downgrade to ') + q.name + '?',
+      lead: up ? (trial ? 'You get the bigger plan right away.' : 'You get the extra credits right away. Today’s charge covers the ' + CYCLE.daysLeft + ' days left in this cycle.')
+        : 'From ' + (trial ? 'today' : CYCLE.next) + ' this is what changes:',
+      rows: rows,
+      list: up ? [] : ['Only 2 quizzes can be live. You pick which ones.', 'A/B tests stop and custom CSS is removed.', 'Credits you already have stay yours until they expire.'],
+      no: up ? 'Not now' : 'Keep ' + p.name,
+      done: function () {
+        if (up || trial) { state.plan = k; state.addon = 0; state.pending = null; state.ending = false; state.amount = defAmount(); go('billing'); return 'You’re on ' + q.name + '.'; }
+        state.pending = k; state.ending = false; go('billing');
+        return q.name + ' starts ' + CYCLE.next + '. You keep ' + p.name + ' until then.';
+      }
+    });
+  }
+
+  $('mcBtn').addEventListener('click', function () {
+    var f = figures(), p = f.p, pack = state.amount, cost = pack * p.rate, once = state.mode === 'once';
+    openDlg(once ? {
+      title: 'Buy ' + n(pack) + ' credits?',
+      lead: 'A one-time top-up. Your plan stays the same.',
+      rows: [['Credits', '+' + n(pack) + ' today'], ['Price', usd(cost) + ', charged once'], ['On your bill', 'Its own line on your Shopify bill']],
+      no: 'Not now',
+      done: function () { state.topup += pack; go('billing'); return n(pack) + ' credits added.'; }
+    } : {
+      title: 'Add ' + n(pack) + ' credits every cycle?',
+      lead: 'They’re added today and on every bill after, until you remove them.',
+      rows: [['Credits each cycle', '<s>' + n(p.credits + state.addon) + '</s> → ' + n(p.credits + state.addon + pack)],
+        ['Price', '<s>' + usd(f.monthly) + '</s> → ' + usd(f.monthly + cost) + ' a month'],
+        ['You pay today', 'About ' + usd(cost * CYCLE.daysLeft / CYCLE.days)]],
+      no: 'Not now',
+      done: function () { state.addon += pack; go('billing'); return n(pack) + ' credits added to every cycle.'; }
+    });
+  });
+
+  $('cancelBtn').addEventListener('click', function () {
+    var p = PLANS[state.plan], trial = state.use === 'trial';
+    if (state.ending) { state.ending = false; render(); say(p.name + ' kept. Nothing changes.'); return; }
+    openDlg({
+      title: trial ? 'Cancel your free trial?' : 'Cancel ' + p.name + '?',
+      lead: trial ? 'You won’t be billed. This is what happens:' : 'You won’t be billed again. This is what happens:',
+      list: trial
+        ? ['Your quizzes come off your store today.', 'Your quizzes and results are kept, so you can pick a plan later.']
+        : [p.name + ' stays on until ' + CYCLE.end + '.', 'After that your quizzes come off your store.', 'Extra credits used before then are on your last bill.', 'Your quizzes and results are kept, so you can pick a plan later.'],
+      no: trial ? 'Keep trial' : 'Keep ' + p.name,
+      yes: trial ? 'Cancel trial' : 'Cancel plan',
+      crit: true,
+      done: function () { state.ending = true; state.pending = null; go('billing'); return trial ? 'Trial cancelled. Nothing was billed.' : p.name + ' cancelled. It stays on until ' + CYCLE.end + '.'; }
+    });
+  });
+
+  /* ── Bill emails: Save adds the address to the list; each one can be removed. ── */
+  $('mailForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = $('billEmail'), v = input.value.trim().toLowerCase(), err = '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) err = 'Enter a full email address, like name@yourstore.com.';
+    else if (state.emails.indexOf(v) !== -1) err = v + ' is already on the list.';
+    $('mailErr').hidden = !err;
+    $('mailErr').textContent = err;
+    if (err) { input.focus(); return; }
+    state.emails.push(v);
+    input.value = '';
+    render();
+    say('Saved. Bills and alerts also go to ' + v + '.');
+  });
+
+  /* The "i": hover and focus are CSS; a tap toggles it, a tap elsewhere or Esc closes it. */
+  var info = $('crInfo'), infoBtn = info.querySelector('.info-btn');
+  function setInfo(on) { info.classList.toggle('is-open', on); infoBtn.setAttribute('aria-expanded', String(on)); }
+  infoBtn.addEventListener('click', function (e) { e.stopPropagation(); setInfo(!info.classList.contains('is-open')); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { setInfo(false); infoBtn.blur(); } });
+
+  document.addEventListener('click', function (e) {
+    var t = e.target, el;
+    if (!t.closest('#crInfo')) setInfo(false);
+    if ((el = t.closest('[data-view]')) && !el.closest('.pv')) { go(el.dataset.view); return; }
+    if ((el = t.closest('[data-go]'))) { changePlan(el.dataset.go); return; }
+    if ((el = t.closest('#mcMode [data-mode]'))) { state.mode = el.dataset.mode; render(); return; }
+    if ((el = t.closest('[data-rm]'))) { var gone = state.emails.splice(+el.dataset.rm, 1)[0]; render(); say(gone + ' removed.'); return; }
+    if ((el = t.closest('[data-receipt]'))) {
+      var r = HIST[state.plan][+el.dataset.receipt];
+      say(state.emails.length ? 'Receipt for ' + r[0] + ' sent to ' + (state.emails.length === 1 ? state.emails[0] : state.emails.length + ' addresses') + '.' : 'Save an email under Bill emails first.');
+      return;
+    }
+    if (t.closest('#addonRm')) {
+      var had = state.addon;
+      openDlg({
+        title: 'Remove the ' + n(had) + ' added credits?',
+        lead: 'You keep them for this cycle. From ' + CYCLE.next + ' your plan goes back to ' + usd(PLANS[state.plan].price) + ' a month.',
+        no: 'Keep them', yes: 'Remove', crit: true,
+        done: function () { state.addon = 0; render(); return 'Removed. Your plan goes back to ' + usd(PLANS[state.plan].price) + ' a month on ' + CYCLE.next + '.'; }
+      });
+      return;
+    }
+    if ((el = t.closest('[data-say]'))) { if (el.tagName === 'A') e.preventDefault(); say(el.dataset.say); return; }
+    if (t.closest('a[href="#"]')) e.preventDefault();
+  });
+  document.querySelectorAll('.sw').forEach(function (sw) {
+    sw.addEventListener('change', function () { say(sw.checked ? 'Turned on.' : 'Turned off.'); });
+  });
+
+  var toast = $('toast'), toastT;
+  function say(t) { if (!t) return; toast.textContent = t; toast.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(function () { toast.classList.remove('on'); }, 3600); }
+
+  /* ── The amount. The slider moves in steps; the field takes any whole number. ── */
+  function clamp(v) { var a = PLANS[state.plan].add; return Math.min(a.max, Math.max(a.min, Math.round(v))); }
+  /* Opens on enough to cover what the shop is over by, else the plan's usual top-up. */
+  function defAmount() {
+    var a = PLANS[state.plan].add, saved = state.topup;
+    state.topup = 0;
+    var extra = figures().extra;
+    state.topup = saved;
+    return extra ? clamp(Math.ceil(extra / a.step) * a.step) : a.def;
+  }
+  $('amtRange').addEventListener('input', function () { state.amount = clamp(+this.value); render(); });
+  $('amtNum').addEventListener('input', function () {
+    var v = parseInt(this.value, 10), a = PLANS[state.plan].add;
+    if (v >= a.min && v <= a.max) { state.amount = v; render(); }
+  });
+  $('amtNum').addEventListener('blur', function () {
+    var v = parseInt(this.value, 10);
+    state.amount = clamp(isNaN(v) ? PLANS[state.plan].add.def : v);
+    this.value = state.amount;
+    render();
+  });
+
+  function reset() { state.addon = 0; state.topup = 0; state.pending = null; state.ending = false; state.amount = defAmount(); }
+  $('pvView').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) go(b.dataset.view); });
+  $('pvPlan').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { state.plan = b.dataset.plan; reset(); render(); } });
+  $('pvUse').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { state.use = b.dataset.use; reset(); render(); } });
+
+  /* #change opens the Change plan page; #near, #over, #trial, #starter set the state. */
+  var h = (location.hash || '').slice(1);
+  if (USE.growth[h]) state.use = h;
+  if (h === 'starter') state.plan = 'starter';
+  if (h === 'change') state.view = 'change';
+  if (h === 'tag') state.view = 'builder';
+  state.amount = defAmount();
+  render();
+})();
+</script>
