@@ -54,7 +54,7 @@ export function board(state) {
   const labels = {backlog:'Backlog (paused)', queued:'Queued', building:'Building', review:'Review', done:'Done', blocked:'Blocked', human:'Needs owner', cancelled:'Cancelled'};
   return `*Wiskr functionality backlog*\n${state.paused ? '⏸ Auto-start paused' : '▶ Auto-start enabled'} · checked about every 5 minutes while Codex is available\n\n` +
     [...state.tasks].sort((a,b) => a.priority-b.priority || a.id.localeCompare(b.id)).map(t =>
-      `${t.status === 'done' ? '✓' : '•'} *${t.id}* · ${labels[t.status]} · ${escapeSlack(t.title)}${t.notes && t.status !== 'backlog' ? `\n    ${escapeSlack(t.notes)}` : ''}`
+      `${t.status === 'done' ? '✓' : '•'} *${t.id}* · ${labels[t.status]} · ${escapeSlack(t.title)}${t.notes && !['backlog', 'done', 'cancelled'].includes(t.status) ? `\n    ${escapeSlack(t.notes)}` : ''}`
     ).join('\n') + '\n\nPost new requests in #functionality-requests. To change an item, post its WIS ID and the change in either channel. Only Tyler’s requests currently trigger work. Business/legal items stay assigned to the owner.';
 }
 async function atomic(file, value) {

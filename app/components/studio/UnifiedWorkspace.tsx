@@ -153,6 +153,8 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     saveError,
     retrySave,
     flushSave,
+    flush,
+    isAiPaused,
     beginAiEdit,
     applyAiResult,
     endAiEdit,
@@ -321,6 +323,9 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
   }>();
   const renameFetcher = useFetcher<{ ok: boolean; name?: string }>();
   const navigate = useNavigate();
+  const [openingHistory, setOpeningHistory] = useState(false);
+  const historyDocRef = useRef(doc);
+  historyDocRef.current = doc;
 
   // QRTZ-S4 — a successful publish ships the live doc, so at that moment the
   // draft and the published version agree again. QRTZ-F4 — the change count
@@ -1826,6 +1831,23 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
           {saveStatusV2}
           <span className="qz-bt-sp" />
           {undoRedo}
+          {chrome === "standalone" && isDecider && <button
+            type="button" className="qz-bt-tbtn"
+            disabled={openingHistory || isAiPaused || isPublishing}
+            onClick={async () => {
+              setOpeningHistory(true);
+              // A merchant can keep editing while the first PUT is in flight.
+              // Flush again if the document changed before leaving the builder.
+              let snapshot;
+              let outcome;
+              do {
+                snapshot = historyDocRef.current;
+                outcome = await flush();
+              } while (outcome === "saved" && snapshot !== historyDocRef.current);
+              if (outcome === "saved") navigate(`/studio/${data.quizId}/versions`);
+              setOpeningHistory(false);
+            }}
+          >{openingHistory ? "Saving…" : "History"}</button>}
           {/* QZY-6 — AI is a persistent top-bar companion, never a tab. */}
           <button
             type="button"

@@ -25,3 +25,10 @@ test('board escapes Slack mention/link markup and preserves done status',()=>{
  const text=board({...state,tasks:[{...task,title:'Fix <!channel> & <https://evil.test>',status:'done'}]});
  assert.ok(!text.includes('<!channel>')); assert.ok(text.includes('Done')); assert.ok(text.includes('&lt;'));
 });
+test('board keeps completed evidence durable without repeating it in the overview',()=>{
+ const tasks=[{...task,status:'done',notes:'Detailed release evidence'}, {...task,id:'WIS-002',status:'building',notes:'Current progress'}];
+ const text=board({...state,tasks});
+ assert.ok(text.includes('WIS-001')); assert.ok(text.includes('Done'));
+ assert.ok(!text.includes('Detailed release evidence')); assert.ok(text.includes('Current progress'));
+ assert.equal(tasks[0].notes,'Detailed release evidence');
+});
