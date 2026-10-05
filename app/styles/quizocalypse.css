@@ -9669,6 +9669,48 @@ body[data-qz] .qz-cust-row:focus-visible {
 /* — QzSectionHeader count chip (mock hm-count: "4 to do"). — */
 .qz-section-count { font-size: 12.5px; color: var(--qz-ink-4); }
 
+/* The personalization card's helper line (RecCopyToggleCard, both admins). */
+.qz-reccopy-help { display: block; max-width: 56ch; font-size: 11.5px; font-weight: 400; }
+
+/* ── .qz-crest — the Crest surface for a classic studio page ────────────────
+   (owner 2026-10-05, Integrations first). Wrap a QzPage's content in
+   .qz-crest and the page takes the look Home and the Quizzes tab already
+   have, without a rebuild: the Crest ground (--qz-ground-crest), one 960px
+   centred column (the Quizzes tab's measure), 22px cards on --qz-edge sitting
+   18px apart, 12px inner rows, pill chips / badges / buttons. No text sits on
+   the print — the page title rides a white header card, as on Quizzes.
+   Scoped overrides only: pages without the wrapper are untouched. */
+.qz-shell-main:has(.qz-crest) { background: var(--qz-ground-crest); }
+.qz-crest { width: 100%; max-width: 960px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
+.qz-crest .qz-card,
+.qz-crest .qz-page-header {
+  margin: 0; padding: 18px 22px; border: 0; border-radius: 22px;
+  background: var(--qz-paper); box-shadow: var(--qz-edge);
+}
+/* The header card's title — the Quizzes tab's .qz-lib-h1 values. */
+.qz-crest .qz-page-header .qz-display { margin: 0; font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
+.qz-crest .qz-page-header .qz-subtitle { margin: 6px 0 0; font-size: 13.5px; color: var(--qz-ink-4); font-variant-numeric: tabular-nums; }
+.qz-crest .qz-label { font-size: 10.5px; letter-spacing: .08em; }
+.qz-crest .qz-h2 { font-size: 17px; font-weight: 700; letter-spacing: -.015em; }
+.qz-crest .qz-btn { border-radius: 999px; }
+/* Status badges take Home's chip: pill, 2px 7px, 10.5px/700, no dot. */
+.qz-crest .qz-badge { height: auto; padding: 2px 7px; font-size: 10.5px; letter-spacing: .04em; border-radius: 999px; }
+.qz-crest .qz-badge::before { display: none; }
+.qz-crest-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+  background: var(--qz-cream-2); color: var(--qz-ink-3); font-size: 12.5px; font-weight: 600;
+}
+/* Inner rows are Home's inner boxes: cell fill, 12px, a light hairline. */
+.qz-crest-row {
+  gap: 12px; padding: 11px 14px; border: 1px solid var(--qz-rule-2); border-radius: 12px;
+  background: var(--qz-ls-cell-bg);
+}
+/* A switch beside copy: keep it level with the first line; Home's row type. */
+.qz-crest .qz-rp2-check { gap: 12px; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
+.qz-crest .qz-reccopy-help { margin-top: 4px; font-size: 13px; line-height: 1.5; }
+.qz-crest .qz-rp2-check > .hm3-sw { margin-top: 1px; }
+@media (max-width: 720px) { .qz-crest .qz-card, .qz-crest .qz-page-header { padding: 18px 16px; } }
+
 /* ── Studio Home — HOME-3, the first-run handoff (2026-09-22) ──────────────
    First open (a dialog, once per shop) · No quiz yet (the create card) ·
    With a quiz (the reminder, the two-row create module, Also waiting + Last

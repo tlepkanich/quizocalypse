@@ -86,47 +86,40 @@ export default function StudioIntegrations() {
   const data = useLoaderData<typeof loader>();
   return (
     <QzPage>
-      <QzPageHeader title="Integrations" />
+      {/* HOME-3 look (first-run handoff §13) — .qz-crest puts the page on the
+          Wiskr print; every text sits on a white card, the title included. */}
+      <div className="qz-crest">
+        <QzPageHeader
+          title="Integrations"
+          subtitle={
+            data.rows.length > 0
+              ? `${data.klaviyoCount} Klaviyo · ${data.webhookCount} webhook${
+                  data.webhookCount === 1 ? "" : "s"
+                } across ${data.rows.length} quiz${data.rows.length === 1 ? "" : "zes"}`
+              : undefined
+          }
+        />
 
-      <div style={{ marginBottom: 16 }}>
         <RecCopyToggleCard enabled={data.aiRecCopyEnabled} />
-      </div>
 
-      {data.rows.length === 0 ? (
-        <QzCard>
-          <h2 className="qz-h2" style={{ marginTop: 0 }}>Connect your stack</h2>
-          <p className="qz-muted" style={{ marginTop: 4 }}>
-            No connections yet. Open a quiz, drop an <strong>Integration</strong> node into the
-            flow, and point it at Klaviyo or your own webhook endpoint. Answers and contacts
-            POST automatically when a shopper reaches that step.
-          </p>
-          <div className="qz-row" style={{ gap: 8, marginTop: 16 }}>
-            {["✉️ Klaviyo", "🔗 Webhook"].map((p) => (
-              <span
-                key={p}
-                style={{
-                  fontSize: 13,
-                  padding: "4px 12px",
-                  borderRadius: "var(--qz-radius-pill)",
-                  border: "1px solid var(--qz-rule)",
-                  color: "var(--qz-ink-2)",
-                }}
-              >
-                {p}
-              </span>
-            ))}
-          </div>
-        </QzCard>
-      ) : (
-        <>
-          <div className="qz-row" style={{ gap: 8, marginBottom: 16 }}>
-            <span className="qz-dim" style={{ fontSize: 13 }}>
-              {data.klaviyoCount} Klaviyo · {data.webhookCount} webhook
-              {data.webhookCount === 1 ? "" : "s"} across {data.rows.length} quiz
-              {data.rows.length === 1 ? "" : "zes"}
-            </span>
-          </div>
-          <div style={{ display: "grid", gap: 16 }}>
+        {data.rows.length === 0 ? (
+          <QzCard>
+            <h2 className="qz-h2" style={{ marginTop: 0 }}>Connect your stack</h2>
+            <p className="qz-muted" style={{ marginTop: 4 }}>
+              No connections yet. Open a quiz, drop an <strong>Integration</strong> node into the
+              flow, and point it at Klaviyo or your own webhook endpoint. Answers and contacts
+              POST automatically when a shopper reaches that step.
+            </p>
+            <div className="qz-row" style={{ gap: 8, marginTop: 16 }}>
+              {["✉️ Klaviyo", "🔗 Webhook"].map((p) => (
+                <span key={p} className="qz-crest-chip">
+                  {p}
+                </span>
+              ))}
+            </div>
+          </QzCard>
+        ) : (
+          <>
             {data.rows.map((r) => (
               <QzCard key={r.id}>
                 <div className="qz-row qz-row-between" style={{ alignItems: "center", gap: 16 }}>
@@ -142,17 +135,7 @@ export default function StudioIntegrations() {
                   {r.connections.map((c, i) => {
                     const meta = KIND_META[c.kind] ?? { label: c.kind, emoji: "🔗" };
                     return (
-                      <div
-                        key={i}
-                        className="qz-row qz-row-between"
-                        style={{
-                          padding: "10px 12px",
-                          borderRadius: "var(--qz-radius)",
-                          border: "1px solid var(--qz-rule)",
-                          background: "var(--qz-paper)",
-                          gap: 12,
-                        }}
-                      >
+                      <div key={i} className="qz-row qz-row-between qz-crest-row">
                         <span style={{ fontSize: 14 }}>
                           <span aria-hidden="true">{meta.emoji}</span>{" "}
                           <strong>{meta.label}</strong>
@@ -167,9 +150,9 @@ export default function StudioIntegrations() {
                 </div>
               </QzCard>
             ))}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </QzPage>
   );
 }

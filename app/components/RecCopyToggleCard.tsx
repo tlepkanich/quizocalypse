@@ -22,8 +22,11 @@ export function RecCopyToggleCard({ enabled }: { enabled: boolean }) {
           </div>
         </div>
         <label className="qz-rp2-field qz-rp2-check" style={{ alignItems: "flex-start" }}>
+          {/* The new design's on/off control (first-run handoff §5): a switch
+              drawn on a real checkbox. */}
           <input
             type="checkbox"
+            className="hm3-sw"
             checked={on}
             disabled={fetcher.state !== "idle"}
             onChange={(e) =>
@@ -35,10 +38,7 @@ export function RecCopyToggleCard({ enabled }: { enabled: boolean }) {
           />
           <span style={{ display: "block" }}>
             Generate a fresh “why we recommend this” paragraph for each shopper
-            <span
-              className="qz-dim"
-              style={{ display: "block", fontSize: 11.5, fontWeight: 400, maxWidth: "56ch" }}
-            >
+            <span className="qz-dim qz-reccopy-help">
               Off unless you turn it on. On: AI writes a “why we recommend this” paragraph for each
               shopper. Your product recommendations come from your quiz logic either way and use no
               credits.
