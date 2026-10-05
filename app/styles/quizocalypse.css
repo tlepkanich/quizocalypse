@@ -9708,6 +9708,36 @@ body[data-qz] .qz-cust-row:focus-visible {
   gap: 12px; padding: 11px 14px; border: 1px solid var(--qz-rule-2); border-radius: 12px;
   background: var(--qz-ls-cell-bg);
 }
+/* The Brand book inside a crest page (Brand Identity): the hero, the section
+   nav, each band heading, each section and the closing notes are cards, so no
+   label sits on the print. The hero keeps its gradient — the merchant's own
+   colours are this page's subject. Sections stay collapsible; an open one
+   takes the accent ring over the shared shadow. */
+.qz-crest .qz-bb-hero,
+.qz-crest .qz-bb-nav,
+.qz-crest .qz-bb-bandhead,
+.qz-crest .qz-bb-sec,
+.qz-crest .qz-bb-notes {
+  margin: 0; border: 0; border-radius: 22px; box-shadow: var(--qz-edge);
+}
+.qz-crest .qz-bb-nav, .qz-crest .qz-bb-bandhead, .qz-crest .qz-bb-sec, .qz-crest .qz-bb-notes { background: var(--qz-paper); }
+.qz-crest .qz-bb { gap: 18px; }
+.qz-crest .qz-bb-doc, .qz-crest .qz-bb-band { gap: 18px; }
+.qz-crest .qz-bb-nav { top: 18px; padding: 16px 12px 16px 26px; }
+.qz-crest .qz-bb-track { left: 12px; top: 18px; bottom: 18px; }
+.qz-crest .qz-bb-navitem { border-radius: 999px; padding: 6px 10px; }
+.qz-crest .qz-bb-bandhead { align-self: flex-start; align-items: center; padding: 9px 18px 9px 12px; border-radius: 999px; }
+.qz-crest .qz-bb-bandnum { border-radius: 999px; }
+.qz-crest .qz-bb-sec.is-open { box-shadow: 0 0 0 1px var(--qz-accent-line), var(--qz-edge-shadow); }
+.qz-crest .qz-bb-sechead { padding: 16px 22px; border-radius: 22px; }
+.qz-crest .qz-bb-secbody { padding: 2px 22px 22px; }
+.qz-crest .qz-bb-secicon { border-radius: 12px; }
+.qz-crest .qz-bb-logoprev, .qz-crest .qz-bb-preset { border-radius: 12px; }
+.qz-crest .qz-bb-notes { padding: 14px 22px; }
+.qz-crest .qz-bb-presetnote { margin: 0; padding: 0; border: 0; }
+.qz-crest .qz-bb-foot { margin: 6px 0 0; }
+@media (max-width: 1024px) { .qz-crest .qz-bb-nav { padding: 14px 16px; } }
+
 /* The Analytics home inside a crest page: the control bar is the header
    card (its title takes the page-title type), each stat tile is a card, and
    each heading + body pair (.qz-ansec) is one card with its table or

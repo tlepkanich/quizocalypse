@@ -130,21 +130,25 @@ export default function StudioBrand() {
   const building = buildFetcher.state !== "idle";
   return (
     <QzPage width="wide">
-      <QzPageHeader
-        title="Brand Identity"
-        actions={
-          <div className="qz-row" style={{ gap: 8 }}>
-            <buildFetcher.Form method="post">
-              <input type="hidden" name="intent" value={identity ? "refresh" : "build"} />
-              <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm" disabled={building}>
-                {building ? "Working…" : identity ? "Re-sync from store" : "Build identity"}
-              </button>
-            </buildFetcher.Form>
-            <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">← All quizzes</Link>
-          </div>
-        }
-      />
-      <BrandBook identity={identity} tokens={tokens} voice={voice} />
+      {/* The Crest surface (.qz-crest, owner 2026-10-05): print ground, one
+          centred column (wide: the book is two columns), every block a card. */}
+      <div className="qz-crest is-wide">
+        <QzPageHeader
+          title="Brand Identity"
+          actions={
+            <div className="qz-row" style={{ gap: 8 }}>
+              <buildFetcher.Form method="post">
+                <input type="hidden" name="intent" value={identity ? "refresh" : "build"} />
+                <button type="submit" className="qz-btn qz-btn-ghost qz-btn-sm" disabled={building}>
+                  {building ? "Working…" : identity ? "Re-sync from store" : "Build identity"}
+                </button>
+              </buildFetcher.Form>
+              <Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">← All quizzes</Link>
+            </div>
+          }
+        />
+        <BrandBook identity={identity} tokens={tokens} voice={voice} />
+      </div>
     </QzPage>
   );
 }

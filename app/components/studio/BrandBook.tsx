@@ -251,11 +251,15 @@ export function BrandBook({
               })}
             </div>
           ))}
-          <p className="qz-dim qz-bb-presetnote">Style presets are generated automatically from the above.</p>
-          <p className="qz-dim qz-bb-foot">
-            Applied automatically whenever the AI builds a quiz. Edited fields lock <Lock size={11} style={{ verticalAlign: "-1px" }} /> so a
-            re-sync never overwrites them. Saves happen as you type.
-          </p>
+          {/* One box for the two closing notes, so a crest page can put them
+              on a card. Unstyled elsewhere: a plain block. */}
+          <div className="qz-bb-notes">
+            <p className="qz-dim qz-bb-presetnote">Style presets are generated automatically from the above.</p>
+            <p className="qz-dim qz-bb-foot">
+              Applied automatically whenever the AI builds a quiz. Edited fields lock <Lock size={11} style={{ verticalAlign: "-1px" }} /> so a
+              re-sync never overwrites them. Saves happen as you type.
+            </p>
+          </div>
         </div>
       </div>
     </>
