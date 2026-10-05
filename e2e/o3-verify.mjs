@@ -35,7 +35,10 @@ page.on("pageerror", (e) => out.pageErrors.push(String(e).slice(0, 200)));
 await page.goto(`${BASE}/studio?key=${KEY}`, { waitUntil: "domcontentloaded" });
 const legacyBefore = sha(await (await ctx.request.get(`${BASE}/q/${LEGACY}.json`)).text());
 
-const funnelData = (id) => `${BASE}/studio/onboarding/${id}?_data=routes%2Fstudio.onboarding_.%24quizId`;
+// BIC-2 B1 (a1e7e0a) renamed the funnel route file to studio_.onboarding_.$quizId;
+// the old route id answers 403, which made every readFunnel below come back
+// stage-less (and the draft loop graduate drafts it could not read).
+const funnelData = (id) => `${BASE}/studio/onboarding/${id}?_data=routes%2Fstudio_.onboarding_.%24quizId`;
 const builderData = (id) => `${BASE}/studio/${id}?_data=routes%2Fstudio_.%24id`;
 const readFunnel = async (id) => (await ctx.request.get(funnelData(id))).json();
 const readBuilder = async (id) => (await ctx.request.get(builderData(id))).json();

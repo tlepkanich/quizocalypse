@@ -9,7 +9,10 @@ const BASE = "https://quizocalypse-studio.fly.dev";
 const KEY = process.env.STUDIO_ACCESS_TOKEN;
 const QUIZ = "cmqwd15f0001aqvl19onkpwm6";
 const ROUTE = `${BASE}/studio/onboarding/${QUIZ}`;
-const DATA = `${ROUTE}?_data=routes%2Fstudio.onboarding_.%24quizId`;
+// BIC-2 B1 (a1e7e0a) renamed the funnel route file to studio_.onboarding_.$quizId;
+// the old route id answers 403, so the loader, the doc PUT and the intents
+// below never reached the funnel route.
+const DATA = `${ROUTE}?_data=routes%2Fstudio_.onboarding_.%24quizId`;
 
 const out = { checks: {}, pageErrors: [] };
 const ok = (name, v) => {
