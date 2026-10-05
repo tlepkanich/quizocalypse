@@ -171,7 +171,7 @@ if (VARIANT === "questions") {
 
 // Mirrors buildQuizFromPicked's assembly (step2Build.server.ts), in capture
 // mode: the finished doc is returned, never written.
-async function buildQuestions(template, questionPlan) {
+async function buildQuestions(template, prefetchedQuestions) {
   const { tokenPatch, promptDirectives } = dialsToBuildDirectives(template.dials);
   const strategy = process.env.DRAFT_QUESTION_FLOW;
   const build = await timed(() =>
@@ -198,7 +198,7 @@ async function buildQuestions(template, questionPlan) {
       },
       captureDoc: true,
       ...(strategy ? { questionFlow: strategy } : {}),
-      ...(questionPlan ? { prefetchedQuestionPlan: questionPlan } : {}),
+      ...(prefetchedQuestions ? { prefetchedQuestions } : {}),
     }),
   );
   if (!build.value.doc) throw new Error(`degraded build: ${build.value.degraded}`);
@@ -237,15 +237,26 @@ const runQuestions = () => buildQuestions(fixedDirection.template);
 
 async function runChain() {
   const overlap = process.env.DRAFT_OVERLAP !== "off";
+  // DRAFT_PLAN_MODEL / DRAFT_WRITE_MODEL — a model id per planned-build step
+  // (side-by-side comparisons; the app itself runs both on Sonnet).
+  const plannedModels = {
+    ...(process.env.DRAFT_PLAN_MODEL ? { plan: process.env.DRAFT_PLAN_MODEL } : {}),
+    ...(process.env.DRAFT_WRITE_MODEL ? { write: process.env.DRAFT_WRITE_MODEL } : {}),
+  };
   const draft = await timed(() =>
     overlap
-      ? step2.draftHeadlessDirection(quiz.shopId, quiz.id, { goal, cats: buckets, webResearchText })
+      ? step2.draftHeadlessDirection(quiz.shopId, quiz.id, {
+          goal,
+          cats: buckets,
+          webResearchText,
+          ...(Object.keys(plannedModels).length ? { plannedModels } : {}),
+        })
       : step2.generateStep2Direction(quiz.shopId, quiz.id, { goal, buckets, webResearchText }),
   );
-  const built = await buildQuestions(draft.value.template, draft.value.questionPlan);
+  const built = await buildQuestions(draft.value.template, draft.value.prefetchedQuestions);
   return {
     passes: {
-      drafting: { ...meta(draft), plan: Boolean(draft.value.questionPlan) },
+      drafting: { ...meta(draft), plan: Boolean(draft.value.prefetchedQuestions) },
       questions: built.passes.questions,
     },
     picked: { type: draft.value.type, template: draft.value.template },

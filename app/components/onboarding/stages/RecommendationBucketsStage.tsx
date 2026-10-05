@@ -82,6 +82,8 @@ const TAB_META: Array<{ type: BucketType; label: string }> = [
 const WINDOW = 25;
 // The 5 s Undo (decision 2 — five ships unless the owner says otherwise).
 const UNDO_MS = 5000;
+// How long the pool must sit unchanged before the pre-build starts.
+const SPEC_SETTLE_MS = 1500;
 
 // The one-recommendation notice is OFF this screen (§08 advisories removed);
 // its copy is preserved verbatim for the per-page AI surface.
@@ -600,7 +602,11 @@ export function RecommendationBucketsStage({
   );
   useFunnelBar(barOverride);
 
-  // QRTZ-G1 — speculative question-gen prefetch once the pool settles (5s).
+  // QRTZ-G1 — speculative question-gen prefetch once the pool settles. The
+  // settle delay is the head start the pre-build gets before Continue: 1.5 s
+  // (was 5 s) — long enough to skip a run of quick clicks, short enough that
+  // the ~8 s chain is done, or nearly, when the merchant confirms. A pool
+  // change supersedes the run, which stops at its next pass boundary.
   const specFetcher = useFetcher();
   const specFetcherRef = useRef(specFetcher);
   specFetcherRef.current = specFetcher;
@@ -613,7 +619,7 @@ export function RecommendationBucketsStage({
     if (!specEligible || poolCount === 0 || mutationState !== "idle") return;
     const t = window.setTimeout(() => {
       specFetcherRef.current.submit({ intent: "speculate" }, { method: "post" });
-    }, 5000);
+    }, SPEC_SETTLE_MS);
     return () => window.clearTimeout(t);
   }, [poolKey, poolCount, mutationState, specEligible]);
 

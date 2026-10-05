@@ -424,8 +424,9 @@ describe("generateQuizDirection — one pass, the kept direction only", () => {
 });
 
 // QBUILD-FAST — the decider question build as PLAN → parallel WRITES. Same
-// model as the single call; the wall time is the plan plus the slowest slice.
-describe("the planned question build — one plan, then the questions written in parallel", () => {
+// model as the single call; every call writes little (compact lines), and the
+// wall time is the plan plus the slowest write.
+describe("the planned question build — a compact plan, then the questions written in parallel", () => {
   // The two steps as the build composes them (onboardingBuild.server.ts).
   const generateQuestionFlowPlanned = async (input: GenerateQuestionFlowInput) =>
     writePlannedQuestions(input, await generateQuestionPlan(input));
@@ -443,31 +444,27 @@ describe("the planned question build — one plan, then the questions written in
     logicModel: "decider" as const,
   };
   type PlannedCall = {
+    model: string;
     system: Array<{ text: string; cache_control?: { type: string } }>;
     tools: Array<{ name: string }>;
     tool_choice: { name: string };
     messages: Array<{ content: string }>;
   };
-  const planItem = (text: string, role: "decides" | "narrows" | "info", extra: object = {}) => ({
-    text,
-    question_type: "single_select",
-    role,
+  const planDraft = (questions: string[], extra: object = {}) => ({
+    questions,
+    decider_answers: ["On groomers", "In the park"],
     ...extra,
   });
   const written = (text: string, extra: object = {}) => ({
     text,
-    question_type: "single_select",
-    answers: [
-      { text: "A", tags: ["carve"] },
-      { text: "B", tags: ["park"] },
-    ],
+    answers: ["A => carve", "B => park"],
     ...extra,
   });
   // Answers each write call from the numbers its task names ("#2 and #3").
-  const serve = (plan: object[], write: (n: number) => object = (n) => written(`written ${n}`)) => {
+  const serve = (plan: object, write: (n: number) => object = (n) => written(`written ${n}`)) => {
     createMessageMock.mockImplementation(async (params: PlannedCall) => {
       if (params.tool_choice.name === "emit_question_plan") {
-        return toolResponse("emit_question_plan", { questions: plan });
+        return toolResponse("emit_question_plan", plan);
       }
       const line = params.messages[0]!.content.split("\n").find((l) => l.startsWith("Write ONLY"))!;
       const numbers = [...line.split(" of this plan")[0]!.matchAll(/#(\d+)/g)].map((m) => Number(m[1]));
@@ -475,25 +472,65 @@ describe("the planned question build — one plan, then the questions written in
     });
   };
   const calls = () => createMessageMock.mock.calls.map((c) => c[0] as PlannedCall);
+  const THREE = planDraft([
+    "decides | single_select | Your riding | where they ride",
+    "narrows | multi_select | Your riding | how they tune their board",
+    "info | single_select | - | who the board is for",
+  ]);
+
+  it("parses the compact plan lines: role, input type, chapter and topic", async () => {
+    serve(planDraft(
+      ["decides | image_tile | Your riding | where they ride", "info | single_select | - | gift | or self"],
+      { explainer: 2, helpers: [1] },
+    ));
+    const plan = await generateQuestionPlan(base);
+    expect(plan).toEqual([
+      {
+        topic: "where they ride",
+        question_type: "image_tile",
+        role: "decides",
+        section_label: "Your riding",
+        answer_outline: ["On groomers", "In the park"],
+        needs_helper: true,
+      },
+      // "-" = no chapter; a topic may itself contain " | ".
+      { topic: "gift | or self", question_type: "single_select", role: "info", needs_explainer: true },
+    ]);
+  });
 
   it("writes one question per call and merges them in plan order", async () => {
-    serve([
-      planItem("Where do you ride?", "decides", { section_label: "Your riding" }),
-      planItem("How do you tune?", "narrows", { section_label: "Your riding" }),
-      planItem("Who is it for?", "info"),
-    ]);
+    serve(THREE);
     const flow = await generateQuestionFlowPlanned(base);
     expect(createMessageMock).toHaveBeenCalledTimes(4); // 1 plan + 3 writes
     expect(flow.questions.map((q) => q.text)).toEqual(["written 1", "written 2", "written 3"]);
-    // Structure (role + chapter) is the plan's, deterministically.
+    // Structure (input type, role, chapter) is the plan's, deterministically.
+    expect(flow.questions.map((q) => q.question_type)).toEqual([
+      "single_select",
+      "multi_select",
+      "single_select",
+    ]);
     expect(flow.questions.map((q) => q.role)).toEqual(["decides", "narrows", "info"]);
     expect(flow.questions.map((q) => q.section_label)).toEqual(["Your riding", "Your riding", undefined]);
     expect(flow.welcome_message).toBeUndefined();
     expect(flow.email_gate).toBeUndefined();
   });
 
+  it("parses the compact answer lines: text, tags after the arrow, no arrow = no tags", async () => {
+    serve(planDraft(["decides | single_select | - | where they ride"]), () => ({
+      text: "Where do you ride?",
+      answers: ["Groomed runs => carve, wax", "The park => park", "Not sure yet", "Both => (none)"],
+    }));
+    const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
+    expect(flow.questions[0]!.answers).toEqual([
+      { text: "Groomed runs", tags: ["carve", "wax"] },
+      { text: "The park", tags: ["park"] },
+      { text: "Not sure yet", tags: [] },
+      { text: "Both", tags: [] },
+    ]);
+  });
+
   it("every call sends the SAME cached prefix: both tools, the rules, the quiz context", async () => {
-    serve([planItem("Where do you ride?", "decides"), planItem("Who is it for?", "info")]);
+    serve(planDraft(["decides | single_select | - | where they ride", "info | single_select | - | who it is for"]));
     await generateQuestionFlowPlanned(base);
     const [plan, ...writes] = calls();
     expect(plan!.tool_choice.name).toBe("emit_question_plan");
@@ -511,34 +548,26 @@ describe("the planned question build — one plan, then the questions written in
   });
 
   it("each write call sees the whole plan and its own question's rules", async () => {
-    serve([planItem("Where do you ride?", "decides"), planItem("Who is it for?", "info")]);
+    serve(THREE);
     await generateQuestionFlowPlanned(base);
     const tasks = calls().slice(1).map((c) => c.messages[0]!.content);
     const first = tasks.find((t) => t.includes("Write ONLY question #1 of this plan"))!;
     const second = tasks.find((t) => t.includes("Write ONLY question #2 of this plan"))!;
-    for (const t of [first, second]) {
-      expect(t).toContain("1. [decides · single_select] Where do you ride?");
-      expect(t).toContain("2. [info · single_select] Who is it for?");
+    const third = tasks.find((t) => t.includes("Write ONLY question #3 of this plan"))!;
+    for (const t of [first, second, third]) {
+      expect(t).toContain("1. [decides · single_select] where they ride");
+      expect(t).toContain("3. [info · single_select] who the board is for");
     }
-    expect(first).toContain("#1 is the DECIDING question");
-    expect(second).toContain("#2 is an INFO question: its answers carry empty tags [].");
-  });
-
-  it("the deciding question's planned answers reach the call that writes it", async () => {
-    serve([
-      planItem("How does your board feel at speed?", "decides", { answer_outline: ["Locked in", "Loose and playful"] }),
-      planItem("Who is it for?", "info"),
-    ]);
-    await generateQuestionFlowPlanned(base);
-    const tasks = calls().slice(1).map((c) => c.messages[0]!.content);
-    expect(tasks.find((t) => t.includes("question #1 of"))).toContain(
-      "Its planned answers, to refine: Locked in | Loose and playful.",
-    );
-    expect(tasks.find((t) => t.includes("question #2 of"))).not.toContain("Its planned answers");
+    expect(first).toContain("#1 is the DECIDING question: phrase it diagnostically");
+    expect(first).toContain("Its planned answers, to refine: On groomers | In the park.");
+    expect(second).toContain("#2 NARROWS the product pool");
+    expect(second).toContain("#2 is multi_select: set max_selections.");
+    expect(second).not.toContain("Its planned answers");
+    expect(third).toContain("#3 is an INFO question: its answers carry no tags.");
   });
 
   it("OVERLAP: the plan picks the count itself when asked to; a pin still wins", async () => {
-    serve([planItem("d", "decides")]);
+    serve(planDraft(["decides | single_select | - | where they ride"]));
     await generateQuestionPlan({ ...base, chooseQuestionCount: true });
     expect(calls()[0]!.system[1]!.text).toContain("Question count: choose it by category norm");
     expect(calls()[0]!.system[1]!.text).not.toContain("Target question count");
@@ -549,47 +578,95 @@ describe("the planned question build — one plan, then the questions written in
     expect(calls()[0]!.system[1]!.text).not.toContain("choose it by category norm");
   });
 
-  it("OVERLAP: late guidance rides each write call's own message, never the cached prefix", async () => {
-    const plan = [planItem("Where do you ride?", "decides"), planItem("Who is it for?", "info")];
-    serve(plan);
-    const input = { ...base };
-    const built = await generateQuestionPlan(input);
-    createMessageMock.mockClear();
-    serve(plan);
-    await writePlannedQuestions(input, built, "Quiz direction: start with terrain.\n- IMAGERY HIGH");
-    const writes = calls();
-    expect(writes).toHaveLength(2);
-    for (const w of writes) {
-      expect(w.messages[0]!.content).toContain("Style guidance for this quiz");
-      expect(w.messages[0]!.content).toContain("Quiz direction: start with terrain.");
-      expect(w.system.map((b) => b.text).join("\n")).not.toContain("start with terrain");
-    }
-    // No guidance → no guidance block (the inline plan already saw the direction).
-    createMessageMock.mockClear();
-    serve(plan);
-    await writePlannedQuestions(input, built);
-    expect(calls()[0]!.messages[0]!.content).not.toContain("Style guidance for this quiz");
+  it("OVERLAP: a plan that picks its own count must land in 5 to 9 — a thinner one is retried", async () => {
+    const lines = (n: number) =>
+      Array.from({ length: n }, (_, i) => `${i === 0 ? "decides" : "info"} | single_select | Ch | topic ${i + 1}`);
+    createMessageMock
+      .mockResolvedValueOnce(toolResponse("emit_question_plan", planDraft(lines(3))))
+      .mockResolvedValueOnce(toolResponse("emit_question_plan", planDraft(lines(5))));
+    const plan = await generateQuestionPlan({ ...base, chooseQuestionCount: true });
+    expect(plan).toHaveLength(5);
+    const retry = createMessageMock.mock.calls[1]![0] as PlannedCall;
+    expect(retry.messages[0]!.content).toContain("Expected 5 to 9 questions, got 3");
+    // A hinted count ("Target question count") is not held to that range.
+    createMessageMock.mockReset();
+    createMessageMock.mockResolvedValue(toolResponse("emit_question_plan", planDraft(lines(3))));
+    expect(await generateQuestionPlan(base)).toHaveLength(3);
+    expect(createMessageMock).toHaveBeenCalledTimes(1);
   });
 
-  it("only the questions the plan marked keep a helper line or the explainer card", async () => {
+  it("more than three chapter labels is one label per question: such a plan carries none", async () => {
+    const lines = (chapters: string[]) =>
+      chapters.map((c, i) => `${i === 0 ? "decides" : "info"} | single_select | ${c} | topic ${i + 1}`);
+    serve(planDraft(lines(["A", "A", "B", "C"])));
+    expect((await generateQuestionPlan(base)).map((q) => q.section_label)).toEqual(["A", "A", "B", "C"]);
+    serve(planDraft(lines(["A", "B", "C", "D"])));
+    expect((await generateQuestionPlan(base)).map((q) => q.section_label)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
+  it("the quiz-wide budgets are the plan's: one explainer card, at most two helper lines", async () => {
     serve(
-      [
-        planItem("Where do you ride?", "decides", { needs_helper: true }),
-        planItem("Which base?", "narrows", { needs_explainer: true }),
-        planItem("Who is it for?", "info"),
-      ],
+      planDraft(
+        [
+          "decides | single_select | - | where they ride",
+          "narrows | single_select | - | base material",
+          "info | single_select | - | who it is for",
+          "info | single_select | - | how often they ride",
+        ],
+        { explainer: 2, helpers: [1, 3, 4] },
+      ),
       (n) => written(`written ${n}`, { helper_text: `helper ${n}`, education_card_before: `card ${n}` }),
     );
-    const flow = await generateQuestionFlowPlanned(base);
-    expect(flow.questions.map((q) => q.helper_text)).toEqual(["helper 1", undefined, undefined]);
-    expect(flow.questions.map((q) => q.education_card_before)).toEqual([undefined, "card 2", undefined]);
+    const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 4 });
+    // The third helper the model named is dropped; unmarked questions carry neither.
+    expect(flow.questions.map((q) => q.helper_text)).toEqual(["helper 1", undefined, "helper 3", undefined]);
+    expect(flow.questions.map((q) => q.education_card_before)).toEqual([undefined, "card 2", undefined, undefined]);
     const tasks = calls().slice(1).map((c) => c.messages[0]!.content);
     expect(tasks.find((t) => t.includes("question #2 of"))).toContain("#2 needs a concept explained first");
-    expect(tasks.find((t) => t.includes("question #3 of"))).toContain("#3 gets no helper_text.");
+    expect(tasks.find((t) => t.includes("question #4 of"))).toContain("#4 gets no helper_text.");
+  });
+
+  it("exactly one question decides: a second is demoted, none is a validation failure", async () => {
+    serve(planDraft([
+      "decides | single_select | - | where they ride",
+      "decides | single_select | - | how they ride",
+    ]));
+    expect((await generateQuestionPlan(base)).map((q) => q.role)).toEqual(["decides", "narrows"]);
+
+    createMessageMock.mockReset();
+    createMessageMock.mockResolvedValue(
+      toolResponse("emit_question_plan", planDraft(["info | single_select | - | who it is for"])),
+    );
+    await expect(generateQuestionPlan(base)).rejects.toThrow(
+      "Question plan generation failed validation after retries.",
+    );
+    const retry = createMessageMock.mock.calls[1]![0] as PlannedCall;
+    expect(retry.messages[0]!.content).toContain("exactly one question must have role decides");
+  });
+
+  it("a malformed plan line is a validation failure that names the line", async () => {
+    createMessageMock
+      .mockResolvedValueOnce(toolResponse("emit_question_plan", planDraft(["decides | where they ride"])))
+      .mockResolvedValueOnce(toolResponse("emit_question_plan", planDraft(["chooses | single_select | - | x"])))
+      .mockResolvedValueOnce(
+        toolResponse("emit_question_plan", planDraft(["decides | single_select | - | where they ride"])),
+      );
+    const plan = await generateQuestionPlan(base);
+    expect(plan).toHaveLength(1);
+    const [, second, third] = createMessageMock.mock.calls.map((c) => (c[0] as PlannedCall).messages[0]!.content);
+    expect(second).toContain('questions.0: expected "role | input type | chapter | topic"');
+    expect(third).toContain("questions.0: role must be decides, narrows or info");
   });
 
   it("a long plan is cut into at most 8 slices of consecutive questions", async () => {
-    serve(Array.from({ length: 10 }, (_, i) => planItem(`q${i + 1}`, i === 0 ? "decides" : "info")));
+    serve(planDraft(
+      Array.from({ length: 10 }, (_, i) => `${i === 0 ? "decides" : "info"} | single_select | - | topic ${i + 1}`),
+    ));
     const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 10 });
     expect(createMessageMock).toHaveBeenCalledTimes(6); // 1 plan + 5 slices of 2
     expect(flow.questions.map((q) => q.text)).toEqual(
@@ -601,71 +678,103 @@ describe("the planned question build — one plan, then the questions written in
   });
 
   it("applies the same copy passes as the single call (emoji, em-dash answers)", async () => {
-    serve([planItem("Where do you ride? 🏂", "decides")], () => ({
+    serve(planDraft(["decides | single_select | - | where they ride"]), () => ({
       text: "Where do you ride? 🏂",
-      question_type: "single_select",
-      answers: [
-        { text: "Groomers — fast and smooth", tags: ["carve"] },
-        { text: "Park ✨", tags: ["park"] },
-      ],
+      answers: ["Groomers — fast and smooth => carve", "Park ✨ => park"],
     }));
     const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
     expect(flow.questions[0]!.text).toBe("Where do you ride?");
     expect(flow.questions[0]!.answers.map((a) => a.text)).toEqual(["Groomers, fast and smooth", "Park"]);
   });
 
-  it("drops an AI-written image_url that is not a real http(s) URL (a placeholder fails the doc schema)", async () => {
-    serve([planItem("Where do you ride?", "decides")], () => ({
-      text: "Where do you ride?",
-      question_type: "image_tile",
-      answers: [
-        { text: "Groomers", tags: ["carve"], image_url: "<UNKNOWN>" },
-        { text: "Park", tags: ["park"], image_url: "park.jpg" },
-        { text: "Powder", tags: ["carve"], image_url: "https://cdn.shop.example/powder.jpg" },
-      ],
-    }));
-    const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
-    expect(flow.questions[0]!.answers.map((a) => a.image_url)).toEqual([
-      undefined,
-      undefined,
-      "https://cdn.shop.example/powder.jpg",
-    ]);
-    expect(calls()[1]!.messages[0]!.content).toContain("Never invent an image_url");
-  });
-
   it("a pinned count that misses retries the plan, then trims an overshoot (never the decider)", async () => {
-    const over = [planItem("n1", "narrows"), planItem("i1", "info"), planItem("d", "decides")];
-    createMessageMock.mockResolvedValue(toolResponse("emit_question_plan", { questions: over }));
+    const over = planDraft([
+      "narrows | single_select | - | n1",
+      "info | single_select | - | i1",
+      "decides | single_select | - | d",
+    ]);
+    createMessageMock.mockResolvedValue(toolResponse("emit_question_plan", over));
     const plan = await generateQuestionPlan({ ...base, questionCount: 2, exactQuestionCount: 2 });
     expect(createMessageMock).toHaveBeenCalledTimes(3);
-    expect(plan.map((q) => q.text)).toEqual(["n1", "d"]);
+    expect(plan.map((q) => q.topic)).toEqual(["n1", "d"]);
     const retry = createMessageMock.mock.calls[1]![0] as PlannedCall;
     expect(retry.messages[0]!.content).toContain("Expected exactly 2 questions, got 3");
     expect(retry.system[1]!.text).toContain("EXACTLY 2 questions");
   });
 
-  it("a slice that returns the wrong count retries; one that keeps failing fails the build", async () => {
+  it("a slice that returns the wrong count, or an answer with no text, retries; one that keeps failing fails the build", async () => {
+    const ONE = planDraft(["decides | single_select | - | where they ride"]);
     let writes = 0;
     createMessageMock.mockImplementation(async (params: PlannedCall) => {
-      if (params.tool_choice.name === "emit_question_plan") {
-        return toolResponse("emit_question_plan", { questions: [planItem("d", "decides")] });
-      }
+      if (params.tool_choice.name === "emit_question_plan") return toolResponse("emit_question_plan", ONE);
       writes += 1;
       return toolResponse("emit_questions", {
-        questions: writes === 1 ? [written("a"), written("b")] : [written("only")],
+        questions:
+          writes === 1
+            ? [written("a"), written("b")]
+            : writes === 2
+              ? [{ text: "x", answers: [" => carve", "B"] }]
+              : [written("only")],
       });
     });
     const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
-    expect(writes).toBe(2);
+    expect(writes).toBe(3);
     expect(flow.questions.map((q) => q.text)).toEqual(["only"]);
 
     createMessageMock.mockImplementation(async (params: PlannedCall) =>
       params.tool_choice.name === "emit_question_plan"
-        ? toolResponse("emit_question_plan", { questions: [planItem("d", "decides")] })
-        : toolResponse("emit_questions", { questions: [{ text: "", question_type: "single_select", answers: [] }] }),
+        ? toolResponse("emit_question_plan", ONE)
+        : toolResponse("emit_questions", { questions: [{ text: "", answers: [] }] }),
     );
     await expect(generateQuestionFlowPlanned({ ...base, questionCount: 1 })).rejects.toThrow(
       "Planned question write failed validation after retries.",
     );
+  });
+
+  it("a stalled call is raced by an identical second request; the first answer wins", async () => {
+    vi.useFakeTimers();
+    try {
+      const ONE = planDraft(["decides | single_select | - | where they ride"]);
+      let writeCalls = 0;
+      createMessageMock.mockImplementation((params: PlannedCall) => {
+        if (params.tool_choice.name === "emit_question_plan") {
+          return Promise.resolve(toolResponse("emit_question_plan", ONE));
+        }
+        writeCalls += 1;
+        // The first write never answers; its duplicate answers at once.
+        return writeCalls === 1
+          ? new Promise(() => {})
+          : Promise.resolve(toolResponse("emit_questions", { questions: [written("from the second request")] }));
+      });
+      const pending = generateQuestionFlowPlanned({ ...base, questionCount: 1 });
+      await vi.advanceTimersByTimeAsync(4_900);
+      expect(writeCalls).toBe(1);
+      await vi.advanceTimersByTimeAsync(200);
+      const flow = await pending;
+      expect(writeCalls).toBe(2);
+      expect(flow.questions[0]!.text).toBe("from the second request");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a call that fails fast is not raced: the error surfaces at once", async () => {
+    createMessageMock.mockRejectedValue(new Error("400 credit balance too low"));
+    await expect(generateQuestionPlan(base)).rejects.toThrow("400 credit balance too low");
+    expect(createMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs both steps on the question model unless a probe overrides them", async () => {
+    serve(planDraft(["decides | single_select | - | where they ride"]));
+    await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
+    expect(calls().map((c) => c.model)).toEqual(["claude-sonnet-4-6", "claude-sonnet-4-6"]);
+
+    createMessageMock.mockClear();
+    await generateQuestionFlowPlanned({
+      ...base,
+      questionCount: 1,
+      plannedModels: { plan: "probe-plan-model", write: "probe-write-model" },
+    });
+    expect(calls().map((c) => c.model)).toEqual(["probe-plan-model", "probe-write-model"]);
   });
 });

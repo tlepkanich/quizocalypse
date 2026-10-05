@@ -63,8 +63,9 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
 
   // Poll the loader while a detached generation job runs (typing/templating);
   // the job writes the next stage, the revalidate picks it up, the poll stops.
-  // FAST F3 — 1500ms (was 3000): the loader is cheap and this halves both the
-  // stage-flip latency and the gen_progress checkpoint latency.
+  // 600ms (was 1500, before FAST F3 3000): the loader answers in ~30-70 ms,
+  // and the whole generation chain is now a few seconds — a 1.5 s poll added
+  // up to 1.5 s of pure waiting after the quiz was already built.
   const isGenerating =
     data.stage === "typing" ||
     data.stage === "templating" ||
@@ -75,7 +76,7 @@ export function Step1Funnel({ data }: { data: FunnelData }) {
     if (!isGenerating) return;
     const t = setInterval(() => {
       if (revalidator.state === "idle") revalidator.revalidate();
-    }, 1500);
+    }, GENERATING_POLL_MS);
     return () => clearInterval(t);
   }, [isGenerating, revalidator]);
 
@@ -452,6 +453,9 @@ function FunnelStepNav({
 // types/templates=1 (both passes draft the quiz's shape), questions=2,
 // products=3. null (an old in-flight session) falls back on the stage: typing
 // starts the chain (row 0), templating is mid-write (row 2).
+// How often the funnel re-reads the loader while a generation job runs.
+const GENERATING_POLL_MS = 600;
+
 const GEN_CHECKLIST = [
   "Reading your catalog",
   "Drafting tailored quiz types",

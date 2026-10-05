@@ -419,6 +419,11 @@ export interface GenerateQuestionFlowInput {
   // that used to pick it has finished). Ignored when exactQuestionCount is
   // set, and by the single-call generator.
   chooseQuestionCount?: boolean;
+  // PLANNED build only — a PROBE-ONLY seam (the FAST F4 modelOverride
+  // precedent): e2e/draft-latency.mjs forces a model per step for side-by-side
+  // comparisons. Production callers never set it; absent → MODEL for both
+  // steps (the owner's keep-Sonnet decision for question writing).
+  plannedModels?: { plan?: string; write?: string };
 }
 
 // Per-type prompt addendum (E2). Empty for the historical product_match.
@@ -630,23 +635,30 @@ export async function generateQuestionFlow(
 
 // ── QBUILD-FAST: the decider question build as PLAN → parallel WRITES ────────
 // generateQuestionFlow (above) writes the whole quiz in ONE Sonnet response:
-// ~1,400 output tokens ≈ 20 s, output-bound. The planned build keeps every
-// word on the same model (the owner's keep-Sonnet decision) and cuts the WALL
-// time instead:
-//   1. generateQuestionPlan  — a short outline, one line per question (working
-//      text, input type, role, chapter).
-//   2. writePlannedQuestions — the outline's questions written IN PARALLEL.
-//      Every call sees the whole plan (so concepts never overlap) and writes
-//      only its own slice: wall time is the slowest slice, not the sum.
+// ~1,400 output tokens ≈ 20 s. Measured on the real requests: Sonnet writes
+// this JSON at ~60 tokens/s and does not stream it, so every call's wall time
+// IS its output size. The planned build keeps every word on the same model
+// (the owner's keep-Sonnet decision) and cuts the wall time by making each
+// call write little:
+//   1. generateQuestionPlan  — the quiz's OUTLINE, one compact line per
+//      question (role | input type | chapter | topic), plus a short answer
+//      outline for the deciding question. ~110 tokens ≈ 2.5 s. One author
+//      sees the whole quiz: order, roles, no two questions alike.
+//   2. writePlannedQuestions — each question WRITTEN IN PARALLEL: its final
+//      text and its answers, one compact line each ("answer text => tag,
+//      tag"). 80–170 tokens ≈ 3 s for the slowest. Wall time is the slowest
+//      call, not the sum.
 // Both steps send ONE byte-identical request prefix — both tools, the system
 // rules, and the quiz context as a cached system block — so the plan call
-// writes the prompt cache and every write call reads it. N parallel calls then
-// cost ~0.1× the shared input each instead of N× the full prompt. (tool_choice
-// differs per step; it does not invalidate the tools + system cache.)
+// writes the prompt cache and every write call reads it: N parallel calls
+// cost ~0.1× the shared input each instead of N× the full prompt.
+// (tool_choice differs per step; it does not invalidate the tools + system
+// cache.)
 //
-// Roles and chapter labels come from the PLAN, deterministically — one author
-// for the quiz's structure. Decider builds only (onboardingBuild.server.ts
-// gates it); the single-call generator stays the legacy path and the fallback.
+// The compact lines are a deliberate token diet, not a style choice: the same
+// content as JSON objects costs ~2× the output tokens, i.e. ~2× the wait.
+// Decider builds only (onboardingBuild.server.ts gates it); the single-call
+// generator stays the legacy path and the fallback.
 
 // At most this many write calls run at once; a longer plan is cut into
 // equal slices of consecutive questions.
@@ -660,102 +672,97 @@ const PLAN_QUESTION_TYPES = [
   "image_picker",
 ] as const;
 
-const QuestionPlanSchema = z.object({
-  questions: z
-    .array(
-      z.object({
-        text: z.string().min(1),
-        question_type: QuestionDataObject.shape.question_type,
-        role: z.enum(["decides", "narrows", "info"]),
-        section_label: z.string().max(40).optional(),
-        needs_explainer: z.boolean().optional(),
-        needs_helper: z.boolean().optional(),
-        answer_outline: z.array(z.string()).optional(),
-      }),
-    )
-    .min(1),
-});
-export type QuestionPlan = z.infer<typeof QuestionPlanSchema>["questions"];
+const PlanRole = z.enum(["decides", "narrows", "info"]);
 
-const WrittenQuestionsSchema = z.object({
+// The range the plan may pick from when the count is its own choice
+// (chooseQuestionCount) — the same numbers the context line states.
+const CHOSEN_COUNT_MIN = 5;
+const CHOSEN_COUNT_MAX = 9;
+
+// One planned question. `topic` names its ONE concept in a few words; the
+// write step turns it into the final question text.
+export interface PlannedQuestion {
+  topic: string;
+  question_type: z.infer<typeof QuestionDataObject.shape.question_type>;
+  role: z.infer<typeof PlanRole>;
+  section_label?: string;
+  needs_explainer?: boolean;
+  needs_helper?: boolean;
+  // The deciding question only: its answers in a few words each.
+  answer_outline?: string[];
+}
+export type QuestionPlan = PlannedQuestion[];
+
+const QuestionPlanDraft = z.object({
+  questions: z.array(z.string().min(1)).min(1),
+  decider_answers: z.array(z.string().min(1)).optional(),
+  explainer: z.number().int().positive().optional(),
+  helpers: z.array(z.number().int().positive()).optional(),
+});
+
+const WrittenQuestionsDraft = z.object({
   questions: z
     .array(
       z.object({
         text: z.string().min(1),
-        question_type: QuestionDataObject.shape.question_type,
-        required: z.boolean().optional(),
+        answers: z.array(z.string().min(1)).min(2),
         max_selections: z.number().int().positive().optional(),
+        helper_text: z.string().optional(),
         education_card_before: z.string().optional(),
-        helper_text: z.string().max(160).optional(),
-        answers: z
-          .array(
-            z.object({
-              text: z.string().min(1),
-              tags: z.array(z.string()).default([]),
-              collection_filter: z.string().optional(),
-              image_url: z.string().optional(),
-            }),
-          )
-          .min(2),
       }),
     )
     .min(1),
 });
+type WrittenQuestion = z.infer<typeof WrittenQuestionsDraft>["questions"][number];
 
 // BOTH tools ride EVERY planned request, in this order — the tool list is the
 // head of the cached prefix, so it must never vary between the two steps.
 const PLANNED_BUILD_TOOLS = [
   {
     name: "emit_question_plan",
-    description: "Step 1. Emit the outline of every question in the quiz, in order. No answers.",
+    description:
+      "Step 1. Outline every question of the quiz, in order, one compact line each. No wording and no answers, except the deciding question's short answer outline.",
     input_schema: {
       type: "object",
-      required: ["questions"],
+      required: ["questions", "decider_answers"],
       properties: {
         questions: {
           type: "array",
           minItems: 1,
-          items: {
-            type: "object",
-            required: ["text", "question_type", "role"],
-            properties: {
-              text: { type: "string", description: "The question's working text — one concept." },
-              question_type: { type: "string", enum: PLAN_QUESTION_TYPES },
-              role: {
-                type: "string",
-                enum: ["decides", "narrows", "info"],
-                description:
-                  "What the question does to the product pool: 'decides' picks the outcome (exactly one per quiz), 'narrows' cuts the pool by a real catalog attribute, 'info' only collects the answer.",
-              },
-              section_label: {
-                type: "string",
-                description: "Optional chapter label (≤40 chars). Consecutive questions share one; ≤3 distinct labels.",
-              },
-              needs_explainer: {
-                type: "boolean",
-                description:
-                  "true on AT MOST ONE question: shoppers need a concept explained before they can answer it well.",
-              },
-              needs_helper: {
-                type: "boolean",
-                description:
-                  "true on AT MOST TWO questions: shoppers might overthink this one, so it gets a one-line reassurance.",
-              },
-              answer_outline: {
-                type: "array",
-                items: { type: "string" },
-                description:
-                  "The DECIDING question only: its answer options, a few words each, roughly one per outcome bucket — proof that this question can route a shopper to every bucket.",
-              },
-            },
-          },
+          items: { type: "string" },
+          description:
+            `One line per question, in the order shoppers answer them: "role | input type | chapter | topic". ` +
+            `role is decides, narrows or info. input type is one of ${PLAN_QUESTION_TYPES.join(", ")}. ` +
+            `chapter is a short label (≤40 chars) shared by consecutive questions, at most 3 distinct labels across the quiz (e.g. "Your dog", "Feeding habits"), or "-" for none. ` +
+            `topic names the ONE concept the question asks about, in a few words — not its wording. ` +
+            `Example: "decides | single_select | Your dog | the dog's age"`,
+        },
+        decider_answers: {
+          type: "array",
+          minItems: 2,
+          items: { type: "string" },
+          description:
+            "The deciding question's answer options, a few words each, roughly one per outcome bucket — proof that the question can route a shopper to every bucket.",
+        },
+        explainer: {
+          type: "integer",
+          description:
+            "The number (1-based) of the ONE question where shoppers need a concept explained before they can answer. Omit when none does.",
+        },
+        helpers: {
+          type: "array",
+          maxItems: 2,
+          items: { type: "integer" },
+          description:
+            "The numbers (1-based) of at most TWO questions where shoppers might overthink and a one-line reassurance helps.",
         },
       },
     },
   },
   {
     name: "emit_questions",
-    description: "Step 2. Emit the requested question(s) of the plan, written in full with answers.",
+    description:
+      "Step 2. Emit the question(s) the request names, written in full — one entry per question, in the order asked.",
     input_schema: {
       type: "object",
       required: ["questions"],
@@ -765,30 +772,29 @@ const PLANNED_BUILD_TOOLS = [
           minItems: 1,
           items: {
             type: "object",
-            required: ["text", "question_type", "answers"],
+            required: ["text", "answers"],
             properties: {
-              text: { type: "string" },
-              question_type: { type: "string", enum: PLAN_QUESTION_TYPES },
-              required: { type: "boolean" },
-              max_selections: { type: "number" },
-              education_card_before: { type: "string" },
-              helper_text: {
-                type: "string",
-                description: "Optional one-line reassurance under the question (≤160 chars).",
-              },
+              text: { type: "string", description: "The final question text." },
               answers: {
                 type: "array",
                 minItems: 2,
-                items: {
-                  type: "object",
-                  required: ["text", "tags"],
-                  properties: {
-                    text: { type: "string" },
-                    tags: { type: "array", items: { type: "string" } },
-                    collection_filter: { type: "string" },
-                    image_url: { type: "string" },
-                  },
-                },
+                items: { type: "string" },
+                description:
+                  `One line per answer option: "answer text => tag, tag". The tags are the catalog tags the answer matches. ` +
+                  `An answer with no tags is the answer text alone, with no arrow. ` +
+                  `Example: "Under 1 year => puppy"`,
+              },
+              max_selections: {
+                type: "number",
+                description: "multi_select questions only: how many options a shopper may pick.",
+              },
+              helper_text: {
+                type: "string",
+                description: "A one-line reassurance (≤160 chars). Only when the request asks for it.",
+              },
+              education_card_before: {
+                type: "string",
+                description: "One short plain-language sentence. Only when the request asks for it.",
               },
             },
           },
@@ -818,7 +824,7 @@ function plannedBuildPrefix(input: GenerateQuestionFlowInput): {
     exact
       ? `Question count: EXACTLY ${exact} questions — no more, no fewer. The merchant chose this number.`
       : input.chooseQuestionCount
-        ? "Question count: choose it by category norm — 5 to 7 questions for most catalogs, up to 9 where shoppers need more guidance before they can choose (wellness, skincare routines, nutrition)."
+        ? `Question count: choose it by category norm — ${CHOSEN_COUNT_MIN} to 7 questions for most catalogs, up to ${CHOSEN_COUNT_MAX} where shoppers need more guidance before they can choose (wellness, skincare routines, nutrition). Never fewer than ${CHOSEN_COUNT_MIN}.`
         : `Target question count: ${input.questionCount}.`,
     "Merchant's quiz goal (verbatim):",
     input.goalPrompt || "(none — infer from the catalog + buckets)",
@@ -861,6 +867,45 @@ function plannedBuildPrefix(input: GenerateQuestionFlowInput): {
   };
 }
 
+// A stalled call is rare, but the planned build waits for its SLOWEST call
+// and runs up to nine, so it meets one often (measured: a 91-token call that
+// took 6.3 s beside 2 s siblings; a 12 s one). If a call has not answered
+// after `afterMs`, an identical second request is started and the first to
+// succeed wins. Both bill; the duplicate is a few hundred cached tokens.
+// A failure only rejects once every started request has failed.
+function hedged<T>(run: () => Promise<T>, afterMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let pending = 0;
+    let settled = false;
+    const start = () => {
+      pending += 1;
+      run().then(
+        (value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err: unknown) => {
+          pending -= 1;
+          if (settled || pending > 0) return;
+          settled = true;
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    };
+    const timer = setTimeout(() => {
+      if (!settled) start();
+    }, afterMs);
+    start();
+  });
+}
+
+// Typical: the plan answers in ~4.5 s, a write call in 2–4.5 s.
+const PLAN_HEDGE_MS = 7_000;
+const WRITE_HEDGE_MS = 5_000;
+
 function validationIssue(error: z.ZodError): string {
   return error.issues
     .slice(0, 5)
@@ -869,22 +914,69 @@ function validationIssue(error: z.ZodError): string {
 }
 
 const PLAN_TASK =
-  "STEP 1 — PLAN. Outline the whole quiz, in the order shoppers answer it. For each " +
-  "question give its working text, input type, role, and an optional section_label " +
-  "(≤3 distinct labels across the quiz, consecutive questions share one — e.g. " +
-  "\"Skin profile\", \"Your preferences\"). Every question covers a DIFFERENT concept: " +
-  "no two questions may ask about the same thing in different words. Exactly ONE " +
-  "question has role decides — phrased DIAGNOSTICALLY, as the one-decider rule " +
-  "above requires: a concrete behavior, feeling, or situation the shopper can " +
-  "observe, never \"what are you shopping for\" or any other self-classification " +
-  "that recites the bucket names. Give the deciding question its answer_outline, so " +
-  "the question you choose is one whose answers reach every bucket. At most TWO " +
-  "questions have role narrows, and only " +
-  "where the catalog summary shows a real attribute that splits the products; every " +
-  "other question has role info. Set needs_explainer true on at most one question, " +
-  "and only where shoppers need an unfamiliar material, spec, fit, or term explained " +
-  "before they can answer. Set needs_helper true on at most two questions where " +
-  "shoppers might overthink. No answers yet. Emit via emit_question_plan.";
+  "STEP 1 — PLAN. Outline the whole quiz, in the order shoppers answer it, one " +
+  "compact line per question. Name each question's topic in a few words; step 2 " +
+  "writes the wording. Every question covers a DIFFERENT concept: no two questions " +
+  "may ask about the same thing. Exactly ONE question has role decides. Choose a " +
+  "deciding topic that can be asked DIAGNOSTICALLY, as the one-decider rule above " +
+  "requires — a concrete behavior, feeling, or situation the shopper can observe, " +
+  "never \"what are you shopping for\" or any other self-classification that " +
+  "recites the bucket names — and give decider_answers, so the topic you choose is " +
+  "one whose answers reach every bucket. At most TWO questions have role narrows, " +
+  "and only where the catalog summary shows a real attribute that splits the " +
+  "products; every other question has role info. Name an explainer question only " +
+  "where shoppers need an unfamiliar material, spec, fit, or term explained before " +
+  "they can answer. Name at most two helper questions, where shoppers might " +
+  "overthink. Emit via emit_question_plan.";
+
+// "role | input type | chapter | topic" → a planned question, or the reason
+// the line is unusable. The topic may itself contain " | ".
+function parsePlanLine(line: string, n: number): PlannedQuestion | string {
+  const parts = line.split("|").map((p) => p.trim());
+  if (parts.length < 4) return `questions.${n - 1}: expected "role | input type | chapter | topic"`;
+  const role = PlanRole.safeParse(parts[0]!.toLowerCase());
+  if (!role.success) return `questions.${n - 1}: role must be decides, narrows or info`;
+  const type = QuestionDataObject.shape.question_type.safeParse(parts[1]!.toLowerCase());
+  if (!type.success) return `questions.${n - 1}: unknown input type "${parts[1]}"`;
+  const topic = parts.slice(3).join(" | ").trim();
+  if (!topic) return `questions.${n - 1}: the topic is empty`;
+  const chapter = parts[2]!;
+  return {
+    topic,
+    question_type: type.data,
+    role: role.data,
+    ...(chapter && chapter !== "-" ? { section_label: chapter.slice(0, 40) } : {}),
+  };
+}
+
+// The model's draft → the plan. Exactly one question decides: a second
+// "decides" is demoted to narrows (the deterministic decider pick downstream
+// would ignore it anyway); NONE is a validation failure. The quiz-wide
+// budgets are enforced here, not trusted: one explainer, two helper lines.
+function assemblePlan(draft: z.infer<typeof QuestionPlanDraft>): QuestionPlan | string {
+  const plan: QuestionPlan = [];
+  for (const [i, line] of draft.questions.entries()) {
+    const parsed = parsePlanLine(line, i + 1);
+    if (typeof parsed === "string") return parsed;
+    plan.push(parsed);
+  }
+  const deciderAt = plan.findIndex((q) => q.role === "decides");
+  if (deciderAt === -1) return "questions: exactly one question must have role decides";
+  const helpers = new Set((draft.helpers ?? []).slice(0, 2));
+  // Chapters group questions. More than three labels is one label per
+  // question — noise on the quiz, so such a plan carries none.
+  const chapters = new Set(plan.flatMap((q) => (q.section_label ? [q.section_label] : [])));
+  return plan.map(({ section_label, ...q }, i) => ({
+    ...q,
+    ...(section_label && chapters.size <= 3 ? { section_label } : {}),
+    ...(q.role === "decides" && i !== deciderAt ? { role: "narrows" as const } : {}),
+    ...(i === deciderAt && draft.decider_answers?.length
+      ? { answer_outline: draft.decider_answers }
+      : {}),
+    ...(draft.explainer === i + 1 ? { needs_explainer: true } : {}),
+    ...(helpers.has(i + 1) ? { needs_helper: true } : {}),
+  }));
+}
 
 // Step 1 — the outline. A pinned count that misses is a validation failure
 // while retries remain; the final attempt trims an overshoot (never the
@@ -896,22 +988,22 @@ export async function generateQuestionPlan(
   const exact = input.exactQuestionCount;
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await createMessage({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: prefix.system,
-      tools: prefix.tools,
-      tool_choice: { type: "tool", name: "emit_question_plan" },
-      messages: [
-        {
-          role: "user",
-          content:
-            attempt === 1
-              ? PLAN_TASK
-              : `${PLAN_TASK}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
-        },
-      ],
-    });
+    const content =
+      attempt === 1
+        ? PLAN_TASK
+        : `${PLAN_TASK}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`;
+    const response = await hedged(
+      () =>
+        createMessage({
+          model: input.plannedModels?.plan ?? MODEL,
+          max_tokens: MAX_TOKENS,
+          system: prefix.system,
+          tools: prefix.tools,
+          tool_choice: { type: "tool", name: "emit_question_plan" },
+          messages: [{ role: "user", content }],
+        }),
+      PLAN_HEDGE_MS,
+    );
     const toolUse = response.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
     );
@@ -919,14 +1011,29 @@ export async function generateQuestionPlan(
       lastIssue = "No tool_use block in response.";
       continue;
     }
-    const parsed = QuestionPlanSchema.safeParse(toolUse.input);
+    const parsed = QuestionPlanDraft.safeParse(toolUse.input);
     if (!parsed.success) {
       lastIssue = validationIssue(parsed.error);
       continue;
     }
-    const planned = parsed.data.questions;
+    const planned = assemblePlan(parsed.data);
+    if (typeof planned === "string") {
+      lastIssue = planned;
+      continue;
+    }
     if (exact && planned.length !== exact && attempt < MAX_ATTEMPTS) {
       lastIssue = `Expected exactly ${exact} questions, got ${planned.length}`;
+      continue;
+    }
+    // The plan's own count has a floor and a ceiling: a 3-question outline is
+    // a thin quiz, not a short one. Enforced while retries remain.
+    if (
+      !exact &&
+      input.chooseQuestionCount &&
+      (planned.length < CHOSEN_COUNT_MIN || planned.length > CHOSEN_COUNT_MAX) &&
+      attempt < MAX_ATTEMPTS
+    ) {
+      lastIssue = `Expected ${CHOSEN_COUNT_MIN} to ${CHOSEN_COUNT_MAX} questions, got ${planned.length}`;
       continue;
     }
     return exact ? clampQuestionsTo(planned, exact) : planned;
@@ -938,9 +1045,8 @@ export async function generateQuestionPlan(
   );
 }
 
-function planLine(q: QuestionPlan[number], index: number): string {
-  const chapter = q.section_label?.trim() ? ` · chapter "${q.section_label.trim()}"` : "";
-  return `${index + 1}. [${q.role} · ${q.question_type}${chapter}] ${q.text}`;
+function planLine(q: PlannedQuestion, index: number): string {
+  return `${index + 1}. [${q.role} · ${q.question_type}] ${q.topic}`;
 }
 
 // Consecutive-question slices, at most MAX_PARALLEL_QUESTION_WRITES of them.
@@ -955,38 +1061,22 @@ function planSlices(count: number): number[][] {
   return slices;
 }
 
-type WrittenQuestion = z.infer<typeof WrittenQuestionsSchema>["questions"][number];
-
-// An AI-written image_url is kept only when it is a real absolute http(s)
-// URL. The writer has no image URLs to draw on, and a placeholder
-// ("<UNKNOWN>", seen live when the IMAGERY HIGH directive asks for answer
-// images) fails the doc schema — which would cost the merchant the WHOLE
-// build over one optional field.
-function realImageUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
-  try {
-    const { protocol } = new URL(url);
-    return protocol === "https:" || protocol === "http:" ? url : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 // What the plan decided for ONE question, restated for the call that writes
 // it. A write call sees one slice in isolation, so the quiz-wide budgets (one
 // explainer card, a couple of reassurance lines) are the plan's to hand out.
-function sliceRules(q: QuestionPlan[number], n: number): string[] {
+function sliceRules(q: PlannedQuestion, n: number): string[] {
   const role =
     q.role === "decides"
-      ? `#${n} is the DECIDING question: write roughly one answer per outcome bucket, each answer's tags matching ONE bucket's routing tags, so every bucket is reachable from this question. Each answer describes what the shopper observes or does — never the bucket's name.` +
+      ? `#${n} is the DECIDING question: phrase it diagnostically, and write roughly one answer per outcome bucket, each answer's tags matching ONE bucket's routing tags, so every bucket is reachable from this question. Each answer describes what the shopper observes or does — never the bucket's name.` +
         (q.answer_outline?.length
           ? ` Its planned answers, to refine: ${q.answer_outline.join(" | ")}.`
           : "")
       : q.role === "narrows"
         ? `#${n} NARROWS the product pool: each answer carries the accurate catalog value(s) it matches, taken from the catalog summary.`
-        : `#${n} is an INFO question: its answers carry empty tags [].`;
+        : `#${n} is an INFO question: its answers carry no tags.`;
   return [
     role,
+    ...(q.question_type === "multi_select" ? [`#${n} is multi_select: set max_selections.`] : []),
     q.needs_explainer
       ? `#${n} needs a concept explained first: give it ONE education_card_before, one short plain-language sentence.`
       : `#${n} gets no education_card_before.`,
@@ -996,48 +1086,60 @@ function sliceRules(q: QuestionPlan[number], n: number): string[] {
   ];
 }
 
-// One write call: the questions at `indexes`, in plan order. A wrong count is
-// a validation failure while retries remain; the final attempt keeps the
-// first `indexes.length` of an overshoot and fails on a short result (a
-// missing question cannot be invented).
+// "answer text => tag, tag" → the answer. No arrow = no tags. A tag slot the
+// model filled with a stand-in for "none" is dropped.
+const NO_TAG = new Set(["", "[]", "none", "(none)", "-", "n/a"]);
+function parseAnswerLine(line: string): { text: string; tags: string[] } {
+  const arrow = line.lastIndexOf("=>");
+  if (arrow === -1) return { text: line.trim(), tags: [] };
+  return {
+    text: line.slice(0, arrow).trim(),
+    tags: line
+      .slice(arrow + 2)
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => !NO_TAG.has(t.toLowerCase())),
+  };
+}
+
+// One write call: the questions at `indexes`, in plan order. A wrong count,
+// or an answer with no text, is a validation failure while retries remain;
+// the final attempt keeps the first `indexes.length` of an overshoot and
+// fails on a short result (a missing question cannot be invented).
 async function writePlanSlice(
   prefix: ReturnType<typeof plannedBuildPrefix>,
   plan: QuestionPlan,
   indexes: number[],
-  guidance: string | undefined,
+  model: string,
 ): Promise<WrittenQuestion[]> {
   const numbers = indexes.map((i) => `#${i + 1}`).join(" and ");
   const task = [
     "STEP 2 — WRITE. The quiz plan, in order:",
     ...plan.map(planLine),
     "",
-    `Write ONLY question ${numbers} of this plan, in full: the final question text, its input type, and its answers with tags. Keep each question's planned concept and role; refine the wording. The other questions are written separately — do not cover their concepts, and do not repeat their answer sets.`,
-    "Never invent an image_url or a placeholder for one: give an answer an image_url only when the catalog summary shows that exact URL.",
+    `Write ONLY question ${numbers} of this plan: its final question text and its answer options. Keep the planned topic and input type. The other questions are written separately — do not cover their topics, and do not repeat their answer sets.`,
     ...indexes.flatMap((i) => sliceRules(plan[i]!, i + 1)),
-    ...(guidance
-      ? ["", "Style guidance for this quiz — honor it where natural; the per-question rules above win:", guidance, ""]
-      : []),
     `Emit exactly ${indexes.length} question${indexes.length === 1 ? "" : "s"} via emit_questions, in plan order.`,
   ].join("\n");
 
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const response = await createMessage({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: prefix.system,
-      tools: prefix.tools,
-      tool_choice: { type: "tool", name: "emit_questions" },
-      messages: [
-        {
-          role: "user",
-          content:
-            attempt === 1
-              ? task
-              : `${task}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
-        },
-      ],
-    });
+    const content =
+      attempt === 1
+        ? task
+        : `${task}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`;
+    const response = await hedged(
+      () =>
+        createMessage({
+          model,
+          max_tokens: MAX_TOKENS,
+          system: prefix.system,
+          tools: prefix.tools,
+          tool_choice: { type: "tool", name: "emit_questions" },
+          messages: [{ role: "user", content }],
+        }),
+      WRITE_HEDGE_MS,
+    );
     const toolUse = response.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
     );
@@ -1045,12 +1147,16 @@ async function writePlanSlice(
       lastIssue = "No tool_use block in response.";
       continue;
     }
-    const parsed = WrittenQuestionsSchema.safeParse(toolUse.input);
+    const parsed = WrittenQuestionsDraft.safeParse(toolUse.input);
     if (!parsed.success) {
       lastIssue = validationIssue(parsed.error);
       continue;
     }
     const written = parsed.data.questions;
+    if (written.some((q) => q.answers.some((line) => !parseAnswerLine(line).text))) {
+      lastIssue = "answers: every answer line needs its text before the arrow";
+      continue;
+    }
     if (written.length === indexes.length) return written;
     if (written.length > indexes.length && attempt === MAX_ATTEMPTS) {
       return written.slice(0, indexes.length);
@@ -1070,20 +1176,22 @@ async function writePlanSlice(
 // there. Emits questions only — never welcome / email-gate copy, so the
 // caller takes this path only when the flow needs neither.
 //
+// Structure is the PLAN's, deterministically: input type, role, chapter, and
+// which questions may carry the explainer card or a reassurance line.
 // `input` MUST be the input the plan was generated from: it is the cached
-// prefix the write calls read. `guidance` is for context that arrived AFTER
-// the plan (OVERLAP — the direction pass's angle and style directives, when
-// the plan ran concurrently with it); it rides each call's own message, so it
-// never touches the cache.
+// prefix the write calls read.
 export async function writePlannedQuestions(
   input: GenerateQuestionFlowInput,
   plan: QuestionPlan,
-  guidance?: string,
 ): Promise<GeneratedQuestionFlow> {
   const prefix = plannedBuildPrefix(input);
   const slices = planSlices(plan.length);
   const written = (
-    await Promise.all(slices.map((indexes) => writePlanSlice(prefix, plan, indexes, guidance)))
+    await Promise.all(
+      slices.map((indexes) =>
+        writePlanSlice(prefix, plan, indexes, input.plannedModels?.write ?? MODEL),
+      ),
+    )
   ).flat();
   return {
     questions: written.map((q, i) => {
@@ -1091,27 +1199,22 @@ export async function writePlannedQuestions(
       return {
         // FIX-1 — deterministic anti-slop pass on the AI-authored copy only.
         text: stripEmoji(q.text),
-        question_type: q.question_type,
+        question_type: planned.question_type,
         role: planned.role,
         ...(planned.section_label?.trim()
           ? { section_label: stripEmoji(planned.section_label) }
           : {}),
-        // Only the questions the plan marked carry a reassurance line or the
-        // explainer card.
         ...(planned.needs_helper && q.helper_text?.trim()
-          ? { helper_text: stripEmoji(q.helper_text) }
+          ? { helper_text: stripEmoji(q.helper_text).slice(0, 160) }
           : {}),
-        ...(q.required !== undefined ? { required: q.required } : {}),
         ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
         ...(planned.needs_explainer && q.education_card_before
           ? { education_card_before: q.education_card_before }
           : {}),
-        answers: q.answers.map((a) => ({
-          text: stripAnswerEmDash(stripEmoji(a.text)),
-          tags: a.tags,
-          ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
-          ...(realImageUrl(a.image_url) ? { image_url: a.image_url } : {}),
-        })),
+        answers: q.answers.map((line) => {
+          const answer = parseAnswerLine(line);
+          return { text: stripAnswerEmDash(stripEmoji(answer.text)), tags: answer.tags };
+        }),
       };
     }),
   };

@@ -175,7 +175,9 @@ try {
     if (fd.genProgress && out.progressSeen.typing.at(-1) !== fd.genProgress) {
       out.progressSeen.typing.push(fd.genProgress);
     }
-    await sleep(1500);
+    // 300ms — the chain's stages now last a few seconds each; a 1.5s poll
+    // could step straight over a checkpoint.
+    await sleep(300);
     fd = await readFunnel();
   }
   out.timings.typingMs = Date.now() - tTyping;
@@ -218,7 +220,9 @@ try {
     if (fd.genProgress && out.progressSeen.templating.at(-1) !== fd.genProgress) {
       out.progressSeen.templating.push(fd.genProgress);
     }
-    await sleep(1500);
+    // 300ms — the chain's stages now last a few seconds each; a 1.5s poll
+    // could step straight over a checkpoint.
+    await sleep(300);
     fd = await readFunnel();
   }
   out.timings.templatingMs = Date.now() - tTempl;
@@ -268,7 +272,9 @@ try {
     if (fd.genProgress && out.progressSeen.retry.at(-1) !== fd.genProgress) {
       out.progressSeen.retry.push(fd.genProgress);
     }
-    await sleep(1500);
+    // 300ms — the chain's stages now last a few seconds each; a 1.5s poll
+    // could step straight over a checkpoint.
+    await sleep(300);
     fd = await readFunnel();
   }
   out.timings.retryTypingMs = Date.now() - tRetry;

@@ -5,7 +5,7 @@
 // shop's AiUsage day-row are all snapshotted and restored in `finally`.
 //
 // Proves the QRTZ-G1 contract:
-//   • SETTLE → the real buckets page (client effect, ~5s debounce) writes the
+//   • SETTLE → the real buckets page (client effect, 1.5s debounce) writes the
 //     build_session.speculative marker — the visible stage NEVER leaves
 //     "grouping" and the merchant-visible draft (nodes, name) is untouched.
 //   • one-at-a-time / cache: a same-signature settle ping answers "cached";

@@ -23,10 +23,10 @@ import { directionMatchesGrounding } from "./groundingGuard";
 import { industryGuidanceText } from "./industryTemplates";
 import {
   runAiOnboardingBuild,
-  prefetchQuestionPlan,
+  prefetchQuestions,
   type OnboardingBuildResult,
   type PrefetchedBuildCatalog,
-  type PrefetchedQuestionPlan,
+  type PrefetchedQuestions,
 } from "./onboardingBuild.server";
 import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
@@ -227,15 +227,18 @@ function questionGoalPrompt(goal: string, struggle: string): string {
 }
 
 // OVERLAP — the headless chains' drafting step: the direction pass and, for a
-// pool small enough to route whole, the question PLAN — run CONCURRENTLY (the
-// plan used to wait ~5 s for the direction). With a plan in hand:
+// pool small enough to route whole, the quiz's QUESTIONS — started together.
+// The questions do not wait for the direction: their plan runs beside it and
+// their answer calls start the moment the plan is in (prefetchQuestions), so
+// by the time the direction lands the answers are already being written.
+// With questions in hand:
 //  • every confirmed bucket stays enabled — the direction's
 //    recommended_bucket_ids are dropped, because the plan already wrote the
 //    deciding question for the whole pool;
 //  • the template's question_count is the plan's (unless the merchant pinned
 //    a length), so the persisted working copy matches the quiz being built.
-// A failed plan prefetch changes nothing: the direction comes back as-is and
-// the build plans inline.
+// A failed plan changes nothing: the direction comes back as-is and the
+// build plans inline.
 export async function draftHeadlessDirection(
   shopId: string,
   quizId: string,
@@ -246,11 +249,14 @@ export async function draftHeadlessDirection(
     webResearchText: string;
     questionLength?: number;
     prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>;
+    // Probe-only model override for the planned build's two steps
+    // (e2e/draft-latency.mjs side-by-sides). Production callers never set it.
+    plannedModels?: { plan?: string; write?: string };
   },
-): Promise<QuizDirection & { questionPlan?: PrefetchedQuestionPlan }> {
+): Promise<QuizDirection & { prefetchedQuestions?: PrefetchedQuestions }> {
   const buckets = args.cats.map((c) => ({ id: c.id, name: c.name, tags: c.tags }));
   const overlap = buckets.length >= 1 && buckets.length <= OVERLAP_PLAN_MAX_BUCKETS;
-  const [direction, questionPlan] = await Promise.all([
+  const [direction, prefetchedQuestions] = await Promise.all([
     generateStep2Direction(shopId, quizId, {
       goal: args.goal,
       ...(args.struggle ? { struggle: args.struggle } : {}),
@@ -259,17 +265,18 @@ export async function draftHeadlessDirection(
       ...(args.questionLength ? { questionLength: args.questionLength } : {}),
     }),
     overlap
-      ? prefetchQuestionPlan({
+      ? prefetchQuestions({
           shopId,
           quizId,
           goalPrompt: questionGoalPrompt(args.goal, args.struggle ?? ""),
           buckets,
           ...(args.questionLength ? { questionLength: args.questionLength } : {}),
           ...(args.prefetchedCatalog ? { catalog: args.prefetchedCatalog } : {}),
+          ...(args.plannedModels ? { plannedModels: args.plannedModels } : {}),
         })
       : undefined,
   ]);
-  if (!questionPlan) return direction;
+  if (!prefetchedQuestions) return direction;
   return {
     type: direction.type,
     template: {
@@ -277,9 +284,9 @@ export async function draftHeadlessDirection(
       recommended_bucket_ids: [],
       ...(args.questionLength
         ? {}
-        : { question_count: Math.max(3, Math.min(40, questionPlan.plan.length)) }),
+        : { question_count: Math.max(3, Math.min(40, prefetchedQuestions.plan.length)) }),
     },
-    questionPlan,
+    prefetchedQuestions,
   };
 }
 
@@ -530,9 +537,9 @@ export function startStep2Types(
         const prefetchedCatalog = prefetchBuildCatalog(shopId);
         const promptCats = await loadGenerationBuckets(shopId, quizId);
         const tDirection = Date.now();
-        // OVERLAP — the question plan runs beside the direction pass when the
-        // pool is small enough to route whole (draftHeadlessDirection).
-        const { type, template, questionPlan } = await draftHeadlessDirection(shopId, quizId, {
+        // OVERLAP — the questions are drafted beside the direction pass when
+        // the pool is small enough to route whole (draftHeadlessDirection).
+        const { type, template, prefetchedQuestions } = await draftHeadlessDirection(shopId, quizId, {
           goal: input.goal,
           ...(input.struggle ? { struggle: input.struggle } : {}),
           cats: promptCats,
@@ -541,7 +548,7 @@ export function startStep2Types(
           prefetchedCatalog,
         });
         logFor("step2").info(
-          { quizId, ms: Date.now() - tDirection, plan: Boolean(questionPlan) },
+          { quizId, ms: Date.now() - tDirection, questions: Boolean(prefetchedQuestions) },
           "direction took",
         );
         // Re-read AFTER the pass: it refreshed bucket membership, and the
@@ -572,7 +579,7 @@ export function startStep2Types(
           failMode: "blank_questions",
           prefetchedCatalog,
           budgetPrechecked: true,
-          ...(questionPlan ? { questionPlan } : {}),
+          ...(prefetchedQuestions ? { prefetchedQuestions } : {}),
         });
         return;
       }
@@ -790,8 +797,8 @@ export async function buildQuizFromPicked(
     prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>;
     // QRTZ-G1 — capture mode (see OnboardingBuildInput.captureDoc).
     captureDoc?: boolean;
-    // OVERLAP — a plan drafted beside the direction pass (draftHeadlessDirection).
-    questionPlan?: PrefetchedQuestionPlan;
+    // OVERLAP — questions drafted beside the direction pass (draftHeadlessDirection).
+    prefetchedQuestions?: PrefetchedQuestions;
   },
 ): Promise<OnboardingBuildResult> {
   // Snapshot membership BEFORE the refresh: the working copy's product_ids were
@@ -949,7 +956,7 @@ export async function buildQuizFromPicked(
       },
       ...(prefetched ? { prefetchedCatalog: prefetched } : {}),
       ...(opts?.captureDoc ? { captureDoc: true } : {}),
-      ...(opts?.questionPlan ? { prefetchedQuestionPlan: opts.questionPlan } : {}),
+      ...(opts?.prefetchedQuestions ? { prefetchedQuestions: opts.prefetchedQuestions } : {}),
     }),
   );
 }
@@ -1005,8 +1012,8 @@ export async function startQuestionBuild(
     // FAST F2 — prep started concurrently with template generation (only the
     // templating job passes it; retry-gen / saved-template callers don't).
     prefetchedCatalog?: Promise<PrefetchedBuildCatalog | undefined>;
-    // OVERLAP — a plan drafted beside the direction pass (headless chain only).
-    questionPlan?: PrefetchedQuestionPlan;
+    // OVERLAP — questions drafted beside the direction pass (headless chain only).
+    prefetchedQuestions?: PrefetchedQuestions;
     // BIC-2 A3 — the templating job already checked the ceiling at ITS kick;
     // it passes true so the chained build is never interrupted mid-pipeline.
     // Direct callers (retry-gen, saved-template) leave it unset → checked here.
@@ -1055,7 +1062,7 @@ export async function startQuestionBuild(
 
   void buildQuizFromPicked(shopId, quizId, rich, picked, goal, struggle, {
     ...(opts?.prefetchedCatalog ? { prefetchedCatalog: opts.prefetchedCatalog } : {}),
-    ...(opts?.questionPlan ? { questionPlan: opts.questionPlan } : {}),
+    ...(opts?.prefetchedQuestions ? { prefetchedQuestions: opts.prefetchedQuestions } : {}),
   })
     .then(async (buildResult) => {
       logFor("step2").info({ quizId, ms: Date.now() - tBuild }, "question-build took");

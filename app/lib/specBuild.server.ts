@@ -271,7 +271,7 @@ function startSpeculativeBuild(
       // it for a pool small enough to route whole (the flow1 question-length
       // pin rides inside both).
       const tDirection = Date.now();
-      const { type, template, questionPlan } = await draftHeadlessDirection(shopId, quizId, {
+      const { type, template, prefetchedQuestions } = await draftHeadlessDirection(shopId, quizId, {
         goal: inputs.goal,
         ...(inputs.struggle ? { struggle: inputs.struggle } : {}),
         cats: inputs.cats,
@@ -279,7 +279,7 @@ function startSpeculativeBuild(
         ...(inputs.questionLength ? { questionLength: inputs.questionLength } : {}),
       });
       log.info(
-        { quizId, ms: Date.now() - tDirection, plan: Boolean(questionPlan) },
+        { quizId, ms: Date.now() - tDirection, questions: Boolean(prefetchedQuestions) },
         "speculative direction took",
       );
       const picked = initPickedTemplate(
@@ -298,7 +298,7 @@ function startSpeculativeBuild(
         picked,
         inputs.goal,
         inputs.struggle,
-        { captureDoc: true, ...(questionPlan ? { questionPlan } : {}) },
+        { captureDoc: true, ...(prefetchedQuestions ? { prefetchedQuestions } : {}) },
       );
       log.info({ quizId, ms: Date.now() - tBuild }, "speculative question-build took");
       if (result.degraded || !result.doc) {

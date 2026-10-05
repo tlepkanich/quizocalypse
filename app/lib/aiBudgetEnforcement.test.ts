@@ -13,7 +13,7 @@ import { action as recCopyAction } from "../routes/q.$id.rec-copy";
 import { action as whyCopyAction } from "../routes/api.generate-why-copy";
 import { action as pathQualityAction } from "../routes/api.path-quality";
 import { startStep2Types, startQuestionBuild } from "./step2Build.server";
-import { prefetchQuestionPlan, runAiOnboardingBuild } from "./onboardingBuild.server";
+import { prefetchQuestions, runAiOnboardingBuild } from "./onboardingBuild.server";
 import { getOrStartShopWebResearch, peekFreshShopWebResearch } from "./shopWebResearch.server";
 import { buildSeedQuiz } from "./seedQuiz";
 
@@ -61,7 +61,7 @@ vi.mock("./shopWebResearch.server", () => ({
 // The question build itself is out of scope here.
 vi.mock("./onboardingBuild.server", () => ({
   runAiOnboardingBuild: vi.fn().mockResolvedValue(undefined),
-  prefetchQuestionPlan: vi.fn().mockResolvedValue(undefined),
+  prefetchQuestions: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./log.server", () => ({
@@ -288,11 +288,11 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
     // Cleared on purpose: a killed build retries the question build directly.
     expect(handoff?.picked_type_id).toBeUndefined();
     // No confirmed buckets → nothing to plan for ahead of the direction.
-    expect(prefetchQuestionPlan).not.toHaveBeenCalled();
+    expect(prefetchQuestions).not.toHaveBeenCalled();
   });
 
-  // OVERLAP — a pool small enough to route whole: the question plan runs
-  // BESIDE the direction pass and rides into the build; every confirmed
+  // OVERLAP — a pool small enough to route whole: the questions are drafted
+  // BESIDE the direction pass and ride into the build; every confirmed
   // bucket stays enabled and the working copy takes the plan's count.
   const bucketRows = (n: number) =>
     Array.from({ length: n }, (_, i) => ({
@@ -302,18 +302,19 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
       productIds: [`p${i + 1}`],
       source: "manual",
     }));
-  const QUESTION_PLAN = {
+  const PREFETCHED = {
     input: { goalPrompt: "sell boards" },
     plan: Array.from({ length: 7 }, (_, i) => ({
-      text: `q${i + 1}`,
+      topic: `topic ${i + 1}`,
       question_type: "single_select",
       role: i === 0 ? "decides" : "info",
     })),
+    flow: Promise.resolve(undefined),
   };
   type BuildArgs = {
     questionCount: number;
     preResolvedBuckets: Array<{ id: string }>;
-    prefetchedQuestionPlan?: unknown;
+    prefetchedQuestions?: unknown;
   };
   const seedHeadless = (buckets: number) => {
     seedDraft();
@@ -329,15 +330,15 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
     (runAiOnboardingBuild as Mock).mockResolvedValue({ degraded: false });
   };
 
-  it("headless + a small pool → the plan is drafted beside the direction and handed to the build", async () => {
+  it("headless + a small pool → the questions are drafted beside the direction and handed to the build", async () => {
     seedHeadless(2);
-    (prefetchQuestionPlan as Mock).mockResolvedValue(QUESTION_PLAN);
+    (prefetchQuestions as Mock).mockResolvedValue(PREFETCHED);
 
     startStep2Types("s1", "qz1", { goal: "sell boards", struggle: "too many specs" }, { headless: {} });
     await vi.waitFor(() => expect(runAiOnboardingBuild).toHaveBeenCalled());
 
-    expect(prefetchQuestionPlan).toHaveBeenCalledTimes(1);
-    expect((prefetchQuestionPlan as Mock).mock.calls[0]?.[0]).toMatchObject({
+    expect(prefetchQuestions).toHaveBeenCalledTimes(1);
+    expect((prefetchQuestions as Mock).mock.calls[0]?.[0]).toMatchObject({
       shopId: "s1",
       quizId: "qz1",
       goalPrompt: "sell boards\n\nShoppers struggle with: too many specs",
@@ -347,7 +348,7 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
       ],
     });
     const build = (runAiOnboardingBuild as Mock).mock.calls[0]?.[0] as BuildArgs;
-    expect(build.prefetchedQuestionPlan).toBe(QUESTION_PLAN);
+    expect(build.prefetchedQuestions).toBe(PREFETCHED);
     // The direction's bucket pick is dropped: both confirmed buckets route.
     expect(build.preResolvedBuckets.map((b) => b.id)).toEqual(["cat1", "cat2"]);
     // …and the working copy carries the PLAN's count (7), not the direction's 5.
@@ -356,13 +357,13 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
 
   it("headless + a small pool, plan prefetch failed → the direction stands as it came", async () => {
     seedHeadless(2);
-    (prefetchQuestionPlan as Mock).mockResolvedValue(undefined);
+    (prefetchQuestions as Mock).mockResolvedValue(undefined);
 
     startStep2Types("s1", "qz1", { goal: "sell boards" }, { headless: {} });
     await vi.waitFor(() => expect(runAiOnboardingBuild).toHaveBeenCalled());
 
     const build = (runAiOnboardingBuild as Mock).mock.calls[0]?.[0] as BuildArgs;
-    expect(build.prefetchedQuestionPlan).toBeUndefined();
+    expect(build.prefetchedQuestions).toBeUndefined();
     expect(build.preResolvedBuckets.map((b) => b.id)).toEqual(["cat1"]);
     expect(build.questionCount).toBe(5);
   });
@@ -373,7 +374,7 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
     startStep2Types("s1", "qz1", { goal: "sell boards" }, { headless: {} });
     await vi.waitFor(() => expect(runAiOnboardingBuild).toHaveBeenCalled());
 
-    expect(prefetchQuestionPlan).not.toHaveBeenCalled();
+    expect(prefetchQuestions).not.toHaveBeenCalled();
     const build = (runAiOnboardingBuild as Mock).mock.calls[0]?.[0] as BuildArgs;
     expect(build.preResolvedBuckets.map((b) => b.id)).toEqual(["cat1"]);
   });

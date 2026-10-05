@@ -8,7 +8,7 @@ import {
   QuizGenerationError,
 } from "./claude";
 import {
-  prefetchQuestionPlan,
+  prefetchQuestions,
   runAiOnboardingBuild,
   type OnboardingBuildInput,
 } from "./onboardingBuild.server";
@@ -50,8 +50,8 @@ const plan = generateQuestionPlan as Mock;
 // The planned build's result is what its WRITE step returns.
 const planned = writePlannedQuestions as Mock;
 const PLAN = [
-  { text: "Where do you ride?", question_type: "single_select", role: "decides" },
-  { text: "Who is it for?", question_type: "single_select", role: "info" },
+  { topic: "where they ride", question_type: "single_select", role: "decides" },
+  { topic: "who it is for", question_type: "single_select", role: "info" },
 ];
 
 const BUCKETS = [
@@ -190,11 +190,11 @@ describe("runAiOnboardingBuild — the question-flow strategy", () => {
   });
 });
 
-// OVERLAP — the headless chains draft the plan BESIDE the direction pass and
-// hand it to the build. The build uses it only while it still describes the
-// build; the write step then runs on the plan's own input (its cached prefix)
-// with the direction as late guidance.
-describe("runAiOnboardingBuild — a prefetched question plan", () => {
+// OVERLAP — the headless chains draft the questions BESIDE the direction pass
+// and hand them to the build with their answers already being written. The
+// build uses them only while they still describe the build, and then waits
+// only for whatever is left of the answers.
+describe("runAiOnboardingBuild — prefetched questions", () => {
   const prefetchedInput = {
     goalPrompt: "match riders to boards",
     experienceType: "product_match" as const,
@@ -206,43 +206,52 @@ describe("runAiOnboardingBuild — a prefetched question plan", () => {
     tone: "friendly" as const,
     logicModel: "decider" as const,
   };
-  const prefetchedQuestionPlan = { input: prefetchedInput, plan: PLAN as never };
-
-  it("is written from as-is: no second plan call, the plan's own input, the direction as guidance", async () => {
-    const result = await runAiOnboardingBuild(
-      buildInput({
-        prefetchedQuestionPlan,
-        directionAngle: "Start with terrain.",
-        dialDirectives: "Design direction (honor where natural):\n- IMAGERY HIGH",
-      }),
-    );
-    expect(plan).not.toHaveBeenCalled();
-    expect(planned).toHaveBeenCalledTimes(1);
-    expect(planned.mock.calls[0]?.[0]).toBe(prefetchedInput);
-    expect(planned.mock.calls[0]?.[1]).toBe(PLAN);
-    expect(planned.mock.calls[0]?.[2]).toBe(
-      "Quiz direction: Start with terrain.\n\nDesign direction (honor where natural):\n- IMAGERY HIGH",
-    );
-    expect(result.degraded).toBeUndefined();
-    expect(questionTexts(result.doc)).toHaveLength(2);
+  const EARLY_FLOW = {
+    questions: [
+      { ...FLOW.questions[0]!, text: "Early: where do you ride?" },
+      { ...FLOW.questions[1]!, text: "Early: who is it for?" },
+    ],
+  };
+  // `answers: "failed"` = the answer step failed (flow resolves undefined).
+  const prefetched = (answers: "ready" | "failed" = "ready") => ({
+    input: prefetchedInput,
+    plan: PLAN as never,
+    flow: Promise.resolve((answers === "ready" ? EARLY_FLOW : undefined) as never),
   });
 
-  it("is discarded when the build's buckets differ (a disabled group, changed routing tags)", async () => {
-    await runAiOnboardingBuild(
-      buildInput({ prefetchedQuestionPlan, preResolvedBuckets: [BUCKETS[0]!] }),
+  it("are used as-is: no plan call, no write call — the build only awaits their answers", async () => {
+    const result = await runAiOnboardingBuild(buildInput({ prefetchedQuestions: prefetched() }));
+    expect(plan).not.toHaveBeenCalled();
+    expect(planned).not.toHaveBeenCalled();
+    expect(single).not.toHaveBeenCalled();
+    expect(result.degraded).toBeUndefined();
+    expect(questionTexts(result.doc)).toEqual(["Early: where do you ride?", "Early: who is it for?"]);
+  });
+
+  it("whose answers failed (flow resolved undefined) → the build plans inline", async () => {
+    const result = await runAiOnboardingBuild(
+      buildInput({ prefetchedQuestions: prefetched("failed") }),
+    );
+    expect(plan).toHaveBeenCalledTimes(1);
+    expect(planned).toHaveBeenCalledTimes(1);
+    expect(questionTexts(result.doc)).toEqual(["Where do you ride?", "Who is it for?"]);
+  });
+
+  it("are discarded when the build's buckets differ (a disabled group, changed routing tags)", async () => {
+    const result = await runAiOnboardingBuild(
+      buildInput({ prefetchedQuestions: prefetched(), preResolvedBuckets: [BUCKETS[0]!] }),
     );
     expect(plan).toHaveBeenCalledTimes(1); // planned inline, for the build's own buckets
-    expect(planned.mock.calls[0]?.[0]).not.toBe(prefetchedInput);
-    expect(planned.mock.calls[0]?.[2]).toBeUndefined();
+    expect(questionTexts(result.doc)).toEqual(["Where do you ride?", "Who is it for?"]);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({ sameBuckets: false, sameCount: true }),
-      "prefetched question plan no longer matches the build — planning inline",
+      "prefetched questions no longer match the build — planning inline",
     );
   });
 
-  it("is discarded when the pinned count differs", async () => {
+  it("are discarded when the pinned count differs", async () => {
     await runAiOnboardingBuild(
-      buildInput({ prefetchedQuestionPlan, questionCount: 4, questionCountExact: true }),
+      buildInput({ prefetchedQuestions: prefetched(), questionCount: 4, questionCountExact: true }),
     );
     expect(plan).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(
@@ -251,14 +260,16 @@ describe("runAiOnboardingBuild — a prefetched question plan", () => {
     );
   });
 
-  it("is ignored by a build that does not plan (legacy, single)", async () => {
-    await runAiOnboardingBuild(buildInput({ prefetchedQuestionPlan, questionFlow: "single" }));
+  it("are ignored by a build that does not plan (legacy, single)", async () => {
+    const result = await runAiOnboardingBuild(
+      buildInput({ prefetchedQuestions: prefetched(), questionFlow: "single" }),
+    );
     expect(single).toHaveBeenCalledTimes(1);
-    expect(planned).not.toHaveBeenCalled();
+    expect(questionTexts(result.doc)).toEqual(["Where do you ride?", "Who is it for?"]);
   });
 });
 
-describe("prefetchQuestionPlan — the plan, drafted before the direction exists", () => {
+describe("prefetchQuestions — the questions, drafted before the direction exists", () => {
   const args = {
     shopId: "s1",
     quizId: "qz1",
@@ -271,10 +282,15 @@ describe("prefetchQuestionPlan — the plan, drafted before the direction exists
     }),
   };
 
-  it("plans from the goal + buckets and lets the plan pick the count", async () => {
-    const result = await prefetchQuestionPlan(args);
+  it("resolves when the PLAN is in, with the answers already being written on `flow`", async () => {
+    let finishAnswers: (flow: unknown) => void = () => {};
+    planned.mockReturnValue(new Promise((resolve) => (finishAnswers = resolve)));
+    const result = await prefetchQuestions(args); // resolves although the answers are still pending
     expect(result?.plan).toBe(PLAN);
     expect(plan.mock.calls[0]?.[0]).toBe(result?.input);
+    // The answer step runs on the plan's own input (its cached prefix).
+    expect(planned.mock.calls[0]?.[0]).toBe(result?.input);
+    expect(planned.mock.calls[0]?.[1]).toBe(PLAN);
     expect(result?.input).toMatchObject({
       goalPrompt: "match riders to boards",
       buckets: BUCKETS,
@@ -282,19 +298,27 @@ describe("prefetchQuestionPlan — the plan, drafted before the direction exists
       chooseQuestionCount: true,
     });
     expect(result?.input.exactQuestionCount).toBeUndefined();
+    finishAnswers(FLOW);
+    await expect(result?.flow).resolves.toBe(FLOW);
   });
 
   it("a pinned length is planned for exactly", async () => {
-    const result = await prefetchQuestionPlan({ ...args, questionLength: 5 });
+    const result = await prefetchQuestions({ ...args, questionLength: 5 });
     expect(result?.input).toMatchObject({ questionCount: 5, exactQuestionCount: 5 });
     expect(result?.input.chooseQuestionCount).toBeUndefined();
   });
 
   it("NEVER rejects: a failed plan resolves undefined (the build plans inline)", async () => {
     plan.mockRejectedValue(new Error("400 credit balance too low"));
-    await expect(prefetchQuestionPlan(args)).resolves.toBeUndefined();
+    await expect(prefetchQuestions(args)).resolves.toBeUndefined();
     plan.mockRejectedValue(new QuizGenerationError("plan failed", 3));
-    await expect(prefetchQuestionPlan(args)).resolves.toBeUndefined();
+    await expect(prefetchQuestions(args)).resolves.toBeUndefined();
+    expect(planned).not.toHaveBeenCalled();
+  });
+
+  it("NEVER rejects: failed answers resolve `flow` to undefined", async () => {
+    planned.mockRejectedValue(new QuizGenerationError("slice failed", 3));
+    const result = await prefetchQuestions(args);
+    await expect(result?.flow).resolves.toBeUndefined();
   });
 });
-

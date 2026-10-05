@@ -28,7 +28,12 @@ import {
   type QuestionPlan,
   type QuizTone,
 } from "./claude";
-import { applyQuestionFlow, applyDeciderQuestionFlow, type SmartBuildBucket } from "./smartBuild";
+import {
+  applyQuestionFlow,
+  applyDeciderQuestionFlow,
+  type GeneratedQuestionFlow,
+  type SmartBuildBucket,
+} from "./smartBuild";
 import { parseBrandGuidelinesSafe, type BrandGuidelines } from "./brandGuidelines";
 import { identityToBrandGuidelines, parseBrandIdentitySafe } from "./brandIdentity";
 import { ART_DIRECTION_ENABLED, applyGeneratedArtDirection } from "./deciderArtDirection";
@@ -150,12 +155,12 @@ export interface OnboardingBuildInput {
   // (the latency probe's baseline). Legacy builds are ALWAYS single-call,
   // whatever this says. ABSENT → the default for the doc's logic model.
   questionFlow?: "single" | "planned";
-  // OVERLAP — a question plan generated BEFORE this build started (the
-  // headless chains run it concurrently with the direction pass; see
-  // prefetchQuestionPlan). Used only when it still describes this build —
-  // the same buckets and the same pinned count — else the build plans
-  // inline. ABSENT → the build plans inline, as before.
-  prefetchedQuestionPlan?: PrefetchedQuestionPlan;
+  // OVERLAP — questions drafted BEFORE this build started (the headless
+  // chains start them beside the direction pass; see prefetchQuestions). Used
+  // only while they still describe this build — the same buckets and the
+  // same pinned count — else the build plans inline. ABSENT → the build
+  // plans inline, as before.
+  prefetchedQuestions?: PrefetchedQuestions;
 }
 
 // FAST F2 — the shape of the prefetched catalog inputs (mirrors the catalog
@@ -166,12 +171,14 @@ export interface PrefetchedBuildCatalog {
   shop: { brandGuidelines: unknown; brandIdentity: unknown } | null;
 }
 
-// OVERLAP — a plan together with the EXACT input it was generated from. The
-// write step must reuse that input: it is the cached prefix the write calls
-// read (and the context the plan's wording assumes).
-export interface PrefetchedQuestionPlan {
+// OVERLAP — questions drafted ahead of the build: the plan, the EXACT input
+// it was generated from (the cached prefix its answer calls read), and the
+// answers — already being written when this is handed over. `flow` never
+// rejects: it resolves undefined when the answer step failed.
+export interface PrefetchedQuestions {
   input: GenerateQuestionFlowInput;
   plan: QuestionPlan;
+  flow: Promise<GeneratedQuestionFlow | undefined>;
 }
 
 export interface OnboardingBuildResult {
@@ -413,25 +420,13 @@ export async function runAiOnboardingBuild(
   // The planned build emits questions only, so a flow that also wants welcome
   // copy keeps the single call (decider email_gate is already forced off).
   const planned = decider && input.questionFlow !== "single" && !flow.welcome_message;
-  // OVERLAP — a prefetched plan never saw the direction (it ran beside it), so
-  // the direction's angle + style directives reach the WRITE step as guidance.
-  const prefetchedPlan = planned
-    ? usablePrefetchedPlan(input.prefetchedQuestionPlan, flowInput, { shopId, quizId })
+  const prefetched = planned
+    ? usablePrefetchedQuestions(input.prefetchedQuestions, flowInput, { shopId, quizId })
     : undefined;
-  const writeGuidance = [
-    input.directionAngle ? `Quiz direction: ${input.directionAngle}` : "",
-    input.dialDirectives ?? "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
   let generated;
   try {
     generated = planned
-      ? await generatePlannedQuestionFlow(
-          flowInput,
-          { shopId, quizId },
-          prefetchedPlan ? { ...prefetchedPlan, guidance: writeGuidance } : undefined,
-        )
+      ? await generatePlannedQuestionFlow(flowInput, { shopId, quizId }, prefetched)
       : await generateQuestionFlow(flowInput);
   } catch (err) {
     reportError(err, { scope: "onboardingBuild", msg: "question flow build failed (degraded draft)", shopId, quizId });
@@ -525,22 +520,26 @@ async function questionFlowCatalogContext(
   };
 }
 
-// OVERLAP — the question plan, started BEFORE the direction pass has finished
-// (the headless chains run the two concurrently: the plan was the next ~5 s
-// of the wait). It therefore plans from what is known at that moment — the
-// goal, the confirmed buckets, the catalog — and picks the question count
-// itself unless the merchant pinned one; the direction's angle and style
-// directives reach the write step later, as guidance.
-// NEVER rejects: any failure resolves undefined and the build plans inline.
-export async function prefetchQuestionPlan(args: {
+// OVERLAP — the quiz's questions, started BEFORE the direction pass has
+// finished: the headless chains run the two side by side, and the answer
+// calls start the moment the plan is in — they wait for nothing else. So the
+// questions are drafted from what is known at that moment — the goal, the
+// confirmed buckets, the catalog — and the plan picks the question count
+// itself unless the merchant pinned one.
+// Resolves when the PLAN is in (the answers are then in flight, on `flow`).
+// NEVER rejects: a failed plan resolves undefined and the build plans inline.
+export async function prefetchQuestions(args: {
   shopId: string;
   quizId: string;
   goalPrompt: string;
   questionLength?: number;
   buckets: Array<{ id: string; name: string; tags: string[] }>;
   catalog?: Promise<PrefetchedBuildCatalog | undefined>;
-}): Promise<PrefetchedQuestionPlan | undefined> {
+  // Probe-only (see GenerateQuestionFlowInput.plannedModels).
+  plannedModels?: GenerateQuestionFlowInput["plannedModels"];
+}): Promise<PrefetchedQuestions | undefined> {
   const { shopId, quizId } = args;
+  const log = logFor("onboardingBuild");
   try {
     const tPlan = Date.now();
     const catalog =
@@ -566,18 +565,27 @@ export async function prefetchQuestionPlan(args: {
       logicModel: "decider",
       ...(toneSample ? { toneSample } : {}),
       ...(brandGuidelines ? { brandGuidelines } : {}),
+      ...(args.plannedModels ? { plannedModels: args.plannedModels } : {}),
     };
     const plan = await generateQuestionPlan(input);
-    logFor("onboardingBuild").info(
-      { shopId, quizId, questions: plan.length, ms: Date.now() - tPlan },
-      "question plan prefetched",
+    const planMs = Date.now() - tPlan;
+    const tWrite = Date.now();
+    const flow = writePlannedQuestions(input, plan).then(
+      (generated) => {
+        log.info(
+          { shopId, quizId, questions: plan.length, planMs, writeMs: Date.now() - tWrite },
+          "questions prefetched",
+        );
+        return generated;
+      },
+      (err: unknown) => {
+        log.warn({ err, shopId, quizId }, "question answers prefetch failed (the build will plan inline)");
+        return undefined;
+      },
     );
-    return { input, plan };
+    return { input, plan, flow };
   } catch (err) {
-    logFor("onboardingBuild").warn(
-      { err, shopId, quizId },
-      "question plan prefetch failed (the build will plan inline)",
-    );
+    log.warn({ err, shopId, quizId }, "question plan prefetch failed (the build will plan inline)");
     return undefined;
   }
 }
@@ -596,15 +604,15 @@ async function loadBuildCatalog(shopId: string): Promise<PrefetchedBuildCatalog>
   return { products, collections, shop };
 }
 
-// A prefetched plan is used only while it still describes THIS build: the
-// same buckets (ids, names, routing tags, order) and the same pinned count.
-// Anything else — a bucket the working copy disabled, a membership refresh
-// that changed routing tags — discards it and the build plans inline.
-function usablePrefetchedPlan(
-  prefetched: PrefetchedQuestionPlan | undefined,
+// Prefetched questions are used only while they still describe THIS build:
+// the same buckets (ids, names, routing tags, order) and the same pinned
+// count. Anything else — a bucket the working copy disabled, a membership
+// refresh that changed routing tags — discards them and the build plans inline.
+function usablePrefetchedQuestions(
+  prefetched: PrefetchedQuestions | undefined,
   flowInput: GenerateQuestionFlowInput,
   ctx: { shopId: string; quizId: string },
-): PrefetchedQuestionPlan | undefined {
+): PrefetchedQuestions | undefined {
   if (!prefetched) return undefined;
   const sameBuckets =
     JSON.stringify(prefetched.input.buckets) === JSON.stringify(flowInput.buckets);
@@ -613,7 +621,7 @@ function usablePrefetchedPlan(
   if (sameBuckets && sameCount) return prefetched;
   logFor("onboardingBuild").warn(
     { ...ctx, sameBuckets, sameCount },
-    "prefetched question plan no longer matches the build — planning inline",
+    "prefetched questions no longer match the build — planning inline",
   );
   return undefined;
 }
@@ -626,27 +634,20 @@ function usablePrefetchedPlan(
 async function generatePlannedQuestionFlow(
   flowInput: GenerateQuestionFlowInput,
   ctx: { shopId: string; quizId: string },
-  prefetched?: PrefetchedQuestionPlan & { guidance: string },
+  prefetched?: PrefetchedQuestions,
 ) {
+  // OVERLAP — the questions were drafted beside the direction pass; the build
+  // only waits for whatever is left of their answers.
+  const early = prefetched ? await prefetched.flow : undefined;
+  if (early) return early;
   try {
     const tPlan = Date.now();
-    const plan = prefetched?.plan ?? (await generateQuestionPlan(flowInput));
+    const plan = await generateQuestionPlan(flowInput);
     const planMs = Date.now() - tPlan;
     const tWrite = Date.now();
-    // The write step reads the cache the plan's own input wrote.
-    const generated = await writePlannedQuestions(
-      prefetched?.input ?? flowInput,
-      plan,
-      prefetched?.guidance || undefined,
-    );
+    const generated = await writePlannedQuestions(flowInput, plan);
     logFor("onboardingBuild").info(
-      {
-        ...ctx,
-        questions: plan.length,
-        planMs,
-        writeMs: Date.now() - tWrite,
-        prefetchedPlan: Boolean(prefetched),
-      },
+      { ...ctx, questions: plan.length, planMs, writeMs: Date.now() - tWrite },
       "planned question build took",
     );
     return generated;
