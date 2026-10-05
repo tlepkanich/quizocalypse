@@ -1,11 +1,20 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import prisma from "../db.server";
-import { generateRuntimeRecCopy, generateWhyCopy, reviewPathQuality, generateQuizTypes } from "./claude";
+import {
+  generateRuntimeRecCopy,
+  generateWhyCopy,
+  reviewPathQuality,
+  generateQuizTypes,
+  generateQuizTemplates,
+  generateQuizDirection,
+} from "./claude";
 import { action as recCopyAction } from "../routes/q.$id.rec-copy";
 import { action as whyCopyAction } from "../routes/api.generate-why-copy";
 import { action as pathQualityAction } from "../routes/api.path-quality";
 import { startStep2Types, startQuestionBuild } from "./step2Build.server";
+import { runAiOnboardingBuild } from "./onboardingBuild.server";
+import { getOrStartShopWebResearch, peekFreshShopWebResearch } from "./shopWebResearch.server";
 import { buildSeedQuiz } from "./seedQuiz";
 
 // BIC-2 A3 — refusal wiring per endpoint (the publicWriteGuards pattern:
@@ -40,6 +49,7 @@ vi.mock("./claude", () => ({
   runWebResearchForQuizTypes: vi.fn().mockResolvedValue(""),
   generateQuizTypes: vi.fn().mockResolvedValue([]),
   generateQuizTemplates: vi.fn().mockResolvedValue([]),
+  generateQuizDirection: vi.fn(),
 }));
 
 // step2Build's web-research cache — cold-cache path must not fire on refusal.
@@ -189,6 +199,9 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
 
   it("startStep2Types under budget → the job runs (types generator fires)", async () => {
     seedDraft();
+    // The Shape route still WAITS for research on a cache miss (its cards
+    // quote it) — only the headless chains are cached-only.
+    (peekFreshShopWebResearch as Mock).mockResolvedValueOnce(null);
     startStep2Types("s1", "qz1", { goal: "sell boards" });
     // The job's success path needs catalog context — resolve the mocks enough
     // for generateStep2Types' loadStep2Context.
@@ -197,6 +210,80 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
     p.category.findMany.mockResolvedValue([]);
     p.shop.findUnique.mockResolvedValue({ brandIdentity: null });
     await vi.waitFor(() => expect(generateQuizTypes).toHaveBeenCalled());
+    expect(getOrStartShopWebResearch).toHaveBeenCalledTimes(1);
+  });
+
+  // DRAFT-FAST — the headless chain (goal-first / pop-up AI) drafts ONE
+  // direction in ONE pass and goes straight to the question build: the two
+  // card passes never run, the ceiling is checked once (this job's kick), and
+  // the kept type + template land in the same write that leaves "typing".
+  it("headless startStep2Types under budget → ONE direction pass, then the question build", async () => {
+    seedDraft();
+    p.product.findMany.mockResolvedValue([]);
+    p.collection.findMany.mockResolvedValue([]);
+    p.category.findMany.mockResolvedValue([]);
+    p.shop.findUnique.mockResolvedValue({ brandIdentity: null });
+    (generateQuizDirection as Mock).mockResolvedValue({
+      type: {
+        id: "needs-matcher",
+        experience_type: "product_match",
+        name: "Needs Matcher",
+        achieves: "Matches riders to boards.",
+        question_range: { min: 5, max: 5 },
+        best_practice_note: "",
+        rationale: "",
+        web_research_excerpt: "",
+      },
+      template: {
+        id: "find-your-board",
+        experience_type: "product_match",
+        title: "Find Your Board",
+        angle: "Starts with where you ride.",
+        rationale: "",
+        sample_questions: ["Where do you ride?", "How long have you ridden?"],
+        feature_notes: ["Opens with terrain"],
+        dials: { imagery: "medium", graphics: "medium", word_forward: "medium", lines: "rounded" },
+        rec_defaults: { max_products: 3, oos_behavior: "show_with_badge", fallback_collection_id: "" },
+        recommended_bucket_ids: [],
+        question_count: 5,
+      },
+    });
+    (runAiOnboardingBuild as Mock).mockResolvedValue({ degraded: false });
+    // A research cache MISS: the headless chain must not wait for a run.
+    (peekFreshShopWebResearch as Mock).mockResolvedValueOnce(null);
+
+    startStep2Types("s1", "qz1", { goal: "sell boards" }, { headless: { questionLength: 5 } });
+    await vi.waitFor(() => expect(runAiOnboardingBuild).toHaveBeenCalled());
+
+    expect(getOrStartShopWebResearch).not.toHaveBeenCalled();
+    expect((generateQuizDirection as Mock).mock.calls[0]?.[0]).toMatchObject({ webResearchText: "" });
+
+    expect(generateQuizDirection).toHaveBeenCalledTimes(1);
+    expect((generateQuizDirection as Mock).mock.calls[0]?.[0]).toMatchObject({
+      goalPrompt: "sell boards",
+      questionLength: 5,
+    });
+    expect(generateQuizTypes).not.toHaveBeenCalled();
+    expect(generateQuizTemplates).not.toHaveBeenCalled();
+    // One ceiling read for the whole chain (the chained build is prechecked).
+    expect(p.aiUsage.findUnique).toHaveBeenCalledTimes(1);
+
+    type WrittenSession = {
+      stage?: string;
+      quiz_types?: Array<{ id: string }>;
+      rich_templates?: Array<{ id: string }>;
+      picked_template?: { template_id: string; question_count: number };
+      picked_type_id?: string;
+    };
+    const sessions = p.quiz.update.mock.calls
+      .map((c) => (c[0] as { data: { draftJson?: { build_session?: WrittenSession } } }).data.draftJson)
+      .flatMap((d) => (d?.build_session ? [d.build_session] : []));
+    const handoff = sessions.find((s) => s.stage === "templating");
+    expect(handoff?.quiz_types?.map((t) => t.id)).toEqual(["needs-matcher"]);
+    expect(handoff?.rich_templates?.map((t) => t.id)).toEqual(["find-your-board"]);
+    expect(handoff?.picked_template).toMatchObject({ template_id: "find-your-board", question_count: 5 });
+    // Cleared on purpose: a killed build retries the question build directly.
+    expect(handoff?.picked_type_id).toBeUndefined();
   });
 
   it("startQuestionBuild (direct kick) over budget → gen_error, build never starts", async () => {

@@ -21,6 +21,7 @@ import { suggestBucketStrategy } from "./bucketDetect";
 import { inverseCollectionIndex } from "./categoryGrouping";
 import { setIntroHidden } from "./seedQuiz";
 import { loadBucketInputs, toGroupingProduct } from "./bucketPersist.server";
+import { kickSpeculativeBuild } from "./specBuild.server";
 import {
   bucketRowsFor,
   addBuckets,
@@ -245,6 +246,17 @@ export function startGoalPrepick(shopId: string, quizId: string): void {
         { quizId, ms: Date.now() - t, strategy, picked: rows.length, wrote },
         "goal pre-pick done",
       );
+      // QBUILD-FAST — the pool is settled the moment the pick lands, so start
+      // the speculative question build NOW: the merchant reads the picks
+      // while it runs, and their Continue applies it (or attaches mid-run).
+      // The page's own settle ping, ~5s after it renders, then answers
+      // "cached". Best-effort: a failed kick only means that ping starts it.
+      try {
+        const spec = await kickSpeculativeBuild(shopId, quizId);
+        logFor("goalPrepick").info({ quizId, spec }, "speculative build kicked at pre-pick");
+      } catch (err) {
+        reportError(err, { scope: "goalPrepick", msg: "speculative kick failed", shopId, quizId });
+      }
     } catch (err) {
       reportError(err, { scope: "goalPrepick", msg: "goal pre-pick failed", shopId, quizId });
       await failPrepick(quizId, friendlyPrepickError(err));

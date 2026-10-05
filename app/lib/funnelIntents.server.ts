@@ -12,7 +12,7 @@ import {
 import { z } from "zod";
 import prisma from "../db.server";
 import { logFor } from "./log.server";
-import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
+import { withAiSpendRecording } from "./aiBudget.server";
 import { Quiz, DesignDials, RecDefaults, DesignTokens, QuizType } from "./quizSchema";
 import type { BuildSession } from "./quizSchema";
 import { parseBrandIdentitySafe } from "./brandIdentity";
@@ -45,10 +45,10 @@ import { listStoreDiscounts } from "./discountList.server";
 import { startGoalPrepick } from "./goalPrepick.server";
 import {
   resolveSpecInputs,
-  startSpeculativeBuild,
+  kickSpeculativeBuild,
   applySpeculativeReady,
 } from "./specBuild.server";
-import { specContinueDecision, specStartDecision } from "./specPrefetch";
+import { specContinueDecision } from "./specPrefetch";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import {
   MAX_LOGO_BYTES,
@@ -441,27 +441,9 @@ async function runStep1FunnelActionImpl(
   //    chain halts at its next pass boundary; a stale marker (killed job) may
   //    be restarted.
   if (intent === "speculate") {
-    if (session.stage !== "grouping") return json({ intent, ok: true, spec: "skipped" });
-    const specInputs = await resolveSpecInputs(shop.id, quiz.id, doc, session);
-    if (!specInputs) return json({ intent, ok: true, spec: "skipped" });
-    if (specStartDecision(session.speculative, specInputs.signature, new Date()) !== "start") {
-      return json({ intent, ok: true, spec: "cached" });
-    }
-    const budget = await checkAiBudget(shop.id, "merchant");
-    if (!budget.allowed) return json({ intent, ok: true, spec: "skipped" });
-    await writeDoc(quiz.id, {
-      ...doc,
-      build_session: {
-        ...session,
-        speculative: {
-          signature: specInputs.signature,
-          status: "running",
-          started_at: new Date().toISOString(),
-        },
-      },
-    });
-    startSpeculativeBuild(shop.id, quiz.id, specInputs);
-    return json({ intent, ok: true, spec: "started" });
+    // The decision + kick live in ONE seam (kickSpeculativeBuild), shared with
+    // the goal pre-pick's completion.
+    return json({ intent, ok: true, spec: await kickSpeculativeBuild(shop.id, quiz.id) });
   }
 
   // Continue → advance to the goal stage (relabeled "Step 2" in the UI). The
@@ -495,10 +477,10 @@ async function runStep1FunnelActionImpl(
 
     // FLOW-2 (funnel-reconfig Flow 2) — the manual flow's pop-up "Generate with
     // AI" row is the ONLY caller of this intent on a decider draft, and per the
-    // spec Shape is gone from all flows: the middle passes run HEADLESS (the
-    // flow1-confirm machinery — startStep2Types auto-picks the top type, chains
-    // the templating job which auto-picks the top template, which chains the
-    // question build) and the merchant lands on the Questions step. Every
+    // spec Shape is gone from all flows: the middle pass runs HEADLESS (the
+    // flow1-confirm machinery — startStep2Types drafts ONE direction, a type
+    // + its template (DRAFT-FAST), and chains the question build) and the
+    // merchant lands on the Questions step. Every
     // failure lands the blank-Questions notice — never a Shape they didn't
     // choose. ai_generate marks the chain so retry-gen re-kicks headless and
     // Back-from-Questions returns to Recommendations. Shape's defaults fold in
@@ -842,9 +824,9 @@ async function runStep1FunnelActionImpl(
   // FLOW-1 (funnel-reconfig Flow 1) — the goal-first recs confirm. The merchant
   // already wrote their goal at the front door (session.goal carries the folded
   // brief) and refined the AI-pre-picked selections; this confirm skips BOTH
-  // the start pop-up and the Shape stage: the type/template middle passes run
-  // headless (startStep2Types auto-picks the top type, chains the templating
-  // job which auto-picks the top template, which chains the question build) and
+  // the start pop-up and the Shape stage: the type/template middle pass runs
+  // headless (startStep2Types drafts ONE direction, a type + its template
+  // (DRAFT-FAST), and chains the question build) and
   // the merchant lands on the Questions step. Shape's defaults fold in here:
   // scoring "direct" (the shape-continue precedent — decider drafts are
   // direct-only) and the brief's chosen length pins question_range inside the

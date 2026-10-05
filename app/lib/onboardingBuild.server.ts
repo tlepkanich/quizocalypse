@@ -1,5 +1,5 @@
 import prisma from "../db.server";
-import { reportError } from "./log.server";
+import { logFor, reportError } from "./log.server";
 import type { Product, Collection } from "@prisma/client";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc, OosBehavior } from "./quizSchema";
@@ -19,7 +19,14 @@ import {
 import { loadGenerationBuckets } from "./bucketPersist.server";
 import { CategoryDiscoveryError } from "./categoryDiscover";
 import { reconcileBucketsToResultNodes } from "./bucketReconcile";
-import { generateQuestionFlow, type QuizTone } from "./claude";
+import {
+  generateQuestionFlow,
+  generateQuestionPlan,
+  writePlannedQuestions,
+  QuizGenerationError,
+  type GenerateQuestionFlowInput,
+  type QuizTone,
+} from "./claude";
 import { applyQuestionFlow, applyDeciderQuestionFlow, type SmartBuildBucket } from "./smartBuild";
 import { parseBrandGuidelinesSafe, type BrandGuidelines } from "./brandGuidelines";
 import { identityToBrandGuidelines, parseBrandIdentitySafe } from "./brandIdentity";
@@ -136,6 +143,12 @@ export interface OnboardingBuildInput {
   // caller discards it silently. Requires `quizId` (capture never creates
   // rows). ABSENT → behavior is byte-identical to before.
   captureDoc?: boolean;
+  // QBUILD-FAST — how the question flow is generated. Decider builds default
+  // to "planned" (a short outline, then the questions written in parallel —
+  // same model, ~2× less wall time); "single" pins the one-response generator
+  // (the latency probe's baseline). Legacy builds are ALWAYS single-call,
+  // whatever this says. ABSENT → the default for the doc's logic model.
+  questionFlow?: "single" | "planned";
 }
 
 // FAST F2 — the shape of the prefetched catalog inputs (mirrors the catalog
@@ -377,26 +390,33 @@ export async function runAiOnboardingBuild(
         ? await ingestWebsite(input.websiteUrl)
         : "";
 
+  const flowInput: GenerateQuestionFlowInput = {
+    goalPrompt: goalContext,
+    experienceType: xtype,
+    questionCount: input.questionCount,
+    ...(input.questionCountExact ? { exactQuestionCount: input.questionCount } : {}),
+    catalogSummary: indexed.summary,
+    buckets: (decider ? buckets : smartBuckets).map((b) => ({
+      id: b.id,
+      name: b.name,
+      tags: b.tags,
+    })),
+    flow,
+    tone: input.tone,
+    ...(decider ? { logicModel: "decider" as const } : {}),
+    ...(toneSample ? { toneSample } : {}),
+    ...(websiteText ? { websiteText } : {}),
+    ...(brandGuidelines ? { brandGuidelines } : {}),
+  };
+  // QBUILD-FAST — decider builds write the flow as plan → parallel writes.
+  // The planned build emits questions only, so a flow that also wants welcome
+  // copy keeps the single call (decider email_gate is already forced off).
+  const planned = decider && input.questionFlow !== "single" && !flow.welcome_message;
   let generated;
   try {
-    generated = await generateQuestionFlow({
-      goalPrompt: goalContext,
-      experienceType: xtype,
-      questionCount: input.questionCount,
-      ...(input.questionCountExact ? { exactQuestionCount: input.questionCount } : {}),
-      catalogSummary: indexed.summary,
-      buckets: (decider ? buckets : smartBuckets).map((b) => ({
-        id: b.id,
-        name: b.name,
-        tags: b.tags,
-      })),
-      flow,
-      tone: input.tone,
-      ...(decider ? { logicModel: "decider" as const } : {}),
-      ...(toneSample ? { toneSample } : {}),
-      ...(websiteText ? { websiteText } : {}),
-      ...(brandGuidelines ? { brandGuidelines } : {}),
-    });
+    generated = planned
+      ? await generatePlannedQuestionFlow(flowInput, { shopId, quizId })
+      : await generateQuestionFlow(flowInput);
   } catch (err) {
     reportError(err, { scope: "onboardingBuild", msg: "question flow build failed (degraded draft)", shopId, quizId });
     if (!input.captureDoc) await persist(quizId, doc);
@@ -461,6 +481,36 @@ export async function runAiOnboardingBuild(
   if (input.captureDoc) return { quizId, doc: finalDoc };
   await prisma.quiz.update({ where: { id: quizId }, data: { draftJson: finalDoc as never } });
   return { quizId };
+}
+
+// QBUILD-FAST — the planned build, with the single-call generator as its
+// fallback. Only a VALIDATION failure falls back (the plan or one slice kept
+// missing its schema): an API failure — credits, rate limits, a timeout —
+// would fail the single call too, so it propagates to the caller's degraded
+// path without a second slow attempt.
+async function generatePlannedQuestionFlow(
+  flowInput: GenerateQuestionFlowInput,
+  ctx: { shopId: string; quizId: string },
+) {
+  try {
+    const tPlan = Date.now();
+    const plan = await generateQuestionPlan(flowInput);
+    const planMs = Date.now() - tPlan;
+    const tWrite = Date.now();
+    const generated = await writePlannedQuestions(flowInput, plan);
+    logFor("onboardingBuild").info(
+      { ...ctx, questions: plan.length, planMs, writeMs: Date.now() - tWrite },
+      "planned question build took",
+    );
+    return generated;
+  } catch (err) {
+    if (!(err instanceof QuizGenerationError)) throw err;
+    logFor("onboardingBuild").warn(
+      { ...ctx, issue: err.lastValidationIssue },
+      "planned question build failed validation — single-call fallback",
+    );
+    return generateQuestionFlow(flowInput);
+  }
 }
 
 // Step 2 — apply the merchant's rec_defaults to every result node's ResultData

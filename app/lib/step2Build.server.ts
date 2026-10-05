@@ -9,12 +9,14 @@ import {
   runWebResearchForQuizTypes,
   generateQuizTypes,
   generateQuizTemplates,
+  generateQuizDirection,
+  type QuizDirection,
 } from "./claude";
 import {
   getOrStartShopWebResearch,
   peekFreshShopWebResearch,
 } from "./shopWebResearch.server";
-import { Quiz, BuildSession, PickedTemplate, QuizType as QuizTypeSchema } from "./quizSchema";
+import { Quiz, BuildSession, PickedTemplate } from "./quizSchema";
 import { applyManualDeciderSkeleton } from "./smartBuild";
 import { dialsToBuildDirectives, autoQuizName } from "./dialDirectives";
 import { directionMatchesGrounding } from "./groundingGuard";
@@ -27,7 +29,6 @@ import {
 import type { DesignTokensT } from "./designTokens";
 import type { GroupingProduct } from "./categoryGrouping";
 import type { QuizType, RichTemplateOption, Quiz as QuizDocT } from "./quizSchema";
-import { pickHeadlessType } from "./headlessTypePick";
 import { loadGenerationBuckets, refreshBucketMembership } from "./bucketPersist.server";
 import { sameIdSet } from "./bucketPersist";
 
@@ -174,6 +175,39 @@ export async function generateStep2Templates(
     ...(input.struggle ? { struggle: input.struggle } : {}),
     buckets,
     catalogSummary: ctx.indexed.summary,
+  });
+}
+
+// DRAFT-FAST — the headless chains' ONE merged middle pass: the kept
+// direction (one product_match type + its one template) in a single Haiku
+// call, in place of generateStep2Types → pickHeadlessType →
+// generateStep2Templates → templates[0]. Measured on a real local draft
+// (e2e/draft-latency.mjs): the two passes took ~22 s; this takes a few
+// seconds, because it writes only the output the chain keeps. Shape-route
+// callers keep the two card passes above.
+export async function generateStep2Direction(
+  shopId: string,
+  quizId: string,
+  input: {
+    goal: string;
+    struggle?: string;
+    buckets: Array<{ id: string; name: string; tags: string[] }>;
+    webResearchText: string;
+    questionLength?: number;
+  },
+): Promise<QuizDirection> {
+  // Scope the catalog summary to the quiz's confirmed buckets (chosen products).
+  const ctx = await loadStep2Context(shopId, quizId);
+  return generateQuizDirection({
+    brandSummary: ctx.brandSummary,
+    ...(ctx.brandVoiceSample ? { brandVoiceSample: ctx.brandVoiceSample } : {}),
+    positioning: ctx.positioning,
+    goalPrompt: input.goal,
+    ...(input.struggle ? { struggle: input.struggle } : {}),
+    buckets: input.buckets,
+    catalogSummary: ctx.indexed.summary,
+    webResearchText: input.webResearchText,
+    ...(input.questionLength ? { questionLength: input.questionLength } : {}),
   });
 }
 
@@ -340,14 +374,13 @@ export async function failToBlankQuestions(
 // merchant can retry / write a goal there (the standalone Goal step is retired).
 //
 // FLOW-1 — `opts.headless` (the goal-first flow's confirm, funnel-reconfig Flow
-// 1): the merchant never sees Shape, so on success the job AUTO-PICKS the AI's
-// best product_match type (pickHeadlessType — handoff §11 defect 5: types[0]
-// silently picked a personality framing for a product quiz), pins its question_range to
-// the goal brief's chosen length when one was set, and chains straight into
-// startStep2Templates with failMode "blank_questions" (the merchant chose a
-// goal, not Shape — every failure lands the blank-Questions notice, never a
-// stage they didn't pick). quiz_types + picked_type_id are persisted so the
-// existing retry-gen "templating" branch re-kicks a killed chain unchanged.
+// 1): the merchant never sees Shape, so the job drafts ONE direction itself
+// (DRAFT-FAST, generateStep2Direction — a product_match type + its template,
+// the pair the old two passes auto-picked; handoff §11 defect 5 is why the
+// type is product_match by construction), with the goal brief's chosen length
+// pinned when one was set, and chains straight into the question build with
+// failMode "blank_questions" (the merchant chose a goal, not Shape — every
+// failure lands the blank-Questions notice, never a stage they didn't pick).
 export function startStep2Types(
   shopId: string,
   quizId: string,
@@ -396,60 +429,78 @@ export function startStep2Types(
         ).map((c) => ({ name: c.name, tags: c.tags }));
       const focus = { goal: input.goal, bucket_names: focusBuckets.map((b) => b.name) };
       const cachedResearch = await peekFreshShopWebResearch(shopId, focus);
-      if (cachedResearch === null) await writeGenProgress(quizId, "research");
+      // DRAFT-FAST — the headless chains never WAIT for research (the
+      // template-candidates posture): a cache miss cost ~40 s of web search
+      // ahead of a ~5 s direction pass, on every draft whose focus the shop's
+      // one cached record did not serve. They use research when it is cached
+      // and on-focus, and model knowledge otherwise. The Shape route keeps
+      // the blocking run — its cards quote the research.
+      const waitForResearch = cachedResearch === null && !headless;
+      if (waitForResearch) await writeGenProgress(quizId, "research");
       const tResearch = Date.now();
-      const webResearchText = cachedResearch ?? (await getOrStartShopWebResearch(shopId, focus));
+      const webResearchText =
+        cachedResearch ?? (waitForResearch ? await getOrStartShopWebResearch(shopId, focus) : "");
       logFor("step2").info({ quizId, ms: Date.now() - tResearch }, "research took");
 
       await writeGenProgress(quizId, "types");
-      const tTypes = Date.now();
-      const { types } = await generateStep2Types(shopId, quizId, { ...input, webResearchText });
-      logFor("step2").info({ quizId, ms: Date.now() - tTypes }, "types took");
 
-      // FLOW-1 headless — auto-pick the top type and chain the templating job
-      // (which itself auto-picks the top template and chains the question
-      // build). The stage moves straight to "templating" so the merchant's
-      // generating screen narrates the template + question passes; a kill
-      // between here and the templates persisting is covered by retry-gen's
-      // existing "templating" branch (picked_type_id finds the type below).
-      const top = headless ? pickHeadlessType(types) : undefined;
-      if (headless && top) {
-        const len = headless.questionLength;
-        const effectiveType = len
-          ? QuizTypeSchema.parse({ ...top, question_range: { min: len, max: len } })
-          : top;
+      // DRAFT-FAST — the headless chains draft ONE direction in ONE pass (the
+      // type + its template, exactly what the old two passes auto-picked) and
+      // go straight to the question build. The picked template persists in
+      // the SAME write that moves the stage to "templating", so a kill after
+      // it re-runs only the question build (retry-gen's decider branch finds
+      // rich_templates + picked_template; picked_type_id stays cleared, the
+      // saved-template precedent). A kill before it leaves the stage on
+      // "typing" and retry-gen re-kicks this job.
+      if (headless) {
+        // FAST F2 — the question build's non-AI prep overlaps the direction
+        // pass (never rejects; a failure degrades to the build's own queries).
+        const prefetchedCatalog = prefetchBuildCatalog(shopId);
+        const promptCats = await loadGenerationBuckets(shopId, quizId);
+        const tDirection = Date.now();
+        const { type, template } = await generateStep2Direction(shopId, quizId, {
+          goal: input.goal,
+          ...(input.struggle ? { struggle: input.struggle } : {}),
+          buckets: promptCats.map((c) => ({ id: c.id, name: c.name, tags: c.tags })),
+          webResearchText,
+          ...(headless.questionLength ? { questionLength: headless.questionLength } : {}),
+        });
+        logFor("step2").info({ quizId, ms: Date.now() - tDirection }, "direction took");
+        // Re-read AFTER the pass: it refreshed bucket membership, and the
+        // working copy must be seeded from the refreshed rows — the build
+        // reads a mismatch as "the merchant narrowed this group" and would
+        // write the stale ids back (the templating job's read order).
+        const cats = await loadGenerationBuckets(shopId, quizId);
+        const picked = initPickedTemplate(
+          template,
+          cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
+          new Date(),
+        );
         await patchBuildSession(quizId, (s) =>
           BuildSession.parse({
             ...s,
             stage: "templating",
-            quiz_types: len ? [effectiveType, ...types.slice(1)] : types,
-            picked_type_id: top.id,
+            quiz_types: [type],
+            picked_type_id: undefined,
+            rich_templates: [template],
+            picked_template: picked,
             web_research_summary: webResearchText.slice(0, 600),
             gen_error: undefined,
           }),
         );
-        const cats = await prisma.category.findMany({
-          where: { shopId, quizId },
-          select: { id: true, name: true, tags: true },
+        // The ceiling was checked at THIS job's kick (budgetPrechecked) — the
+        // pipeline is never interrupted midway.
+        await startQuestionBuild(shopId, quizId, template, picked, input.goal, input.struggle ?? "", {
+          failMode: "blank_questions",
+          prefetchedCatalog,
+          budgetPrechecked: true,
         });
-        startStep2Templates(
-          shopId,
-          quizId,
-          effectiveType,
-          {
-            goal: input.goal,
-            ...(input.struggle ? { struggle: input.struggle } : {}),
-            ...(cats.length ? { buckets: cats } : {}),
-          },
-          { failMode: "blank_questions" },
-        );
         return;
       }
-      if (headless) {
-        // Degenerate: no type came back at all — land the honest blank canvas.
-        await failToBlankQuestions(shopId, quizId);
-        return;
-      }
+
+      const tTypes = Date.now();
+      const { types } = await generateStep2Types(shopId, quizId, { ...input, webResearchText });
+      logFor("step2").info({ quizId, ms: Date.now() - tTypes }, "types took");
 
       await patchBuildSession(quizId, (s) =>
         BuildSession.parse({
