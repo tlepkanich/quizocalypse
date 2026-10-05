@@ -12,6 +12,12 @@ import {
   tokensToCssVars,
   buttonStyle,
   findContrastIssues,
+  cleanColors,
+  normalizeHex,
+  readHexDraft,
+  setColorRole,
+  withCleanColors,
+  type ColorKey,
   type DesignTokensT,
 } from "../lib/designTokens";
 import {
@@ -32,14 +38,17 @@ import {
 } from "../lib/brandGuidelines";
 import { BRAND_VOICE_PRESETS } from "../lib/brandVoicePresets";
 
-const COLOR_ROLES = [
+const COLOR_ROLES: { key: ColorKey; label: string }[] = [
   { key: "primary", label: "Primary" },
   { key: "secondary", label: "Secondary" },
   { key: "accent", label: "Accent" },
   { key: "background", label: "Background" },
   { key: "text", label: "Text" },
   { key: "muted", label: "Muted" },
-] as const;
+];
+
+// What the storefront uses for a role the merchant has not set.
+const DEFAULT_COLORS = cleanColors(DEFAULT_TOKENS.colors);
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -71,9 +80,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       { status: 400 },
     );
   }
+  // This write REPLACES the stored tokens, so a clean of the payload's colors
+  // is the whole guard: only a valid hex persists (normalized). The
+  // DesignTokens schema stays loose on purpose (legacy published docs must
+  // keep parsing), so this write path is where brand colors are held to a hex.
   await prisma.shop.update({
     where: { id: shop.id },
-    data: { brandTokens: parsed.data as never },
+    data: { brandTokens: withCleanColors(parsed.data) as never },
   });
   return json({ ok: true, savedAt: new Date().toISOString() });
 };
@@ -82,25 +95,25 @@ export default function DesignSettings() {
   const { tokens: initialTokens, guidelines: initialGuidelines } =
     useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ ok: boolean; savedAt?: string; error?: string }>();
-  const [tokens, setTokens] = useState<DesignTokensT>(initialTokens);
+  // Colors enter the editor already clean, so what it shows is what a save
+  // stores: a stored value that is not a valid hex reads as an unset role.
+  const [tokens, setTokens] = useState<DesignTokensT>(() =>
+    withCleanColors(initialTokens),
+  );
   const resolved = resolveDesignTokens(tokens);
 
   const save = (next: DesignTokensT) => {
-    setTokens(next);
-    fetcher.submit(JSON.stringify({ tokens: next }), {
+    const clean = withCleanColors(next);
+    setTokens(clean);
+    fetcher.submit(JSON.stringify({ tokens: clean }), {
       method: "PUT",
       encType: "application/json",
     });
   };
 
-  const setColor = (key: string, hex: string) =>
-    save({
-      ...tokens,
-      colors: {
-        ...(tokens.colors ?? {}),
-        [key]: hex,
-      } as DesignTokensT["colors"],
-    });
+  // hex = a normalized "#rrggbb"; null unsets the role (the key leaves `colors`).
+  const setColor = (key: ColorKey, hex: string | null) =>
+    save(setColorRole(tokens, key, hex));
 
   const setHeadingFont = (family: string) =>
     save({
@@ -278,11 +291,8 @@ export default function DesignSettings() {
                   <ColorRow
                     key={role.key}
                     label={role.label}
-                    value={
-                      tokens.colors?.[role.key] ??
-                      DEFAULT_TOKENS.colors?.[role.key] ??
-                      "#000000"
-                    }
+                    hex={tokens.colors?.[role.key]}
+                    fallback={DEFAULT_COLORS[role.key] ?? "#000000"}
                     onChange={(hex) => setColor(role.key, hex)}
                   />
                 ))}
@@ -487,15 +497,34 @@ function PresetCard({
   );
 }
 
+// One color role: the picker + the hex text field. The raw text lives in local
+// state while the merchant types; the tokens only ever receive a valid
+// normalized hex, or null when the field is emptied.
 function ColorRow({
   label,
-  value,
+  hex,
+  fallback,
   onChange,
 }: {
   label: string;
-  value: string;
-  onChange: (hex: string) => void;
+  // The stored role, a normalized "#rrggbb"; undefined = not set.
+  hex: string | undefined;
+  // The color the storefront uses while the role is not set.
+  fallback: string;
+  onChange: (hex: string | null) => void;
 }) {
+  // null = the field is not in edit and shows the color in use.
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = hex ?? fallback;
+  const commit = (next: string | null) => {
+    if ((next ?? "") !== (hex ?? "")) onChange(next);
+  };
+  const onType = (text: string) => {
+    setDraft(text);
+    const parsed = readHexDraft(text);
+    if (parsed.kind === "set") commit(parsed.hex);
+    else if (parsed.kind === "unset") commit(null);
+  };
   return (
     <div className="qz-row qz-gap-12" style={{ alignItems: "center" }}>
       <span
@@ -512,8 +541,9 @@ function ColorRow({
       </span>
       <input
         type="color"
+        aria-label={`${label} color`}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => commit(normalizeHex(e.target.value))}
         style={{
           width: 44,
           height: 32,
@@ -525,8 +555,18 @@ function ColorRow({
       />
       <div style={{ flex: 1 }}>
         <QzInput
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          aria-label={`${label} hex`}
+          value={draft ?? value}
+          placeholder={fallback}
+          aria-invalid={
+            (draft !== null && readHexDraft(draft).kind === "pending") ||
+            undefined
+          }
+          onChange={(e) => onType(e.target.value)}
+          // Leaving the field settles it on the color in use: a valid entry
+          // shows normalized, an unfinished one goes back to the saved value,
+          // an emptied one shows the default.
+          onBlur={() => setDraft(null)}
           style={{ fontVariantNumeric: "tabular-nums", fontSize: 13 }}
         />
       </div>

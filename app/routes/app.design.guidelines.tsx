@@ -23,6 +23,7 @@ import type { BrandGuidelines } from "../lib/brandGuidelines";
 import {
   BrandTokens,
   resolveDesignTokens,
+  withCleanColors,
   type DesignTokensT,
 } from "../lib/designTokens";
 
@@ -54,9 +55,11 @@ export async function action({ request }: ActionFunctionArgs) {
   // preset / uploading a brand book also flips the theme to match. Read
   // the existing tokens once so a partial preset (e.g. colors only)
   // doesn't clobber a hand-tuned font.
+  // Cleaned on read: a stored color that is not a valid hex must not go back
+  // into brandTokens through the merge, nor to the client in the response.
   const existingTokensParse = BrandTokens.safeParse(shop.brandTokens ?? {});
   const existingTokens: DesignTokensT = existingTokensParse.success
-    ? existingTokensParse.data
+    ? withCleanColors(existingTokensParse.data)
     : {};
 
   const contentType = request.headers.get("content-type") ?? "";
@@ -72,7 +75,9 @@ export async function action({ request }: ActionFunctionArgs) {
 // Compose the Prisma update payload — always writes brandGuidelines; also
 // writes brandTokens when the guidelines carry a visual suggestion. The
 // merge uses resolveDesignTokens so partial overrides layer cleanly onto
-// the existing brand setup.
+// the existing brand setup. The suggestion is cleaned BEFORE the merge: an
+// AI-extracted color is free text ("navy", "rgb(…)"), and an invalid one must
+// neither persist nor replace a valid color the shop already has.
 function buildShopUpdate(
   guidelines: BrandGuidelines,
   existingTokens: DesignTokensT,
@@ -84,7 +89,7 @@ function buildShopUpdate(
   if (!sug) return { brandGuidelines: guidelines };
   return {
     brandGuidelines: guidelines,
-    brandTokens: resolveDesignTokens(existingTokens, sug),
+    brandTokens: resolveDesignTokens(existingTokens, withCleanColors(sug)),
   };
 }
 

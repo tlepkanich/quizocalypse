@@ -8,6 +8,8 @@ import {
   colorsToPatch,
   mergeColorPatch,
   readHexDraft,
+  withCleanColors,
+  setColorRole,
 } from "./designTokens";
 import { DesignTokens } from "./quizSchema";
 import {
@@ -100,6 +102,64 @@ describe("readHexDraft", () => {
     expect(readHexDraft("#")).toEqual({ kind: "pending" });
     expect(readHexDraft("#12")).toEqual({ kind: "pending" });
     expect(readHexDraft(" #000000#10da14")).toEqual({ kind: "pending" });
+  });
+});
+
+describe("withCleanColors", () => {
+  it("keeps only valid colors and leaves every other field alone", () => {
+    const tokens = { colors: DIRTY_STORED, radius: "pill" as const, typography: { heading: { family: "Lora", source: "google" as const } } };
+    expect(withCleanColors(tokens)).toEqual({
+      colors: { primary: "#5563de", muted: "#000000", surface: "#000000" },
+      radius: "pill",
+      typography: { heading: { family: "Lora", source: "google" } },
+    });
+  });
+  it("removes the colors key when no valid role is left", () => {
+    expect(withCleanColors({ colors: { primary: "red", text: "" }, spacing: "compact" })).toEqual({ spacing: "compact" });
+    expect(withCleanColors({ colors: {} })).toEqual({});
+  });
+  it("returns a token set without colors unchanged", () => {
+    const tokens = { radius: "square" as const };
+    expect(withCleanColors(tokens)).toBe(tokens);
+  });
+  it("does not change its input", () => {
+    const tokens = { colors: { ...DIRTY_STORED } };
+    withCleanColors(tokens);
+    expect(tokens.colors).toEqual(DIRTY_STORED);
+  });
+  it("an invalid suggested color never replaces a valid stored one (brand-book upload)", () => {
+    const stored = { colors: { primary: "#111111", text: " #000000#10da14" } };
+    const suggested = { colors: { primary: "navy", accent: "#F0A" } };
+    const merged = resolveDesignTokens(withCleanColors(stored), withCleanColors(suggested));
+    expect(merged.colors?.primary).toBe("#111111");
+    expect(merged.colors?.accent).toBe("#ff00aa");
+    for (const value of Object.values(merged.colors ?? {})) expect(normalizeHex(value)).not.toBeNull();
+  });
+});
+
+describe("setColorRole", () => {
+  it("sets a role to the normalized hex and keeps the other roles", () => {
+    expect(setColorRole({ colors: { text: "#222222" }, radius: "pill" }, "primary", " #ABC ")).toEqual({
+      colors: { text: "#222222", primary: "#aabbcc" },
+      radius: "pill",
+    });
+    expect(setColorRole({}, "accent", "#BB6622")).toEqual({ colors: { accent: "#bb6622" } });
+  });
+  it("removes the key on null", () => {
+    const out = setColorRole({ colors: { primary: "#111111", text: "#222222" } }, "primary", null);
+    expect(out.colors).toEqual({ text: "#222222" });
+    expect(out.colors && "primary" in out.colors).toBe(false);
+  });
+  it("changes nothing for an invalid hex", () => {
+    const tokens = { colors: { primary: "#111111" } };
+    expect(setColorRole(tokens, "primary", " #000000#10da14")).toBe(tokens);
+    expect(setColorRole(tokens, "primary", "")).toBe(tokens);
+  });
+  it("does not change its input", () => {
+    const tokens = { colors: { primary: "#111111" } };
+    setColorRole(tokens, "primary", null);
+    setColorRole(tokens, "text", "#fff");
+    expect(tokens).toEqual({ colors: { primary: "#111111" } });
   });
 });
 

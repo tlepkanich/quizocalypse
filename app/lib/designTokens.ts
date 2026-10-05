@@ -131,6 +131,40 @@ export function readHexDraft(draft: string): HexDraft {
 }
 
 /**
+ * A token set whose colors are safe to persist: `cleanColors` applied, and the
+ * `colors` key removed when no valid role is left. Every other field passes
+ * through unchanged. For a write that REPLACES the stored tokens; a write that
+ * merges over them needs `mergeColorPatch` instead.
+ */
+export function withCleanColors(tokens: DesignTokensT): DesignTokensT {
+  if (!tokens.colors) return tokens;
+  const next: DesignTokensT = { ...tokens, colors: cleanColors(tokens.colors) };
+  if (Object.keys(next.colors ?? {}).length === 0) delete next.colors;
+  return next;
+}
+
+/**
+ * Set one color role, or unset it with `hex = null` (the key leaves `colors`).
+ * An invalid hex changes nothing, so this never puts a bad value in the tokens.
+ * Pure — returns a new object.
+ */
+export function setColorRole(
+  tokens: DesignTokensT,
+  key: ColorKey,
+  hex: string | null,
+): DesignTokensT {
+  const colors = { ...(tokens.colors ?? {}) };
+  if (hex === null) {
+    delete colors[key];
+    return { ...tokens, colors };
+  }
+  const normalized = normalizeHex(hex);
+  if (!normalized) return tokens;
+  colors[key] = normalized;
+  return { ...tokens, colors };
+}
+
+/**
  * Map a shop's Shopify Branding colors (primary/secondary backgrounds) to our
  * color tokens, normalizing hex and dropping invalid/empty values. Pure and
  * Shopify-agnostic so it's unit-testable without the Admin API.
