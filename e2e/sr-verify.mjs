@@ -36,7 +36,10 @@ page.on("pageerror", (e) => out.pageErrors.push(String(e).slice(0, 200)));
 await page.goto(`${BASE}/studio?key=${KEY}`, { waitUntil: "domcontentloaded" });
 const legacyBefore = sha(await (await ctx.request.get(`${BASE}/q/${LEGACY}.json`)).text());
 
-const funnelData = (id) => `${BASE}/studio/onboarding/${id}?_data=routes%2Fstudio.onboarding_.%24quizId`;
+// BIC-2 B1 (a1e7e0a) renamed the funnel route file to studio_.onboarding_.$quizId;
+// the old route id answers 403, which made every readFunnel below come back
+// stage-less (and the draft loop graduate drafts it could not read).
+const funnelData = (id) => `${BASE}/studio/onboarding/${id}?_data=routes%2Fstudio_.onboarding_.%24quizId`;
 const builderData = (id) => `${BASE}/studio/${id}?_data=routes%2Fstudio_.%24id`;
 const readFunnel = async (id) => (await ctx.request.get(funnelData(id))).json();
 const readBuilder = async (id) => (await ctx.request.get(builderData(id))).json();
@@ -79,7 +82,9 @@ ok("selections persisted", fd.buckets.length === applyKeys.length, `${fd.buckets
 const url = `${BASE}/studio/onboarding/${draftId}`;
 await page.goto(url, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(1000);
-await page.locator(".qz-rb-rail-foot .qz-btn-accent").first().click();
+// Step-1 tweaks (167c424 / e8630c2 / a4fac99) — Continue is the FUNNEL BAR's
+// button; the rail foot now holds only "Preview results page".
+await page.locator(".qz-topbar-continue").click();
 await page.waitForTimeout(500);
 // FLOW-2 (funnel-reconfig Phase 3) — the pop-up is single-screen, manual-flow
 // only; row labels are the AUDIT-5 mock's, and Write-your-goal is a LINK to
@@ -98,7 +103,7 @@ await page.waitForTimeout(300);
 ok("Esc closes the modal", !(await page.getByText("What is your goal for the quiz?").first().isVisible().catch(() => false)));
 
 // ── §1.2 manual-build (no AI) ────────────────────────────────────────────────
-await page.locator(".qz-rb-rail-foot .qz-btn-accent").first().click();
+await page.locator(".qz-topbar-continue").click();
 await page.waitForTimeout(400);
 await page.locator(".qz-sm-row", { hasText: "Start from blank" }).click();
 await page.waitForTimeout(1600);

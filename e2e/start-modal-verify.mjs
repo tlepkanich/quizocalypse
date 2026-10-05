@@ -7,6 +7,13 @@
 // the mock's screen-1 structure + the new routing, and screenshots for visual
 // review (SHOT_DIR env). Read-only beyond a possible bucket toggle: no row
 // that mutates the draft is clicked.
+//
+// Step-1 tweaks (167c424 / e8630c2 / a4fac99): Continue is the FUNNEL BAR's
+// button (.qz-topbar-continue) and reads "Continue →" on every flow, so the
+// label no longer tells a manual draft from a goal/template-first one — and
+// clicking to find out would fire flow1-confirm / flow3-confirm (a real
+// build). The flow is read from the funnel loader's own data instead. A row
+// click previews; only its + Add control (.qz-rb-addb) selects.
 import { chromium } from "@playwright/test";
 
 const BASE = "http://localhost:3000";
@@ -30,31 +37,44 @@ await page.waitForLoadState("networkidle").catch(() => {});
 // goal-first nor template-first — those confirm straight through). The front
 // door resumes/creates one; if this shop's in-flight draft is mid-another-flow
 // the probe reports it honestly instead of false-failing the modal asserts.
-const confirmLabel = await page
-  .locator(".qz-rb-rail-foot .qz-btn-accent, .qz-rb-rail-foot .qz-btn[disabled]")
-  .first()
-  .textContent()
-  .catch(() => "");
-if ((confirmLabel ?? "").includes("Generate my quiz")) {
-  console.log("SKIP — resumed draft is goal/template-first (no pop-up by design); graduate it and re-run");
+await page.waitForSelector(".qz-rb", { timeout: 20000 });
+const flow = await page.evaluate(() => {
+  const loaderData = window.__remixContext?.state?.loaderData ?? {};
+  const funnel = Object.values(loaderData).find(
+    (d) => d && typeof d === "object" && "goalFirst" in d && "templateFirst" in d,
+  );
+  if (!funnel) return "unknown";
+  if (funnel.goalFirst) return "goal-first";
+  if (funnel.templateFirst) return "template-first";
+  return "manual";
+});
+if (flow === "unknown") {
+  console.log("FAIL could not read the funnel loader data (goalFirst / templateFirst) — the flow precondition is unverifiable");
+  await browser.close();
+  process.exit(1);
+}
+if (flow !== "manual") {
+  console.log(`SKIP — resumed draft is ${flow} (no pop-up by design); graduate it and re-run`);
   await browser.close();
   process.exit(0);
 }
 
 // Ensure at least one recommendation is selected so Continue opens the modal
 // (truth = the Continue button's own disabled state, not a rail heuristic).
-const cont = page.getByRole("button", { name: /^Continue/ }).last();
+const cont = page.locator(".qz-topbar-continue");
+await cont.waitFor({ timeout: 20000 });
 if (await cont.isDisabled()) {
-  await page.locator('.qz-rb-card[aria-pressed="false"]').first().click();
+  await page.locator('.qz-rb-addb[aria-pressed="false"]').first().click();
   await page.waitForFunction(
-    () => {
-      const btns = [...document.querySelectorAll("button")];
-      const c = btns.filter((b) => /^Continue/.test(b.textContent ?? "")).pop();
-      return c && !c.disabled;
-    },
+    () => document.querySelector(".qz-topbar-continue")?.disabled === false,
     { timeout: 8000 },
   );
 }
+check(
+  "manual Continue is the funnel bar's 'Continue →'",
+  ((await cont.textContent()) ?? "").includes("Continue"),
+  (await cont.textContent()) ?? "",
+);
 await cont.click();
 await page.waitForSelector(".qz-sm-title", { timeout: 5000 }).catch(() => {});
 
@@ -92,9 +112,10 @@ await page.screenshot({ path: `${DIR}/sm-goal-page.png` });
 // ── Esc/scrim closes the modal without submitting ───────────────────────────
 await page.goBack({ waitUntil: "domcontentloaded" });
 await page.waitForLoadState("networkidle").catch(() => {});
-const cont2 = page.getByRole("button", { name: /^Continue/ }).last();
-await cont2.click();
+await cont.waitFor({ timeout: 20000 });
+await cont.click();
 await page.waitForSelector(".qz-sm-title", { timeout: 5000 }).catch(() => {});
+check("Continue reopens the pop-up after Back", (await page.locator(".qz-sm-title").count()) === 1);
 await page.keyboard.press("Escape");
 check("esc closes", (await page.locator(".qz-sm-title").count()) === 0);
 

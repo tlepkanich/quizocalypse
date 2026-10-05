@@ -24,6 +24,17 @@
 //     PRE-POPULATED (deterministic bucket suggestion) → confirm → templating
 //     (types pass short-circuited) → Questions with generated question nodes.
 //
+// Step-1 tweaks (167c424 / e8630c2 / a4fac99) moved the recs page's controls:
+//   • Continue is the FUNNEL BAR's button (.qz-topbar-continue) and reads
+//     "Continue →" on EVERY flow — the "Generate my quiz" confirm label is
+//     retired, so flow 3 is told apart by what Continue DOES (no pop-up; the
+//     chain runs and never carries continue-buckets' ai_generate marker).
+//   • The rail foot holds only "Preview results page".
+//   • A row click PREVIEWS; only its + Add control (.qz-rb-addb) selects.
+//   • .qz-gf-banner renders ONLY for a template-first draft ("Building from …").
+// One-line chrome (6ee1ee5) retired the .qz-topbar-nav wrapper: the step rail
+// is nav.qz-stepnav, four steps — Recommendations · Questions · Logic · Results.
+//
 // Run:  set -a; source .env; set +a; PROBE_MODE=fail node e2e/flow3-verify.mjs
 import { chromium } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
@@ -46,6 +57,15 @@ const check = (name, ok, extra = "") =>
 
 const prisma = new PrismaClient();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// The funnel bar's step rail: every pill's label + the current one.
+const readRail = async (page) => ({
+  pills: (await page.locator(".qz-stepnav .qz-stepnav-pill .qz-stepnav-name").allTextContents()).map(
+    (t) => t.trim(),
+  ),
+  current: (
+    (await page.locator(".qz-stepnav .qz-stepnav-pill.is-current .qz-stepnav-name").textContent()) ?? ""
+  ).trim(),
+});
 
 const readDraft = async (id) => {
   const q = await prisma.quiz.findUnique({
@@ -235,27 +255,31 @@ try {
 
     // ── 5f · The recs surface in flow-3 mode + the 4-step rail ───────────────
     await page.waitForSelector(".qz-rb", { timeout: 20000 });
+    const recsRail = await readRail(page);
     check(
       "4-step rail, current = Recommendations (Shape pill gone)",
-      (await page.locator(".qz-topbar-nav .qz-stepnav-pill").count()) === 4 &&
-        ((await page.locator(".qz-topbar-nav .qz-stepnav-pill.is-current").textContent()) ?? "")
-          .includes("Recommendations") &&
-        !((await page.locator(".qz-topbar-nav").textContent()) ?? "").includes("Shape"),
+      recsRail.pills.length === 4 &&
+        recsRail.current.includes("Recommendations") &&
+        !recsRail.pills.some((label) => label.includes("Shape")),
+      `${recsRail.pills.join(" · ")} — current=${recsRail.current}`,
     );
     check(
       "template banner names the pick",
       ((await page.locator(".qz-gf-banner").textContent()) ?? "").includes("Building from"),
     );
-    const genBtn = page.locator(".qz-rb-rail-foot button", { hasText: "Generate my quiz" });
-    check("flow-3 Continue reads 'Generate my quiz →'", (await genBtn.count()) === 1);
+    const genBtn = page.locator(".qz-topbar-continue");
+    await genBtn.waitFor({ timeout: 20000 });
+    check("flow-3 Continue is the funnel bar's 'Continue →'",
+      (await genBtn.count()) === 1 && ((await genBtn.textContent()) ?? "").includes("Continue"),
+      (await genBtn.textContent().catch(() => "")) ?? "");
     await page.screenshot({ path: `${DIR}/${MODE}-4-recs-template-first.png`, fullPage: true });
 
     // A starter's scope is not derivable, so the pick ADDS nothing itself —
     // but a claimed pre-existing draft may carry its own prior selections.
-    // Ensure ≥1 via the browser (an UNPRESSED card — the manual way forward).
+    // Ensure ≥1 via the browser (an UNPRESSED + Add — the manual way forward).
     const railBefore = Number((await page.locator(".qz-rb-count").textContent())?.trim() ?? "0");
     if (railBefore === 0) {
-      await page.locator('.qz-rb-card[aria-pressed="false"]').first().click();
+      await page.locator('.qz-rb-addb[aria-pressed="false"]').first().click();
       await sleep(1200);
     }
     const railCount = Number((await page.locator(".qz-rb-count").textContent())?.trim() ?? "0");
@@ -263,8 +287,15 @@ try {
       `rail=${railCount}`);
 
     // ── 6f · Confirm (no pop-up) → failed chain lands BLANK Questions ────────
+    await page.waitForFunction(
+      () => document.querySelector(".qz-topbar-continue")?.disabled === false,
+      { timeout: 10000 },
+    );
     await genBtn.click();
-    check("no start pop-up rendered", (await page.locator(".qz-sm-rows").count()) === 0);
+    await sleep(1500);
+    check("no start pop-up rendered (flow3-confirm fires directly)",
+      (await page.locator(".qz-sm-title").count()) === 0 &&
+        (await page.locator(".qz-sm-rows").count()) === 0);
     const seenStages = new Set();
     for (let i = 0; i < 60; i++) {
       d = await readDraft(quizId);
@@ -279,6 +310,11 @@ try {
     );
     check("blank-questions notice persisted", /blank/i.test(d.session.gen_error ?? ""),
       d.session.gen_error ?? "(none)");
+    // Only continue-buckets (the pop-up's AI row) writes ai_generate — its
+    // absence on a chain that ran is the proof flow3-confirm was the intent.
+    check("Continue confirmed via flow3-confirm (chain ran, no ai_generate marker)",
+      d.session.stage === "question_builder" && d.session.ai_generate !== true,
+      `stage=${d.session.stage} ai_generate=${d.session.ai_generate ?? "(absent)"}`);
     await page.waitForTimeout(4000);
     await page.screenshot({ path: `${DIR}/${MODE}-5-blank-questions-landing.png`, fullPage: true });
 
@@ -325,11 +361,11 @@ try {
     });
     check("draft AT shape does not 500", resp.ok(), `${resp.status()}`);
     await page.waitForSelector(".qz-shape-page", { timeout: 20000 });
+    const shapeRail = await readRail(page);
     check(
       "shape-parked draft folds onto the 4-step rail (Questions current)",
-      (await page.locator(".qz-topbar-nav .qz-stepnav-pill").count()) === 4 &&
-        ((await page.locator(".qz-topbar-nav .qz-stepnav-pill.is-current").textContent()) ?? "")
-          .includes("Questions"),
+      shapeRail.pills.length === 4 && shapeRail.current.includes("Questions"),
+      `${shapeRail.pills.join(" · ")} — current=${shapeRail.current}`,
     );
     await page.locator(".qz-shape-other summary").click();
     check(
@@ -385,15 +421,22 @@ try {
     await page.waitForSelector(".qz-rb", { timeout: 20000 });
     const railCount = (await page.locator(".qz-rb-count").textContent())?.trim();
     check("recs rail shows the pre-population", Number(railCount) === cats.length, `rail=${railCount}`);
+    const cont = page.locator(".qz-topbar-continue");
+    await cont.waitFor({ timeout: 20000 });
     check(
-      "template banner + flow-3 Continue present",
+      "template banner + a live funnel-bar Continue",
       ((await page.locator(".qz-gf-banner").textContent()) ?? "").includes("Building from") &&
-        (await page.locator(".qz-rb-rail-foot button", { hasText: "Generate my quiz" }).count()) === 1,
+        ((await cont.textContent()) ?? "").includes("Continue") &&
+        !(await cont.isDisabled()),
+      (await cont.textContent().catch(() => "")) ?? "",
     );
     await page.screenshot({ path: `${DIR}/${MODE}-3-prepopulated-recs.png`, fullPage: true });
 
     // ── 4h · Confirm → templating (types short-circuited) → Questions ────────
-    await page.locator(".qz-rb-rail-foot button", { hasText: "Generate my quiz" }).click();
+    await cont.click();
+    await sleep(1500);
+    check("no start pop-up rendered (flow3-confirm fires directly)",
+      (await page.locator(".qz-sm-title").count()) === 0);
     const seenStages = new Set();
     const seenProgress = new Set();
     let landed = false;
@@ -416,6 +459,8 @@ try {
     const qNodes = (d.doc.nodes ?? []).filter((n) => n.type === "question");
     check("generated question nodes present", qNodes.length >= 3, `${qNodes.length} questions`);
     check("no gen_error on the happy path", d.session.gen_error == null, d.session.gen_error ?? "");
+    check("Continue confirmed via flow3-confirm (no ai_generate marker)",
+      d.session.ai_generate !== true, `ai_generate=${d.session.ai_generate ?? "(absent)"}`);
     check(
       "auto-picked template recorded (retry-gen O-3 coverage)",
       d.session.picked_template != null && d.session.rich_templates?.length >= 1,
