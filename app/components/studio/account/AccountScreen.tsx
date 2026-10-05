@@ -16,23 +16,32 @@ import {
 } from "../../../lib/billing/creditMath";
 import { useQzToast } from "../../qz-toast";
 import { AcctIc, daysLeftText } from "./icons";
+import { STUDIO_ACCOUNT_PATHS, type AccountPaths } from "./paths";
 
-// Account — /studio/account, built to docs/design/settings/billing
+// Account — /studio/account and the embedded /app/account, built to docs/design/settings/billing
 // (BILLING-HANDOFF.md, "Account page"): your plan and the next bill, the
 // credit meter, bill emails, past bills. Every figure comes from the pure
 // creditMath functions, so rows and columns add up to the totals beside them.
 
-const PLAN_PATH = "/studio/account/plan";
 
 interface CardProps {
   data: AccountData;
   plan: SelfServePlan;
   figures: CreditFigures;
+  /** Change plan, on the surface this page is on. */
+  planPath: string;
 }
 
-export function AccountScreen({ data }: { data: AccountData }) {
+export function AccountScreen({
+  data,
+  paths = STUDIO_ACCOUNT_PATHS,
+}: {
+  data: AccountData;
+  paths?: AccountPaths;
+}) {
   const plan = PLANS[data.planKey];
   const figures = creditFigures(plan, data.credits, data.usage);
+  const planPath = paths.plan;
   return (
     <div className="acct">
       <div className="acct-col">
@@ -40,8 +49,8 @@ export function AccountScreen({ data }: { data: AccountData }) {
           <h1>Account</h1>
           <p className="acct-head-now">{data.shopDomain}</p>
         </header>
-        <PlanCard data={data} plan={plan} figures={figures} />
-        <CreditsCard data={data} plan={plan} figures={figures} />
+        <PlanCard data={data} plan={plan} figures={figures} planPath={planPath} />
+        <CreditsCard data={data} plan={plan} figures={figures} planPath={planPath} />
         <BillEmailsCard data={data} plan={plan} />
         <PastBillsCard data={data} />
       </div>
@@ -51,7 +60,7 @@ export function AccountScreen({ data }: { data: AccountData }) {
 
 /* ── Your plan and the next bill ─────────────────────────────────────────── */
 
-function PlanCard({ data, plan, figures }: CardProps) {
+function PlanCard({ data, plan, figures, planPath }: CardProps) {
   const pending = data.pendingPlanKey ? PLANS[data.pendingPlanKey] : null;
   const changeTag = data.ending
     ? `Ends ${data.inTrial ? "today" : data.dates.lastDay}`
@@ -78,7 +87,7 @@ function PlanCard({ data, plan, figures }: CardProps) {
             each cycle
           </p>
           <div className="acct-plan-acts">
-            <Link to={PLAN_PATH} className="acct-btn is-sm">
+            <Link to={planPath} className="acct-btn is-sm">
               Change plan
             </Link>
           </div>
@@ -107,7 +116,7 @@ function PlanCard({ data, plan, figures }: CardProps) {
 
 /* ── Credits ─────────────────────────────────────────────────────────────── */
 
-function CreditsCard({ data, plan, figures }: CardProps) {
+function CreditsCard({ data, plan, figures, planPath }: CardProps) {
   const over = figures.over > 0;
   const { dates, inTrial } = data;
   return (
@@ -132,7 +141,7 @@ function CreditsCard({ data, plan, figures }: CardProps) {
         </span>
       </div>
       <CreditMeter figures={figures} />
-      <CreditSignal data={data} plan={plan} figures={figures} />
+      <CreditSignal data={data} plan={plan} figures={figures} planPath={planPath} />
       <div className="acct-ledger">
         <UsedLedger figures={figures} />
         <CycleLedger data={data} plan={plan} figures={figures} />
@@ -223,7 +232,7 @@ function CreditMeter({ figures }: { figures: CreditFigures }) {
 }
 
 /** The teal banner: nearly out, or over. Teal is only for money on the line. */
-function CreditSignal({ data, plan, figures }: CardProps) {
+function CreditSignal({ data, plan, figures, planPath }: CardProps) {
   const signal = creditSignal(figures, data.inTrial);
   if (!signal) return null;
   const next = nextPlanUp(plan.key);
@@ -243,7 +252,7 @@ function CreditSignal({ data, plan, figures }: CardProps) {
             : null}
         </p>
       )}
-      <Link to={PLAN_PATH} className="acct-btn is-sm is-teal">
+      <Link to={planPath} className="acct-btn is-sm is-teal">
         Get more credits
       </Link>
     </div>
@@ -289,7 +298,7 @@ function UsedLedger({ figures }: { figures: CreditFigures }) {
   );
 }
 
-function CycleLedger({ data, plan, figures }: CardProps) {
+function CycleLedger({ data, plan, figures }: Omit<CardProps, "planPath">) {
   const { everyCycle, oneTime, rolledOver } = data.credits;
   return (
     <div className="acct-lg">

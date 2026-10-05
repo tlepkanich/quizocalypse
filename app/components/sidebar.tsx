@@ -108,6 +108,7 @@ export function Sidebar({
       label: "Shop",
       items: [
         { label: "Settings", to: "/app/settings" },
+        { label: "Account", to: "/app/account" },
         { label: "Captures", to: "/app/captures", count: counts.captures },
       ],
     },

@@ -428,6 +428,9 @@ try {
   await open("/studio/account");
   let written = await billsOf();
   billIds.push(...written.map((b) => b.id));
+  // Closing this cycle also rolls its unused credits over; track that grant
+  // so the probe removes it.
+  grantIds.push(...(await rolloverGrants(oldEnd)).map((grant) => grant.id));
   ok(
     `a connected shop's closed cycle is stored as one bill (${usedClosed} used of 400 → ${expectedTotal}¢)`,
     written.length === 1 &&

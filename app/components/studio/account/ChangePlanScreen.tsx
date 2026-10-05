@@ -23,6 +23,7 @@ import {
 import { QzModal } from "../../qz-overlays";
 import { useQzToast } from "../../qz-toast";
 import { AcctIc } from "./icons";
+import { STUDIO_ACCOUNT_PATHS, type AccountPaths } from "./paths";
 import {
   addEveryCycleDialog,
   buyCreditsDialog,
@@ -32,7 +33,7 @@ import {
   type ConfirmSpec,
 } from "./planDialogs";
 
-// Change plan — /studio/account/plan, built to docs/design/settings/billing
+// Change plan — /studio/account/plan and the embedded /app/account/plan, built to docs/design/settings/billing
 // (BILLING-HANDOFF.md, "Change plan page"): the three plans, more credits
 // (one time or every cycle), and Cancel — the only place Cancel appears.
 //
@@ -50,7 +51,13 @@ interface PlanContext {
   figures: CreditFigures;
 }
 
-export function ChangePlanScreen({ data }: { data: AccountData }) {
+export function ChangePlanScreen({
+  data,
+  paths = STUDIO_ACCOUNT_PATHS,
+}: {
+  data: AccountData;
+  paths?: AccountPaths;
+}) {
   const plan = PLANS[data.planKey];
   const figures = creditFigures(plan, data.credits, data.usage);
   const context: PlanContext = { data, plan, figures };
@@ -71,7 +78,7 @@ export function ChangePlanScreen({ data }: { data: AccountData }) {
       <div className="acct-col">
         <header className="hm3-card acct-head">
           <div className="acct-head-back">
-            <Link to="/studio/account" className="acct-back" aria-label="Back to Account">
+            <Link to={paths.account} className="acct-back" aria-label="Back to Account">
               <AcctIc name="back" />
             </Link>
             <h1>Change plan</h1>
