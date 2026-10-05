@@ -9682,6 +9682,9 @@ body[data-qz] .qz-cust-row:focus-visible {
    Scoped overrides only: pages without the wrapper are untouched. */
 .qz-shell-main:has(.qz-crest) { background: var(--qz-ground-crest); }
 .qz-crest { width: 100%; max-width: 960px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
+/* A data page whose table cannot fit 960 (Analytics: eight columns need
+   1108px) takes the wide column. Below it the table scrolls in its own box. */
+.qz-crest.is-wide { max-width: 1160px; }
 .qz-crest .qz-card,
 .qz-crest .qz-page-header {
   margin: 0; padding: 18px 22px; border: 0; border-radius: 22px;
@@ -9705,6 +9708,36 @@ body[data-qz] .qz-cust-row:focus-visible {
   gap: 12px; padding: 11px 14px; border: 1px solid var(--qz-rule-2); border-radius: 12px;
   background: var(--qz-ls-cell-bg);
 }
+/* The Analytics home inside a crest page: the control bar is the header
+   card (its title takes the page-title type), each stat tile is a card, and
+   each heading + body pair (.qz-ansec) is one card with its table or
+   findings as 12px inner boxes. The embedded /app and the per-quiz
+   analytics view have no wrapper and keep their look. */
+.qz-crest .qz-anwrap { max-width: none; display: flex; flex-direction: column; gap: 18px; }
+.qz-crest .qz-anbar-row,
+.qz-crest .qz-ancustom,
+.qz-crest .qz-antile,
+.qz-crest .qz-ansec,
+.qz-crest .qz-empty {
+  margin: 0; border: 0; border-radius: 22px; background: var(--qz-paper); box-shadow: var(--qz-edge);
+}
+.qz-crest .qz-anbar-row { min-height: 0; padding: 14px 22px; }
+.qz-crest .qz-anbar-title { font-size: 30px; line-height: 1.1; font-weight: 700; letter-spacing: -.02em; }
+.qz-crest .qz-ancustom { padding: 12px 22px; }
+.qz-crest .qz-antiles { margin: 0; gap: 18px; }
+.qz-crest .qz-antile { padding: 18px 22px; }
+.qz-crest .qz-antile.is-hero { background: var(--qz-accent-wash); }
+.qz-crest .qz-ansec { padding: 18px 22px 22px; }
+.qz-crest .qz-ansec .qz-anhead { margin: 0 0 14px; align-items: center; }
+.qz-crest .qz-ansec .qz-anhead h2 { font-size: 17px; font-weight: 700; letter-spacing: -.015em; }
+/* The table card is an inner box here, not a second card. */
+.qz-crest .qz-ansec .qz-card { margin: 0 !important; padding: 0; border-radius: 12px; background: transparent; box-shadow: none; }
+.qz-crest .qz-antablewrap { border-color: var(--qz-rule-2); border-radius: 12px; }
+.qz-crest .qz-anclean { margin: 0; border-radius: 12px; }
+.qz-crest .qz-insight { border-radius: 12px; }
+.qz-crest .qz-anbtn, .qz-crest .qz-anseg, .qz-crest .qz-anseg button, .qz-crest .qz-ansearch { border-radius: 999px; }
+.qz-crest .qz-empty { padding: 40px 22px; }
+
 /* The Engagement panel inside a crest page (account Settings): its intro,
    each section and its closing note are cards; chips and toggles take Home's
    shapes. The per-quiz engagement page has no wrapper and keeps its look. */

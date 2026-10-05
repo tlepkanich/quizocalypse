@@ -31,13 +31,19 @@ export default function StudioAnalytics() {
   const { data } = useLoaderData<typeof loader>();
   return (
     <QzPage width="wide">
-      <AnalyticsHomeView
-        data={data}
-        quizHref={(id) => `/studio/${id}`}
-        analyticsHref={(id) => `/studio/${id}/analytics`}
-        createHref="/studio/onboarding"
-        exportBase="/studio/customers/export"
-      />
+      {/* The Crest surface (.qz-crest, owner 2026-10-05): print ground, one
+          centred column, every block a card — the same as Integrations and
+          Settings, but wide: the eight-column table needs 1108px. The
+          embedded /app renders this view without the wrapper. */}
+      <div className="qz-crest is-wide">
+        <AnalyticsHomeView
+          data={data}
+          quizHref={(id) => `/studio/${id}`}
+          analyticsHref={(id) => `/studio/${id}/analytics`}
+          createHref="/studio/onboarding"
+          exportBase="/studio/customers/export"
+        />
+      </div>
     </QzPage>
   );
 }

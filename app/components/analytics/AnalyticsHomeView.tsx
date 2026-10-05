@@ -220,127 +220,134 @@ export function AnalyticsHomeView({
         />
       </div>
 
-      <div className="qz-anhead">
-        <h2 className="qz-h1">Quizzes</h2>
-        <div className="qz-anseg" role="group" aria-label="Filter by status">
-          {(
-            [
-              ["all", "All", counts.all],
-              ["live", "Live", counts.live],
-              ["draft", "Draft", counts.draft],
-            ] as const
-          ).map(([key, label, n]) => (
-            <button
-              key={key}
-              type="button"
-              className={status === key ? "is-on" : ""}
-              aria-pressed={status === key}
-              aria-label={`${label} — ${n} ${n === 1 ? "quiz" : "quizzes"}`}
-              onClick={() => setStatus(key)}
-            >
-              {label}{" "}
-              {/* Bracketed + italic so the number reads as a COUNT OF QUIZZES
-                  rather than as part of the label. */}
-              <span className="qz-anseg-n">({n})</span>
-            </button>
-          ))}
+      {/* Each heading and its body share one .qz-ansec, so a crest page can
+          draw the pair as one card (no heading loose on the print). Without
+          the wrapper's styles it is a plain block: the layout is unchanged. */}
+      <section className="qz-ansec">
+        <div className="qz-anhead">
+          <h2 className="qz-h1">Quizzes</h2>
+          <div className="qz-anseg" role="group" aria-label="Filter by status">
+            {(
+              [
+                ["all", "All", counts.all],
+                ["live", "Live", counts.live],
+                ["draft", "Draft", counts.draft],
+              ] as const
+            ).map(([key, label, n]) => (
+              <button
+                key={key}
+                type="button"
+                className={status === key ? "is-on" : ""}
+                aria-pressed={status === key}
+                aria-label={`${label} — ${n} ${n === 1 ? "quiz" : "quizzes"}`}
+                onClick={() => setStatus(key)}
+              >
+                {label}{" "}
+                {/* Bracketed + italic so the number reads as a COUNT OF QUIZZES
+                    rather than as part of the label. */}
+                <span className="qz-anseg-n">({n})</span>
+              </button>
+            ))}
+          </div>
+          <label className="qz-ansearch">
+            <span aria-hidden>⌕</span>
+            <input
+              type="search"
+              value={search}
+              placeholder="Search quizzes"
+              aria-label="Search quizzes"
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </label>
         </div>
-        <label className="qz-ansearch">
-          <span aria-hidden>⌕</span>
-          <input
-            type="search"
-            value={search}
-            placeholder="Search quizzes"
-            aria-label="Search quizzes"
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </label>
-      </div>
 
-      <QzCard flush style={{ marginBottom: 28 }}>
-        <div className="qz-antablewrap">
-          <table className="qz-table qz-antable">
-            <thead>
-              <tr>
-                <SortTh label="Quiz" sortKey="name" active={sort.key === "name"} dir={sort.dir} onSort={onSort} />
-                <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={onSort} />
-                <SortTh label="Starts" sortKey="starts" active={sort.key === "starts"} dir={sort.dir} onSort={onSort} numeric />
-                <SortTh label="Completion" sortKey="rate" active={sort.key === "rate"} dir={sort.dir} onSort={onSort} numeric />
-                <SortTh label="Contacts" sortKey="contacts" active={sort.key === "contacts"} dir={sort.dir} onSort={onSort} numeric />
-                <SortTh label="Orders" sortKey="orders" active={sort.key === "orders"} dir={sort.dir} onSort={onSort} numeric />
-                <SortTh label="Revenue" sortKey="revenue" active={sort.key === "revenue"} dir={sort.dir} onSort={onSort} numeric />
-                <SortTh label="Per finisher" sortKey="rpf" active={sort.key === "rpf"} dir={sort.dir} onSort={onSort} numeric />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.length === 0 ? (
+        <QzCard flush style={{ marginBottom: 28 }}>
+          <div className="qz-antablewrap">
+            <table className="qz-table qz-antable">
+              <thead>
                 <tr>
-                  <td colSpan={8} className="qz-dim" style={{ textAlign: "center", padding: 26 }}>
-                    No quizzes match.
-                  </td>
+                  <SortTh label="Quiz" sortKey="name" active={sort.key === "name"} dir={sort.dir} onSort={onSort} />
+                  <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={onSort} />
+                  <SortTh label="Starts" sortKey="starts" active={sort.key === "starts"} dir={sort.dir} onSort={onSort} numeric />
+                  <SortTh label="Completion" sortKey="rate" active={sort.key === "rate"} dir={sort.dir} onSort={onSort} numeric />
+                  <SortTh label="Contacts" sortKey="contacts" active={sort.key === "contacts"} dir={sort.dir} onSort={onSort} numeric />
+                  <SortTh label="Orders" sortKey="orders" active={sort.key === "orders"} dir={sort.dir} onSort={onSort} numeric />
+                  <SortTh label="Revenue" sortKey="revenue" active={sort.key === "revenue"} dir={sort.dir} onSort={onSort} numeric />
+                  <SortTh label="Per finisher" sortKey="rpf" active={sort.key === "rpf"} dir={sort.dir} onSort={onSort} numeric />
                 </tr>
-              ) : (
-                visible.map((q) => (
-                  <tr key={q.id}>
-                    <td>
-                      <Link to={q.live ? analyticsHref(q.id) : quizHref(q.id)} className="qz-anqlink">
-                        {q.name}
-                      </Link>
+              </thead>
+              <tbody>
+                {visible.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="qz-dim" style={{ textAlign: "center", padding: 26 }}>
+                      No quizzes match.
                     </td>
-                    <td>
-                      <QuizStatePill live={q.live} flag={q.flag} />
-                    </td>
-                    <DashCell>{q.starts?.toLocaleString() ?? null}</DashCell>
-                    <DashCell>{completionCell(q)}</DashCell>
-                    <DashCell>{q.contacts?.toLocaleString() ?? null}</DashCell>
-                    <DashCell>{q.orders ?? null}</DashCell>
-                    <DashCell>{q.revenue}</DashCell>
-                    <DashCell>{q.perFinisher}</DashCell>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </QzCard>
+                ) : (
+                  visible.map((q) => (
+                    <tr key={q.id}>
+                      <td>
+                        <Link to={q.live ? analyticsHref(q.id) : quizHref(q.id)} className="qz-anqlink">
+                          {q.name}
+                        </Link>
+                      </td>
+                      <td>
+                        <QuizStatePill live={q.live} flag={q.flag} />
+                      </td>
+                      <DashCell>{q.starts?.toLocaleString() ?? null}</DashCell>
+                      <DashCell>{completionCell(q)}</DashCell>
+                      <DashCell>{q.contacts?.toLocaleString() ?? null}</DashCell>
+                      <DashCell>{q.orders ?? null}</DashCell>
+                      <DashCell>{q.revenue}</DashCell>
+                      <DashCell>{q.perFinisher}</DashCell>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </QzCard>
+      </section>
 
-      <div className="qz-anhead">
-        <h2 className="qz-h1">What to fix</h2>
-        <span className="qz-dim" style={{ fontSize: 12.5 }}>
-          {findings.length > 0
-            ? `${findings.length} finding${findings.length === 1 ? "" : "s"} · checked after every publish`
-            : "checked after every publish"}
-          {dismissedCount > 0
-            ? ` · ${dismissedCount} dismissed, back within ${INSIGHT_SNOOZE_DAYS} days`
-            : ""}
-        </span>
-      </div>
-      {findings.length === 0 ? (
-        <div className="qz-anclean">
-          <span className="qz-anclean-ic" aria-hidden>✓</span>
-          <div>
-            <div style={{ fontWeight: 600 }}>Nothing needs attention</div>
-            <div className="qz-dim" style={{ fontSize: 13 }}>
-              Your quiz logic and the {data.range.label.toLowerCase()} of activity both came back clean.
+      <section className="qz-ansec">
+        <div className="qz-anhead">
+          <h2 className="qz-h1">What to fix</h2>
+          <span className="qz-dim" style={{ fontSize: 12.5 }}>
+            {findings.length > 0
+              ? `${findings.length} finding${findings.length === 1 ? "" : "s"} · checked after every publish`
+              : "checked after every publish"}
+            {dismissedCount > 0
+              ? ` · ${dismissedCount} dismissed, back within ${INSIGHT_SNOOZE_DAYS} days`
+              : ""}
+          </span>
+        </div>
+        {findings.length === 0 ? (
+          <div className="qz-anclean">
+            <span className="qz-anclean-ic" aria-hidden>✓</span>
+            <div>
+              <div style={{ fontWeight: 600 }}>Nothing needs attention</div>
+              <div className="qz-dim" style={{ fontSize: 13 }}>
+                Your quiz logic and the {data.range.label.toLowerCase()} of activity both came back clean.
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="qz-col qz-gap-16">
-          {findings.map((f, i) => (
-            <InsightCardView
-              key={`${f.quizId}-${i}`}
-              severity={f.severity}
-              headline={`${f.quizName}: ${f.headline}`}
-              body={f.body}
-              evidence={f.evidence}
-              basis={f.basis}
-              onDismiss={{ quizId: f.quizId, cardId: f.cardId }}
-              action={{ label: "Open the quiz", href: quizHref(f.quizId) }}
-            />
-          ))}
-        </div>
-      )}
+        ) : (
+          <div className="qz-col qz-gap-16">
+            {findings.map((f, i) => (
+              <InsightCardView
+                key={`${f.quizId}-${i}`}
+                severity={f.severity}
+                headline={`${f.quizName}: ${f.headline}`}
+                body={f.body}
+                evidence={f.evidence}
+                basis={f.basis}
+                onDismiss={{ quizId: f.quizId, cardId: f.cardId }}
+                action={{ label: "Open the quiz", href: quizHref(f.quizId) }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       <MethodDrawer open={methodOpen} onClose={() => setMethodOpen(false)} />
     </div>
