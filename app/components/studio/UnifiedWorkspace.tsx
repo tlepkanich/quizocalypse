@@ -56,7 +56,7 @@ import { Step3Results } from "../builder/Step3Results";
 import { PublishedHistoryModal } from "./PublishedHistoryModal";
 import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
-import { QzDrawer } from "../qz-overlays";
+import { QzDrawer, QzPopover } from "../qz-overlays";
 import { BuilderLogicView, QuizSettingsView } from "./BuilderSettings";
 import type { LogicFocusRequest } from "./logicTab/LogicTabCard";
 import { healthLinkToFocus } from "./logicTab/healthFocus";
@@ -1403,32 +1403,36 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
         stageStepName = names[stageNode.type] ?? "Screen";
       }
     }
+    // The health popover body. Legacy docs hide the decider-only sections
+    // (Tier-2 review, outcome table).
+    const healthPopover = (
+      <HealthPopover
+        report={healthReport}
+        doc={doc}
+        quizId={data.quizId}
+        onCommit={commit}
+        onFlush={flushSave}
+        onNavigate={onHealthNavigate}
+        tier2={isDecider}
+        showOutcomes={isDecider}
+        // QRTZ-S4 — this popover IS the builder's publish gate: blocking
+        // findings render as the states.mjs pb card with the foot
+        // sentence; each row keeps its deep link.
+        publishBlocked
+      />
+    );
     // The health pill + its controlled popover (QzPopover portals correctly
-    // inside the blurred top bar — same hosting as TopBar3). Legacy docs hide
-    // the decider-only sections (Tier-2 review, outcome table).
+    // inside the blurred top bar — same hosting as TopBar3). The pill is
+    // stagebar chrome, so it exists only while the stage is up (onBuild).
     const healthPill = (
       <HealthPill
         verdict={healthReport.verdict}
         open={healthOpen}
         onOpenChange={setHealthOpen}
-        popover={
-          <HealthPopover
-            report={healthReport}
-            doc={doc}
-            quizId={data.quizId}
-            onCommit={commit}
-            onFlush={flushSave}
-            onNavigate={onHealthNavigate}
-            tier2={isDecider}
-            showOutcomes={isDecider}
-            // QRTZ-S4 — this popover IS the builder's publish gate: blocking
-            // findings render as the states.mjs pb card with the foot
-            // sentence; each row keeps its deep link.
-            publishBlocked
-          />
-        }
+        popover={healthPopover}
       />
     );
+    const onBuild = view === "build" && tool === "editor";
 
 
     // QRTZ-H4 — the mock's .canvas-bar arrangement (shared.mjs 634–637):
@@ -1720,16 +1724,35 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     // the exact forbidden thing): the resting width is captured on click and
     // pinned inline; .qz-btn-loading draws the leading 14px ring.
     const blocking = healthReport.verdict.blocking;
+    const fixLabel = `Fix ${blocking} issue${blocking === 1 ? "" : "s"}`;
     const publishBtnV2 =
       blocking > 0 ? (
-        <button
-          type="button"
-          className="qz-bt-tbtn is-blocked qz-s3-continue"
-          aria-haspopup="dialog"
-          onClick={() => setHealthOpen(true)}
-        >
-          Fix {blocking} issue{blocking === 1 ? "" : "s"}
-        </button>
+        onBuild ? (
+          <button
+            type="button"
+            className="qz-bt-tbtn is-blocked qz-s3-continue"
+            aria-haspopup="dialog"
+            onClick={() => setHealthOpen(true)}
+          >
+            {fixLabel}
+          </button>
+        ) : (
+          // Off the stage (Logic, Theme, Settings…) there is no pill to host
+          // the popover, so the button hosts it itself: the same report and
+          // jump-links, hanging under the button.
+          <QzPopover
+            open={healthOpen}
+            onOpenChange={setHealthOpen}
+            placement="bottom"
+            maxWidth={460}
+            trigger={
+              <button type="button" className="qz-bt-tbtn is-blocked qz-s3-continue">
+                {fixLabel}
+              </button>
+            }
+            content={healthPopover}
+          />
+        )
       ) : (
         <button
           ref={publishBtnRef}
@@ -1809,7 +1832,6 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
 
     // BLD-3 — mock renderWorkspace(): the device/mode segs are canvas-only
     // controls (hidden on the config surfaces); Theme renders as a tab panel.
-    const onBuild = view === "build" && tool === "editor";
     const bodyCls =
       "qz-builder-body" +
       (!onBuild

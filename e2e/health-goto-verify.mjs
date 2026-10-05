@@ -1,6 +1,7 @@
 // Builder health popover — every "Go to it" lands on its fix (the builder
 // once handled only question and rule links, so a "never recommended" or a
-// "needs a rule" finding closed the popover and did nothing). Live-verify
+// "needs a rule" finding closed the popover and did nothing), and "Fix N
+// issues" opens the report from every view, not only Build. Live-verify
 // against a LOCAL production build + local DB.
 //
 // Runs on THROWAWAY clones of the local fixture cmr7khgd50001vkhscvox8dgt
@@ -147,6 +148,42 @@ try {
   ok("the Logic view opened", (await card.count()) === 1);
   ok("the rule's own window opened", (await ruleWindow.count()) === 1);
   await shot("05-rule-window");
+  await ruleWindow.locator(".qz-lg-mx").click();
+  await settle(500);
+
+  // ── 5. Off the stage, "Fix N issues" hosts the report itself ──────────────
+  // (the pill is stagebar chrome: outside Build the button once opened nothing)
+  const fixBtn = page.locator("button.is-blocked", { hasText: /^Fix \d+ issue/ });
+  ok("still in the Logic view, with no pill", (await card.count()) === 1 && (await page.locator(".qz-s3-healthpill").count()) === 0);
+  await fixBtn.click();
+  await settle(500);
+  ok("Fix N issues opens the report in the Logic view", (await health.count()) === 1);
+  const box = await health.boundingBox();
+  ok("the report sits inside the viewport", !!box && box.x >= 0 && box.x + box.width <= 1440 && box.y >= 0, JSON.stringify(box));
+  await shot("06-fix-button-report");
+  await health.locator("button.qz-pb-row", { hasText: "Rule 1" }).first().click();
+  await settle();
+  ok("its row jumps to the rule", (await health.count()) === 0 && (await ruleWindow.count()) === 1);
+  await ruleWindow.locator(".qz-lg-mx").click();
+  await settle(400);
+  await fixBtn.click();
+  await settle(400);
+  await page.keyboard.press("Escape");
+  await settle(300);
+  ok("Esc closes the report", (await health.count()) === 0);
+  await page.locator(".qz-builder-rail-item", { hasText: "Settings" }).click();
+  await settle(700);
+  await fixBtn.click();
+  await settle(500);
+  ok("Fix N issues opens the report in Settings", (await health.count()) === 1);
+  await page.keyboard.press("Escape");
+  // On the stage the pill still hosts it (one report, never two).
+  await page.locator(".qz-builder-rail-item", { hasText: "Build" }).click();
+  await settle(700);
+  await fixBtn.click();
+  await settle(500);
+  ok("in Build the pill hosts the one report", (await health.count()) === 1 && (await page.locator(".qz-s3-healthpill").count()) === 1);
+  await page.keyboard.press("Escape");
 
   ok("no page errors", pageErrors.length === 0, pageErrors.join(" | "));
 } catch (e) {
