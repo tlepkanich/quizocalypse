@@ -27,6 +27,7 @@ import { PhoneCanvas } from "./content/PhoneCanvas";
 // config moved to the Results step (resultsGuided); the capture config moved
 // to the Questions step's Email-capture rail row.
 import { LogicTabCard, type LogicFocusRequest } from "../../studio/logicTab/LogicTabCard";
+import { healthLinkToFocus, type LogicFocusTarget } from "../../studio/logicTab/healthFocus";
 import type { LogicCatalog } from "../../studio/logicTab/AddRecommendationsDialog";
 import { CHECK_COPY } from "../../studio/logicTab/logicCopy";
 import type { SaveToken } from "../../studio/saveTracker";
@@ -171,7 +172,7 @@ export function Step3Shell({
   const [checkOpen, setCheckOpen] = useState(false);
   const [focusRequest, setFocusRequest] = useState<LogicFocusRequest | null>(null);
   const nonce = useRef(0);
-  const request = useCallback((r: DistributiveOmit<LogicFocusRequest, "nonce">) => {
+  const request = useCallback((r: LogicFocusTarget) => {
     nonce.current += 1;
     setFocusRequest({ ...r, nonce: nonce.current } as LogicFocusRequest);
   }, []);
@@ -299,29 +300,8 @@ export function Step3Shell({
         }
         return;
       }
-      switch (link.kind) {
-        case "question":
-          if (link.nodeId) request({ kind: "question", id: link.nodeId });
-          return;
-        case "rule":
-          if (link.ruleId) request({ kind: "rule", id: link.ruleId, open: opts.open !== false });
-          return;
-        case "rules":
-          request(rulesLinkIsEmpty(docRef.current) ? { kind: "create" } : { kind: "rules" });
-          return;
-        case "recommendation":
-          if (link.categoryId) {
-            request({
-              kind: "recommendation",
-              id: link.categoryId,
-              ...(link.nodeId ? { questionId: link.nodeId } : {}),
-            });
-          }
-          return;
-        case "style":
-          request({ kind: "style" });
-          return;
-      }
+      const target = healthLinkToFocus(link, docRef.current, { openRule: opts.open !== false });
+      if (target) request(target);
     },
     [view, onContinue, scrollLogicTo, request],
   );
@@ -509,12 +489,4 @@ export function Step3Shell({
       ) : null}
     </div>
   );
-}
-
-/** Omit distributed over a union (keeps each LogicFocusRequest variant). */
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-
-/** "rules" findings: with no rules at all the fix is a blank rule window. */
-function rulesLinkIsEmpty(doc: QuizDoc): boolean {
-  return (doc.decision_rules ?? []).length === 0;
 }

@@ -325,12 +325,17 @@ export function LogicTabCard({
         if (editable) openCreate();
         break;
       case "recommendation":
-        if (rulesOnly) {
-          if (editable) openCreate([req.id]);
-        } else if (req.questionId) {
+        // Filter Results + Rules with a picking question: land on it with
+        // the recommendation armed, so every answer offers to place it.
+        // Rules only, or no picking question to land on: a rule that shows
+        // it is the fix, so the rule window opens with it filled in.
+        if (!rulesOnly && req.questionId) {
           const qid = req.questionId;
           setSelectedId(qid);
+          setPaneFocus({ nonce: req.nonce, questionId: qid, control: "picks", armId: req.id });
           pendingScroll.current = () => scrollTo(`.qz-lg-rail [data-node-id="${CSS.escape(qid)}"]`);
+        } else if (editable) {
+          openCreate([req.id]);
         }
         break;
       case "style":

@@ -4,7 +4,7 @@ import type { Quiz } from "../../lib/quizSchema";
 import { swapScoringModel } from "../../lib/quizMutations";
 import { LogicView } from "../logic/LogicView";
 import { LogicPathsTab } from "./LogicPathsTab";
-import { LogicTabCard } from "./logicTab/LogicTabCard";
+import { LogicTabCard, type LogicFocusRequest } from "./logicTab/LogicTabCard";
 import {
   deciderQuestion,
   orderedQuestions,
@@ -35,11 +35,14 @@ export function BuilderLogicView({
   doc,
   commit,
   onSelectNode,
+  focusRequest,
 }: {
   data: StudioBuilderData;
   doc: QuizDoc;
   commit: (doc: QuizDoc) => void;
   onSelectNode: (nodeId: string | null) => void;
+  /** A health finding's "Go to it" jump (decider docs: the card acts on it). */
+  focusRequest?: LogicFocusRequest | null;
 }) {
   const isDecider = doc.logic_model === "decider";
   const questions = useMemo(() => orderedQuestions(doc), [doc]);
@@ -76,6 +79,7 @@ export function BuilderLogicView({
         quizId={data.quizId}
         lastSyncAt={data.lastSyncAt ?? null}
         shopifyAdminDomain={data.shopifyAdminDomain ?? null}
+        focusRequest={focusRequest ?? null}
       />
 
       {/* QRTZ-G3 — Paths behind a quiet secondary affordance (no tabs). */}

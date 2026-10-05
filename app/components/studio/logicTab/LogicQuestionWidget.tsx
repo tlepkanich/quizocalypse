@@ -85,6 +85,9 @@ export type PaneFocusRequest = {
   questionId: string;
   control?: "role" | "route" | "picks" | "values" | "required";
   answerId?: string;
+  /** Arm this recommendation in the tray, so every answer cell offers to
+   *  place it (the "never recommended" finding's fix). */
+  armId?: string;
 };
 
 /** The recommendation kinds the picks picker filters by (D18: "Tags"). */
@@ -284,12 +287,20 @@ export function LogicQuestionWidget({
   // focuses the control it names once the question's pane is on screen.
   const paneRef = useRef<HTMLDivElement>(null);
   const lastNonce = useRef<number | null>(null);
+  // Only the picking question has a tray, and only a known recommendation
+  // can sit in it. Read through a ref so the effect below keeps its deps.
+  const canArm = useRef<(recId: string) => boolean>(() => false);
+  canArm.current = (recId) =>
+    Boolean(commit) &&
+    !rulesOnly &&
+    selected?.node.data.role === "decides" &&
+    recs.some((r) => r.cat.id === recId);
   useEffect(() => {
     const req = focusRequest;
     if (!req || req.nonce === lastNonce.current || !req.control) return;
     if (selected?.node.id !== req.questionId) return;
     lastNonce.current = req.nonce;
-    setArmed(null);
+    setArmed(req.armId && canArm.current(req.armId) ? req.armId : null);
     const id = window.requestAnimationFrame(() => {
       const pane = paneRef.current;
       if (!pane) return;

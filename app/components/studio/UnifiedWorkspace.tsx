@@ -58,6 +58,8 @@ import { TranslationsPanel } from "./TranslationsPanel";
 import { ExperiencePanel } from "./ExperiencePanel";
 import { QzDrawer } from "../qz-overlays";
 import { BuilderLogicView, QuizSettingsView } from "./BuilderSettings";
+import type { LogicFocusRequest } from "./logicTab/LogicTabCard";
+import { healthLinkToFocus } from "./logicTab/healthFocus";
 import { BuilderDesignPanel } from "./BuilderDesignPanel";
 import { VibeTemplateSelector } from "./VibeTemplateSelector";
 import type { VibeTemplate } from "../../lib/vibeTemplates";
@@ -631,18 +633,33 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
     [setView],
   );
   // Health popover jump-links: a question/node finding focuses that node in
-  // the Build view's editor; a rule finding lives in the Logic view (BLD-4
-  // will deep-scroll it — landing the view is the useful move today).
+  // the Build view's editor. Every other finding (a rule, the rules list, a
+  // recommendation no path shows) is fixed in the Logic view: the card gets
+  // the same focus request the funnel sends, so it scrolls to the target and
+  // opens the fix. The request is dropped on the way out of the Logic view —
+  // the card remounts on the way back in and would act on a stale one.
+  const [logicFocusRequest, setLogicFocusRequest] = useState<LogicFocusRequest | null>(null);
+  const logicFocusNonce = useRef(0);
+  const viewBefore = useRef(view);
+  useEffect(() => {
+    if (viewBefore.current === "logic" && view !== "logic") setLogicFocusRequest(null);
+    viewBefore.current = view;
+  }, [view]);
   const onHealthNavigate = useCallback(
     (link: Tier1Link) => {
       setHealthOpen(false);
-      if (link.kind === "question" && link.nodeId) {
+      if (link.kind === "question") {
+        if (!link.nodeId) return;
         setTool("editor");
         setView("build");
         select(link.nodeId);
-      } else if (link.kind === "rule") {
-        setView("logic");
+        return;
       }
+      const target = healthLinkToFocus(link, docRef.current);
+      if (!target) return;
+      logicFocusNonce.current += 1;
+      setLogicFocusRequest({ ...target, nonce: logicFocusNonce.current } as LogicFocusRequest);
+      setView("logic");
     },
     [setView, select],
   );
@@ -2046,6 +2063,7 @@ function WorkspaceShell({ data, chrome }: { data: StudioBuilderData; chrome: Chr
                     doc={doc}
                     commit={commit}
                     onSelectNode={select}
+                    focusRequest={logicFocusRequest}
                   />
                 ) : (
                   // BLD-3 — the mock's Theme tab panel hosts the real

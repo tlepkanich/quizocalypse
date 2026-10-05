@@ -7,7 +7,7 @@ import type { BuilderCategory } from "../../builder/stepProps";
 import { logicDoc } from "../../../lib/logicStep.fixtures";
 import { orderedQuestions } from "../../../lib/questionOrder";
 import { buildAttributeReadout } from "../../../lib/attributeClustering";
-import { LogicQuestionWidget } from "./LogicQuestionWidget";
+import { LogicQuestionWidget, type PaneFocusRequest } from "./LogicQuestionWidget";
 import type { PaneUndo } from "./LogicTabMenus";
 
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -54,7 +54,10 @@ const cat = (id: string, name: string, n = 2): BuilderCategory =>
   }) as BuilderCategory;
 const CATS = [cat("cat1", "Dry kit"), cat("cat2", "Oily kit"), cat("cat3", "Both kit"), cat("catX", "Extra")];
 
-function mount(doc: Quiz, opts: { selectedId?: string; undo?: PaneUndo } = {}) {
+function mount(
+  doc: Quiz,
+  opts: { selectedId?: string; undo?: PaneUndo; focusRequest?: PaneFocusRequest } = {},
+) {
   const commits: Quiz[] = [];
   let current = doc;
   let selected = opts.selectedId ?? null;
@@ -78,6 +81,7 @@ function mount(doc: Quiz, opts: { selectedId?: string; undo?: PaneUndo } = {}) {
             render();
           },
           ...(opts.undo ? { undo: opts.undo } : {}),
+          ...(opts.focusRequest ? { focusRequest: opts.focusRequest } : {}),
           rulesOnly: false,
           deciderQIndex: 1,
           hasNarrowFields: false,
@@ -144,6 +148,25 @@ describe("the tray and arm-and-place (D14)", () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     });
     expect(q(".qz-lg-tchip.is-armed")).toBeNull();
+  });
+});
+
+describe("a focus request that arms a recommendation (the never-recommended fix)", () => {
+  it("arms it on the picking question, so every answer offers to place it", () => {
+    mount(logicDoc(), {
+      focusRequest: { nonce: 1, questionId: "q1", control: "picks", armId: "catX" },
+    });
+    expect(q(".qz-lg-tchip.is-armed")?.textContent).toBe("Extra");
+    expect(qa(".qz-lg-cell.is-drop")).toHaveLength(3);
+    expect(qa(".qz-lg-cell")[0]!.getAttribute("aria-label")).toBe("Add Extra");
+  });
+
+  it("stays disarmed for a recommendation the tray does not hold", () => {
+    mount(logicDoc(), {
+      focusRequest: { nonce: 1, questionId: "q1", control: "picks", armId: "gone" },
+    });
+    expect(q(".qz-lg-tchip.is-armed")).toBeNull();
+    expect(qa(".qz-lg-cell.is-drop")).toHaveLength(0);
   });
 });
 
