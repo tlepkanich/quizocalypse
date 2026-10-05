@@ -623,6 +623,466 @@ export async function generateQuestionFlow(
   );
 }
 
+// ── QBUILD-FAST: the decider question build as PLAN → parallel WRITES ────────
+// generateQuestionFlow (above) writes the whole quiz in ONE Sonnet response:
+// ~1,400 output tokens ≈ 20 s, output-bound. The planned build keeps every
+// word on the same model (the owner's keep-Sonnet decision) and cuts the WALL
+// time instead:
+//   1. generateQuestionPlan  — a short outline, one line per question (working
+//      text, input type, role, chapter).
+//   2. writePlannedQuestions — the outline's questions written IN PARALLEL.
+//      Every call sees the whole plan (so concepts never overlap) and writes
+//      only its own slice: wall time is the slowest slice, not the sum.
+// Both steps send ONE byte-identical request prefix — both tools, the system
+// rules, and the quiz context as a cached system block — so the plan call
+// writes the prompt cache and every write call reads it. N parallel calls then
+// cost ~0.1× the shared input each instead of N× the full prompt. (tool_choice
+// differs per step; it does not invalidate the tools + system cache.)
+//
+// Roles and chapter labels come from the PLAN, deterministically — one author
+// for the quiz's structure. Decider builds only (onboardingBuild.server.ts
+// gates it); the single-call generator stays the legacy path and the fallback.
+
+// At most this many write calls run at once; a longer plan is cut into
+// equal slices of consecutive questions.
+const MAX_PARALLEL_QUESTION_WRITES = 8;
+
+const PLAN_QUESTION_TYPES = [
+  "single_select",
+  "multi_select",
+  "image_tile",
+  "searchable",
+  "image_picker",
+] as const;
+
+const QuestionPlanSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        question_type: QuestionDataObject.shape.question_type,
+        role: z.enum(["decides", "narrows", "info"]),
+        section_label: z.string().max(40).optional(),
+        needs_explainer: z.boolean().optional(),
+        needs_helper: z.boolean().optional(),
+        answer_outline: z.array(z.string()).optional(),
+      }),
+    )
+    .min(1),
+});
+export type QuestionPlan = z.infer<typeof QuestionPlanSchema>["questions"];
+
+const WrittenQuestionsSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        question_type: QuestionDataObject.shape.question_type,
+        required: z.boolean().optional(),
+        max_selections: z.number().int().positive().optional(),
+        education_card_before: z.string().optional(),
+        helper_text: z.string().max(160).optional(),
+        answers: z
+          .array(
+            z.object({
+              text: z.string().min(1),
+              tags: z.array(z.string()).default([]),
+              collection_filter: z.string().optional(),
+              image_url: z.string().optional(),
+            }),
+          )
+          .min(2),
+      }),
+    )
+    .min(1),
+});
+
+// BOTH tools ride EVERY planned request, in this order — the tool list is the
+// head of the cached prefix, so it must never vary between the two steps.
+const PLANNED_BUILD_TOOLS = [
+  {
+    name: "emit_question_plan",
+    description: "Step 1. Emit the outline of every question in the quiz, in order. No answers.",
+    input_schema: {
+      type: "object",
+      required: ["questions"],
+      properties: {
+        questions: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            required: ["text", "question_type", "role"],
+            properties: {
+              text: { type: "string", description: "The question's working text — one concept." },
+              question_type: { type: "string", enum: PLAN_QUESTION_TYPES },
+              role: {
+                type: "string",
+                enum: ["decides", "narrows", "info"],
+                description:
+                  "What the question does to the product pool: 'decides' picks the outcome (exactly one per quiz), 'narrows' cuts the pool by a real catalog attribute, 'info' only collects the answer.",
+              },
+              section_label: {
+                type: "string",
+                description: "Optional chapter label (≤40 chars). Consecutive questions share one; ≤3 distinct labels.",
+              },
+              needs_explainer: {
+                type: "boolean",
+                description:
+                  "true on AT MOST ONE question: shoppers need a concept explained before they can answer it well.",
+              },
+              needs_helper: {
+                type: "boolean",
+                description:
+                  "true on AT MOST TWO questions: shoppers might overthink this one, so it gets a one-line reassurance.",
+              },
+              answer_outline: {
+                type: "array",
+                items: { type: "string" },
+                description:
+                  "The DECIDING question only: its answer options, a few words each, roughly one per outcome bucket — proof that this question can route a shopper to every bucket.",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: "emit_questions",
+    description: "Step 2. Emit the requested question(s) of the plan, written in full with answers.",
+    input_schema: {
+      type: "object",
+      required: ["questions"],
+      properties: {
+        questions: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            required: ["text", "question_type", "answers"],
+            properties: {
+              text: { type: "string" },
+              question_type: { type: "string", enum: PLAN_QUESTION_TYPES },
+              required: { type: "boolean" },
+              max_selections: { type: "number" },
+              education_card_before: { type: "string" },
+              helper_text: {
+                type: "string",
+                description: "Optional one-line reassurance under the question (≤160 chars).",
+              },
+              answers: {
+                type: "array",
+                minItems: 2,
+                items: {
+                  type: "object",
+                  required: ["text", "tags"],
+                  properties: {
+                    text: { type: "string" },
+                    tags: { type: "array", items: { type: "string" } },
+                    collection_filter: { type: "string" },
+                    image_url: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+] as const;
+
+const PLANNED_BUILD_ADDENDUM =
+  "\nTWO-STEP BUILD: this quiz is built in two steps, and each request names its " +
+  "step. Step 1 (emit_question_plan) outlines every question of the quiz. Step 2 " +
+  "(emit_questions) writes ONLY the questions the request names, in full. The quiz " +
+  "context below is the same for both steps.";
+
+// The request prefix both steps share. `context` carries everything the
+// single-call build's user message carries about THIS quiz — and nothing that
+// differs between the steps.
+function plannedBuildPrefix(input: GenerateQuestionFlowInput): {
+  system: Anthropic.TextBlockParam[];
+  tools: Anthropic.Tool[];
+} {
+  const exact = input.exactQuestionCount;
+  const context = [
+    "QUIZ CONTEXT",
+    `Tone: ${input.tone}.`,
+    exact
+      ? `Question count: EXACTLY ${exact} questions — no more, no fewer. The merchant chose this number.`
+      : `Target question count: ${input.questionCount}.`,
+    "Merchant's quiz goal (verbatim):",
+    input.goalPrompt || "(none — infer from the catalog + buckets)",
+    "",
+    "Outcome buckets the shopper must be routed to (use these tags so answers map to them):",
+    ...input.buckets.map((b) => `- ${b.name} [routing tags: ${b.tags.join(", ") || "(none)"}]`),
+    "",
+    "Catalog summary (only use tags that appear here):",
+    input.catalogSummary,
+    ...(input.toneSample
+      ? ["", "Brand voice sample — match this writing style:", input.toneSample]
+      : []),
+    ...(input.websiteText
+      ? ["", "Brand website content (use for on-brand language, mission, FAQ patterns):", input.websiteText]
+      : []),
+    ...(input.flow.mixed_input_types
+      ? [
+          "",
+          "Flow requirement: use a mix of input styles — include at least one image_picker or searchable question alongside single/multi-select.",
+        ]
+      : []),
+  ].join("\n");
+  const system = [
+    {
+      type: "text",
+      text:
+        QUESTION_FLOW_SYSTEM_PROMPT +
+        experienceAddendum(input.experienceType) +
+        deciderAddendum(input.logicModel) +
+        buildBrandVoiceAddition(input.brandGuidelines) +
+        PLANNED_BUILD_ADDENDUM,
+    },
+    // The cache breakpoint: tools + both system blocks are the shared prefix.
+    { type: "text", text: context, cache_control: { type: "ephemeral" } },
+  ];
+  return {
+    // cache_control postdates this SDK version's param types; the API takes it.
+    system: system as unknown as Anthropic.TextBlockParam[],
+    tools: PLANNED_BUILD_TOOLS as unknown as Anthropic.Tool[],
+  };
+}
+
+function validationIssue(error: z.ZodError): string {
+  return error.issues
+    .slice(0, 5)
+    .map((i) => `${i.path.join(".")}: ${i.message}`)
+    .join("; ");
+}
+
+const PLAN_TASK =
+  "STEP 1 — PLAN. Outline the whole quiz, in the order shoppers answer it. For each " +
+  "question give its working text, input type, role, and an optional section_label " +
+  "(≤3 distinct labels across the quiz, consecutive questions share one — e.g. " +
+  "\"Skin profile\", \"Your preferences\"). Every question covers a DIFFERENT concept: " +
+  "no two questions may ask about the same thing in different words. Exactly ONE " +
+  "question has role decides — phrased DIAGNOSTICALLY, as the one-decider rule " +
+  "above requires: a concrete behavior, feeling, or situation the shopper can " +
+  "observe, never \"what are you shopping for\" or any other self-classification " +
+  "that recites the bucket names. Give the deciding question its answer_outline, so " +
+  "the question you choose is one whose answers reach every bucket. At most TWO " +
+  "questions have role narrows, and only " +
+  "where the catalog summary shows a real attribute that splits the products; every " +
+  "other question has role info. Set needs_explainer true on at most one question, " +
+  "and only where shoppers need an unfamiliar material, spec, fit, or term explained " +
+  "before they can answer. Set needs_helper true on at most two questions where " +
+  "shoppers might overthink. No answers yet. Emit via emit_question_plan.";
+
+// Step 1 — the outline. A pinned count that misses is a validation failure
+// while retries remain; the final attempt trims an overshoot (never the
+// deciding question) and keeps a short plan as-is, the single-call rule.
+export async function generateQuestionPlan(
+  input: GenerateQuestionFlowInput,
+): Promise<QuestionPlan> {
+  const prefix = plannedBuildPrefix(input);
+  const exact = input.exactQuestionCount;
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await createMessage({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: prefix.system,
+      tools: prefix.tools,
+      tool_choice: { type: "tool", name: "emit_question_plan" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? PLAN_TASK
+              : `${PLAN_TASK}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = QuestionPlanSchema.safeParse(toolUse.input);
+    if (!parsed.success) {
+      lastIssue = validationIssue(parsed.error);
+      continue;
+    }
+    const planned = parsed.data.questions;
+    if (exact && planned.length !== exact && attempt < MAX_ATTEMPTS) {
+      lastIssue = `Expected exactly ${exact} questions, got ${planned.length}`;
+      continue;
+    }
+    return exact ? clampQuestionsTo(planned, exact) : planned;
+  }
+  throw new QuizGenerationError(
+    "Question plan generation failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+function planLine(q: QuestionPlan[number], index: number): string {
+  const chapter = q.section_label?.trim() ? ` · chapter "${q.section_label.trim()}"` : "";
+  return `${index + 1}. [${q.role} · ${q.question_type}${chapter}] ${q.text}`;
+}
+
+// Consecutive-question slices, at most MAX_PARALLEL_QUESTION_WRITES of them.
+function planSlices(count: number): number[][] {
+  const size = Math.ceil(count / MAX_PARALLEL_QUESTION_WRITES);
+  const slices: number[][] = [];
+  for (let start = 0; start < count; start += size) {
+    slices.push(
+      Array.from({ length: Math.min(size, count - start) }, (_, offset) => start + offset),
+    );
+  }
+  return slices;
+}
+
+type WrittenQuestion = z.infer<typeof WrittenQuestionsSchema>["questions"][number];
+
+// What the plan decided for ONE question, restated for the call that writes
+// it. A write call sees one slice in isolation, so the quiz-wide budgets (one
+// explainer card, a couple of reassurance lines) are the plan's to hand out.
+function sliceRules(q: QuestionPlan[number], n: number): string[] {
+  const role =
+    q.role === "decides"
+      ? `#${n} is the DECIDING question: write roughly one answer per outcome bucket, each answer's tags matching ONE bucket's routing tags, so every bucket is reachable from this question. Each answer describes what the shopper observes or does — never the bucket's name.` +
+        (q.answer_outline?.length
+          ? ` Its planned answers, to refine: ${q.answer_outline.join(" | ")}.`
+          : "")
+      : q.role === "narrows"
+        ? `#${n} NARROWS the product pool: each answer carries the accurate catalog value(s) it matches, taken from the catalog summary.`
+        : `#${n} is an INFO question: its answers carry empty tags [].`;
+  return [
+    role,
+    q.needs_explainer
+      ? `#${n} needs a concept explained first: give it ONE education_card_before, one short plain-language sentence.`
+      : `#${n} gets no education_card_before.`,
+    q.needs_helper
+      ? `#${n} gets a one-line helper_text reassurance, written for this question.`
+      : `#${n} gets no helper_text.`,
+  ];
+}
+
+// One write call: the questions at `indexes`, in plan order. A wrong count is
+// a validation failure while retries remain; the final attempt keeps the
+// first `indexes.length` of an overshoot and fails on a short result (a
+// missing question cannot be invented).
+async function writePlanSlice(
+  prefix: ReturnType<typeof plannedBuildPrefix>,
+  plan: QuestionPlan,
+  indexes: number[],
+): Promise<WrittenQuestion[]> {
+  const numbers = indexes.map((i) => `#${i + 1}`).join(" and ");
+  const task = [
+    "STEP 2 — WRITE. The quiz plan, in order:",
+    ...plan.map(planLine),
+    "",
+    `Write ONLY question ${numbers} of this plan, in full: the final question text, its input type, and its answers with tags. Keep each question's planned concept and role; refine the wording. The other questions are written separately — do not cover their concepts, and do not repeat their answer sets.`,
+    ...indexes.flatMap((i) => sliceRules(plan[i]!, i + 1)),
+    `Emit exactly ${indexes.length} question${indexes.length === 1 ? "" : "s"} via emit_questions, in plan order.`,
+  ].join("\n");
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await createMessage({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: prefix.system,
+      tools: prefix.tools,
+      tool_choice: { type: "tool", name: "emit_questions" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? task
+              : `${task}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = WrittenQuestionsSchema.safeParse(toolUse.input);
+    if (!parsed.success) {
+      lastIssue = validationIssue(parsed.error);
+      continue;
+    }
+    const written = parsed.data.questions;
+    if (written.length === indexes.length) return written;
+    if (written.length > indexes.length && attempt === MAX_ATTEMPTS) {
+      return written.slice(0, indexes.length);
+    }
+    lastIssue = `Expected exactly ${indexes.length} question(s), got ${written.length}`;
+  }
+  throw new QuizGenerationError(
+    "Planned question write failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// Step 2 — every slice of the plan, written concurrently and merged in plan
+// order. One failed slice fails the build (the caller falls back to the
+// single-call generator); the same deterministic copy passes run here as
+// there. Emits questions only — never welcome / email-gate copy, so the
+// caller takes this path only when the flow needs neither.
+export async function writePlannedQuestions(
+  input: GenerateQuestionFlowInput,
+  plan: QuestionPlan,
+): Promise<GeneratedQuestionFlow> {
+  const prefix = plannedBuildPrefix(input);
+  const slices = planSlices(plan.length);
+  const written = (
+    await Promise.all(slices.map((indexes) => writePlanSlice(prefix, plan, indexes)))
+  ).flat();
+  return {
+    questions: written.map((q, i) => {
+      const planned = plan[i]!;
+      return {
+        // FIX-1 — deterministic anti-slop pass on the AI-authored copy only.
+        text: stripEmoji(q.text),
+        question_type: q.question_type,
+        role: planned.role,
+        ...(planned.section_label?.trim()
+          ? { section_label: stripEmoji(planned.section_label) }
+          : {}),
+        // Only the questions the plan marked carry a reassurance line or the
+        // explainer card.
+        ...(planned.needs_helper && q.helper_text?.trim()
+          ? { helper_text: stripEmoji(q.helper_text) }
+          : {}),
+        ...(q.required !== undefined ? { required: q.required } : {}),
+        ...(q.max_selections !== undefined ? { max_selections: q.max_selections } : {}),
+        ...(planned.needs_explainer && q.education_card_before
+          ? { education_card_before: q.education_card_before }
+          : {}),
+        answers: q.answers.map((a) => ({
+          text: stripAnswerEmDash(stripEmoji(a.text)),
+          tags: a.tags,
+          ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
+          ...(a.image_url ? { image_url: a.image_url } : {}),
+        })),
+      };
+    }),
+  };
+}
+
 // ── Step 1 — lightweight quiz "directions" (the cheap one-pass options) ──────
 // Propose 2–3 distinct quiz DIRECTIONS the merchant picks from at the end of the
 // Step-1 funnel. Each = experience type + angle + 2–3 sample question texts (no
@@ -1213,6 +1673,295 @@ export async function generateQuizTemplates(
 
   throw new QuizGenerationError(
     "Quiz templates generation failed validation after retries.",
+    MAX_ATTEMPTS,
+    lastIssue,
+  );
+}
+
+// ── DRAFT-FAST: the headless chains' ONE merged middle pass ──────────────────
+// The headless chains (goal-first confirm, pop-up "Generate with AI", the
+// speculative pre-build) never show Shape: they auto-picked the best
+// product_match type out of 2-3, then templates[0] out of 2-3 — two
+// sequential Haiku passes writing ~2,400 output tokens to keep ~350 of them.
+// This pass writes ONLY the kept direction (one product_match type + its one
+// template) in a single call. The Shape route still runs the two card passes
+// above — a merchant choosing between cards needs the cards.
+//
+// The tool shape is FLAT and carries no ids / experience_type / rationale:
+// those are derived here (headless builds are decider docs — product matching
+// by construction, the pickHeadlessType rule), so no output tokens are spent
+// on them. Buckets are shown under short refs (B1, B2 …) and mapped back to
+// their ids here — echoing 25-char ids cost ~1.5 s on a 27-bucket draft. The
+// result is assembled into the SAME persisted shapes (QuizType +
+// RichTemplateOption) the two-pass chain produced.
+const QuizDirectionDraft = z.object({
+  type_name: z.string().min(1),
+  achieves: z.string().min(1),
+  question_range: z.object({
+    min: z.number().int().min(1).max(20),
+    max: z.number().int().min(1).max(20),
+  }),
+  title: z.string().min(1),
+  angle: z.string().min(1),
+  sample_questions: z.array(z.string().min(1)).min(2).max(3),
+  feature_notes: z.array(z.string().min(1)).min(1).max(3),
+  dials: z.object({
+    imagery: z.enum(["high", "medium", "low"]),
+    graphics: z.enum(["high", "medium", "low"]),
+    word_forward: z.enum(["high", "medium", "low"]),
+    lines: z.enum(["soft", "sharp", "rounded"]),
+  }),
+  rec_defaults: z.object({
+    max_products: z.number().int().min(1).max(12),
+    oos_behavior: z.enum(["hide", "show_with_badge", "fallback"]),
+  }),
+  recommended_buckets: z.array(z.string()).optional(),
+  question_count: z.number().int().min(1).max(40),
+});
+
+const QUIZ_DIRECTION_TOOL_SCHEMA = {
+  type: "object",
+  required: [
+    "type_name",
+    "achieves",
+    "question_range",
+    "title",
+    "angle",
+    "sample_questions",
+    "feature_notes",
+    "dials",
+    "rec_defaults",
+    "question_count",
+  ],
+  properties: {
+    type_name: { type: "string", description: "the quiz format's display name" },
+    achieves: { type: "string", description: "one line: what this quiz achieves" },
+    question_range: {
+      type: "object",
+      required: ["min", "max"],
+      properties: {
+        min: { type: "integer", minimum: 3, maximum: 20 },
+        max: { type: "integer", minimum: 3, maximum: 20 },
+      },
+    },
+    title: { type: "string", description: "the quiz's name" },
+    angle: { type: "string", description: "one line: how this quiz frames the journey" },
+    sample_questions: {
+      type: "array",
+      minItems: 2,
+      maxItems: 3,
+      items: { type: "string" },
+    },
+    feature_notes: {
+      type: "array",
+      minItems: 1,
+      maxItems: 1,
+      items: { type: "string" },
+      description: "one short note (under 12 words) on what is distinctive about this quiz",
+    },
+    dials: {
+      type: "object",
+      required: ["imagery", "graphics", "word_forward", "lines"],
+      properties: {
+        imagery: { type: "string", enum: ["high", "medium", "low"] },
+        graphics: { type: "string", enum: ["high", "medium", "low"] },
+        word_forward: { type: "string", enum: ["high", "medium", "low"] },
+        lines: { type: "string", enum: ["soft", "sharp", "rounded"] },
+      },
+    },
+    rec_defaults: {
+      type: "object",
+      required: ["max_products", "oos_behavior"],
+      properties: {
+        max_products: { type: "integer", minimum: 1, maximum: 12 },
+        oos_behavior: { type: "string", enum: ["hide", "show_with_badge", "fallback"] },
+      },
+    },
+    recommended_buckets: {
+      type: "array",
+      items: { type: "string" },
+      description: "the most relevant buckets, by their short ref (e.g. B2)",
+    },
+    question_count: { type: "integer", minimum: 3, maximum: 20 },
+  },
+} as const;
+
+export const QUIZ_DIRECTION_SYSTEM_PROMPT =
+  "You choose ONE quiz direction for a Shopify brand's product-recommendation " +
+  "quiz: the quiz TYPE (its format) and the ONE template configuration that " +
+  "implements it. Rules:\n" +
+  // GEN-GROUND — the same ground-truth rule the two card passes carry; the
+  // title becomes the quiz's NAME, so an off-catalog title is merchant-visible.
+  "- GROUND THE DIRECTION in the outcome buckets and catalog summary provided: " +
+  "the quiz is about THOSE products. The brand summary, positioning, and web " +
+  "research inform tone, format, and question-count norms ONLY — when they " +
+  "mention product categories that do not appear in the catalog summary or " +
+  "buckets, IGNORE those categories entirely. Name the type and the title " +
+  "after what the catalog actually sells.\n" +
+  "- This is a product-match quiz: every result is one of the outcome buckets. " +
+  "Pick the single strongest format for THIS brand, catalog, and goal (e.g. " +
+  "Type/Needs Matcher, Routine Builder, Gift Finder, Educational Explainer).\n" +
+  "- type_name and title are plain names in plain words — no em dashes, no " +
+  "colon taglines, no subtitle suffixes.\n" +
+  "- question_range is informed by the category (educational/wellness run " +
+  "longer, 8-12; gifting/style run 4-7); question_count sits within it.\n" +
+  "- angle is one line on how the quiz frames the journey. Give 2-3 sample " +
+  "question texts (never budget / price-range questions — brands don't ask " +
+  "that) and ONE short feature note on what is distinctive (e.g. 'Opens with " +
+  "a visual mood question').\n" +
+  "- Set the dials (imagery/graphics/word_forward high|medium|low and lines " +
+  "soft|sharp|rounded) to match the brand: an educational brand leans " +
+  "word_forward high; a visual brand leans imagery high; a refined brand leans " +
+  "lines sharp.\n" +
+  "- rec_defaults: a recommended max_products + oos_behavior. " +
+  "recommended_buckets is optional (the refs of the most relevant buckets).\n" +
+  "- If no web research is provided, draw on your own knowledge of quiz best " +
+  "practices for the industry.\n" +
+  "- Respond ONLY via the tool call.";
+
+export interface GenerateQuizDirectionInput {
+  brandSummary: string;
+  brandVoiceSample?: string;
+  positioning: { industry: string; vertical: string; price_tier: string; demographic: string[] };
+  goalPrompt: string;
+  struggle?: string;
+  buckets: Array<{ id: string; name: string; tags: string[] }>;
+  catalogSummary: string;
+  webResearchText: string;
+  // The goal brief's chosen length (flow1). A pin, not a hint: the returned
+  // type's question_range and the template's question_count both carry it.
+  questionLength?: number;
+}
+
+export interface QuizDirection {
+  type: QuizTypeT;
+  template: RichTemplateOptionT;
+}
+
+// Stable slug for the derived ids ("" can't satisfy the schemas' min(1)).
+function directionSlug(text: string, fallback: string): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return slug || fallback;
+}
+
+export async function generateQuizDirection(
+  input: GenerateQuizDirectionInput,
+): Promise<QuizDirection> {
+  const tool = {
+    name: "emit_quiz_direction",
+    description: "Emit the one quiz direction: its type and its template. The only allowed response.",
+    input_schema: QUIZ_DIRECTION_TOOL_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+  } satisfies Anthropic.Tool;
+
+  const pin = input.questionLength;
+  const bucketIdByRef = new Map(input.buckets.map((b, i) => [`B${i + 1}`, b.id]));
+  const userMessage = [
+    "Brand summary:",
+    input.brandSummary || "(no brand digest — infer from the catalog)",
+    ...(input.brandVoiceSample ? ["", "Brand voice:", input.brandVoiceSample] : []),
+    "",
+    "Positioning:",
+    `industry: ${input.positioning.industry || "(unknown)"} · vertical: ${input.positioning.vertical || "(unknown)"} · price tier: ${input.positioning.price_tier || "(unknown)"} · audience: ${input.positioning.demographic.join(", ") || "(unknown)"}`,
+    "",
+    "Merchant's quiz goal:",
+    input.goalPrompt || "(none stated)",
+    ...(input.struggle ? ["", "What customers struggle with:", input.struggle] : []),
+    "",
+    "Outcome buckets (ref — name):",
+    input.buckets.length
+      ? input.buckets.map((b, i) => `- B${i + 1} — ${b.name}`).join("\n")
+      : "- (no buckets — recommend from the whole catalog)",
+    "",
+    "Catalog summary:",
+    input.catalogSummary,
+    "",
+    "Web research (best practices for this category):",
+    input.webResearchText || "(no research available — use your own knowledge)",
+    "",
+    ...(pin
+      ? [`The merchant chose the length: exactly ${pin} questions. Set question_range to ${pin}-${pin} and question_count to ${pin}.`, ""]
+      : []),
+    "Choose the one quiz direction. Emit via the tool call.",
+  ].join("\n");
+
+  let lastIssue: string | undefined;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const response = await createMessage({
+      model: MODEL_SPEED,
+      max_tokens: 1024,
+      system: QUIZ_DIRECTION_SYSTEM_PROMPT,
+      tools: [tool],
+      tool_choice: { type: "tool", name: "emit_quiz_direction" },
+      messages: [
+        {
+          role: "user",
+          content:
+            attempt === 1
+              ? userMessage
+              : `${userMessage}\n\nPrevious attempt failed validation: ${lastIssue}. Regenerate strictly matching the schema.`,
+        },
+      ],
+    });
+
+    const toolUse = response.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+    );
+    if (!toolUse) {
+      lastIssue = "No tool_use block in response.";
+      continue;
+    }
+    const parsed = QuizDirectionDraft.safeParse(toolUse.input);
+    if (!parsed.success) {
+      lastIssue = validationIssue(parsed.error);
+      continue;
+    }
+    const draft = parsed.data;
+    // Normalize the range (a swapped min/max is the model's slip, not a
+    // failure), apply the pin, and keep the count inside the range and the
+    // persisted schema's floor of 3.
+    const range = pin
+      ? { min: pin, max: pin }
+      : {
+          min: Math.min(draft.question_range.min, draft.question_range.max),
+          max: Math.max(draft.question_range.min, draft.question_range.max),
+        };
+    const questionCount = Math.max(
+      3,
+      Math.min(range.max, Math.max(range.min, pin ?? draft.question_count)),
+    );
+    const type = QuizType.parse({
+      id: directionSlug(draft.type_name, "quiz-type"),
+      experience_type: "product_match",
+      name: draft.type_name,
+      achieves: draft.achieves,
+      question_range: range,
+    });
+    const template = RichTemplateOption.parse({
+      id: directionSlug(draft.title, "quiz-template"),
+      experience_type: "product_match",
+      title: draft.title,
+      angle: draft.angle,
+      sample_questions: draft.sample_questions,
+      feature_notes: draft.feature_notes,
+      dials: draft.dials,
+      rec_defaults: draft.rec_defaults,
+      // An unknown ref silently drops (never persists) — an empty list means
+      // "every confirmed bucket", the same reading initPickedTemplate gives it.
+      recommended_bucket_ids: (draft.recommended_buckets ?? []).flatMap((ref) => {
+        const id = bucketIdByRef.get(ref.trim().toUpperCase());
+        return id ? [id] : [];
+      }),
+      question_count: questionCount,
+    });
+    return { type, template };
+  }
+
+  throw new QuizGenerationError(
+    "Quiz direction generation failed validation after retries.",
     MAX_ATTEMPTS,
     lastIssue,
   );

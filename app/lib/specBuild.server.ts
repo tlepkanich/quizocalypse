@@ -24,26 +24,21 @@
 //    normal headless chain uses.
 import prisma from "../db.server";
 import { logFor, reportError } from "./log.server";
-import { withAiSpendRecording } from "./aiBudget.server";
-import { Quiz, BuildSession, QuizType as QuizTypeSchema } from "./quizSchema";
+import { checkAiBudget, withAiSpendRecording } from "./aiBudget.server";
+import { Quiz, BuildSession } from "./quizSchema";
 import type { Quiz as QuizDocT } from "./quizSchema";
-import { pickHeadlessType } from "./headlessTypePick";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { suggestQuizGoal } from "./goalSuggest";
 import {
-  generateStep2Types,
-  generateStep2Templates,
+  generateStep2Direction,
   initPickedTemplate,
   buildQuizFromPicked,
   failToBlankQuestions,
   patchBuildSession,
   writeGenProgress,
 } from "./step2Build.server";
-import {
-  getOrStartShopWebResearch,
-  peekFreshShopWebResearch,
-} from "./shopWebResearch.server";
-import { poolSignature } from "./specPrefetch";
+import { peekFreshShopWebResearch } from "./shopWebResearch.server";
+import { poolSignature, specStartDecision } from "./specPrefetch";
 import { loadGenerationBuckets, refreshBucketMembership } from "./bucketPersist.server";
 import { MIN_GOAL_CHARS } from "./funnelDraft.server";
 
@@ -222,13 +217,13 @@ export async function applySpeculativeReady(
 }
 
 // The detached speculative chain. Mirrors the normal headless pipeline
-// (startStep2Types headless → startStep2Templates → startQuestionBuild) pass
-// for pass — same generation functions, same auto-picks, same question-length
-// pin, same gen_progress checkpoints (harmless while the merchant is on
+// (startStep2Types headless → startQuestionBuild) pass for pass — same
+// generation functions, same direction pass, same question-length pin, same
+// gen_progress checkpoints (harmless while the merchant is on
 // buckets; honest if they attach mid-run) — but every session/stage write is
 // replaced by marker bookkeeping, and the question build runs in captureDoc
 // mode so draftJson is never touched.
-export function startSpeculativeBuild(
+function startSpeculativeBuild(
   shopId: string,
   quizId: string,
   inputs: SpecInputs,
@@ -259,58 +254,31 @@ export function startSpeculativeBuild(
       }
       if (!(await specAlive(quizId, signature))) return;
 
-      // Research — the FAST F1 shop-level cache (prefetched at funnel entry)
-      // makes this instant in the common case. GEN-GROUND — focused on this
-      // quiz's goal + buckets, same as the typing job.
-      const specFocus = {
-        goal: inputs.goal,
-        bucket_names: inputs.cats.map((c) => c.name),
-      };
-      const cachedResearch = await peekFreshShopWebResearch(shopId, specFocus);
-      if (cachedResearch === null) await writeGenProgress(quizId, "research");
+      // Research — cached-only, the same posture as the normal headless chain
+      // (DRAFT-FAST): the FAST F1 shop-level cache serves when it is fresh and
+      // on this quiz's focus (GEN-GROUND); a miss means model knowledge, never
+      // a ~40 s web search in front of the direction pass.
       const webResearchText =
-        cachedResearch ?? (await getOrStartShopWebResearch(shopId, specFocus));
+        (await peekFreshShopWebResearch(shopId, {
+          goal: inputs.goal,
+          bucket_names: inputs.cats.map((c) => c.name),
+        })) ?? "";
 
       if (!(await specAlive(quizId, signature))) return;
       await writeGenProgress(quizId, "types");
-      const tTypes = Date.now();
-      const { types } = await generateStep2Types(shopId, quizId, {
-        goal: inputs.goal,
-        ...(inputs.struggle ? { struggle: inputs.struggle } : {}),
-        buckets: inputs.cats.map((c) => ({ name: c.name, tags: c.tags })),
-        webResearchText,
-      });
-      log.info({ quizId, ms: Date.now() - tTypes }, "speculative types took");
-      // Same pick as the headless chain (handoff §11 defect 5).
-      const top = pickHeadlessType(types);
-      if (!top) {
-        await finishFailed(shopId, quizId, signature);
-        return;
-      }
-      // The flow1 question-length pin (the headless startStep2Types precedent).
-      const effectiveType = inputs.questionLength
-        ? QuizTypeSchema.parse({
-            ...top,
-            question_range: { min: inputs.questionLength, max: inputs.questionLength },
-          })
-        : top;
-
-      if (!(await specAlive(quizId, signature))) return;
-      await writeGenProgress(quizId, "templates");
-      const tTemplates = Date.now();
-      const templates = await generateStep2Templates(shopId, quizId, effectiveType, {
+      // DRAFT-FAST — ONE merged direction pass, the same seam the normal
+      // headless chain runs (the flow1 question-length pin rides inside it).
+      const tDirection = Date.now();
+      const { type, template } = await generateStep2Direction(shopId, quizId, {
         goal: inputs.goal,
         ...(inputs.struggle ? { struggle: inputs.struggle } : {}),
         buckets: inputs.cats.map((c) => ({ id: c.id, name: c.name, tags: c.tags })),
+        webResearchText,
+        ...(inputs.questionLength ? { questionLength: inputs.questionLength } : {}),
       });
-      log.info({ quizId, ms: Date.now() - tTemplates }, "speculative templates took");
-      const topTemplate = templates[0];
-      if (!topTemplate) {
-        await finishFailed(shopId, quizId, signature);
-        return;
-      }
+      log.info({ quizId, ms: Date.now() - tDirection }, "speculative direction took");
       const picked = initPickedTemplate(
-        topTemplate,
+        template,
         inputs.cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
         new Date(),
       );
@@ -321,7 +289,7 @@ export function startSpeculativeBuild(
       const result = await buildQuizFromPicked(
         shopId,
         quizId,
-        topTemplate,
+        template,
         picked,
         inputs.goal,
         inputs.struggle,
@@ -335,9 +303,8 @@ export function startSpeculativeBuild(
       }
 
       await finishReady(quizId, signature, {
-        quiz_types: inputs.questionLength ? [effectiveType, ...types.slice(1)] : types,
-        picked_type_id: top.id,
-        rich_templates: templates,
+        quiz_types: [type],
+        rich_templates: [template],
         picked_template: picked,
         web_research_summary: webResearchText.slice(0, 600),
         doc: result.doc,
@@ -347,6 +314,53 @@ export function startSpeculativeBuild(
       await finishFailed(shopId, quizId, signature);
     }
   });
+}
+
+// The whole "should a speculation start now?" decision, as ONE seam for its
+// two callers: the recs page's settle ping (the `speculate` intent) and the
+// goal pre-pick's own completion (QBUILD-FAST — the AI-picked pool is settled
+// the moment it lands, so the chain starts then instead of waiting for the
+// page to render it and count out the 5s settle). Both go through the same
+// guards, in the same order:
+//  • speculation only ever starts from the recs stage ("grouping");
+//  • the draft/flow must be speculable (resolveSpecInputs);
+//  • one live speculation at a time (specStartDecision): a same-signature
+//    run/result/tombstone answers "cached"; a different signature supersedes;
+//  • the merchant AI budget is checked HERE, at kick — over budget skips
+//    silently (speculation is never the merchant's error).
+// The marker write is a fresh-read patch, so a concurrent merchant write to
+// the session is never clobbered. Throws only on a DB failure.
+export async function kickSpeculativeBuild(
+  shopId: string,
+  quizId: string,
+): Promise<"started" | "cached" | "skipped"> {
+  const quiz = await prisma.quiz.findUnique({
+    where: { id: quizId },
+    select: { draftJson: true },
+  });
+  const parsed = quiz ? Quiz.safeParse(quiz.draftJson) : null;
+  if (!parsed?.success) return "skipped";
+  const session = parsed.data.build_session ?? BuildSession.parse({});
+  if (session.stage !== "grouping") return "skipped";
+  const inputs = await resolveSpecInputs(shopId, quizId, parsed.data, session);
+  if (!inputs) return "skipped";
+  if (specStartDecision(session.speculative, inputs.signature, new Date()) !== "start") {
+    return "cached";
+  }
+  const budget = await checkAiBudget(shopId, "merchant");
+  if (!budget.allowed) return "skipped";
+  await patchBuildSession(quizId, (s) =>
+    BuildSession.parse({
+      ...s,
+      speculative: {
+        signature: inputs.signature,
+        status: "running",
+        started_at: new Date().toISOString(),
+      },
+    }),
+  );
+  startSpeculativeBuild(shopId, quizId, inputs);
+  return "started";
 }
 
 // Drop OUR running marker (the settle-race early-out) so a later Continue

@@ -13,8 +13,9 @@ export const MODEL = "claude-sonnet-4-6";
 // the single seam to swap in a Haiku id once confirmed, to cut cost per the spec.
 export const MODEL_FAST = MODEL;
 // FAST F4 (owner-approved, quality-gated) — Haiku for the funnel's two MIDDLE
-// passes ONLY: generateQuizTypes + generateQuizTemplates (bounded, schema-
-// forced card copy where latency is the merchant-visible cost). Everything
+// passes ONLY: generateQuizTypes + generateQuizTemplates, and their merged
+// headless form generateQuizDirection (bounded, schema-forced card copy
+// where latency is the merchant-visible cost). Everything
 // else — question flow, edits, web research, tooltips — stays on MODEL /
 // MODEL_FAST per the owner's keep-Sonnet decision. Haiku 4.5 takes plain
 // forced-tool messages.create (no effort param — it would 400).
@@ -47,7 +48,30 @@ function client(): Anthropic {
 export type AiUsageEmitter = (usage: {
   input_tokens: number;
   output_tokens: number;
+  // QBUILD-FAST — the raw prompt-cache counters, for observers (probes).
+  // Budget math reads input_tokens, which already carries them weighted.
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
 }) => void;
+
+// Prompt-cached input bills at 1.25× (write) and 0.1× (read) of the input
+// rate and is reported OUTSIDE usage.input_tokens. Fold it in at those
+// weights so the per-shop ledger keeps counting every billed token. A
+// response with no cache activity emits exactly what it did before.
+function emittedUsage(usage: { input_tokens: number; output_tokens: number }) {
+  const cached = usage as {
+    cache_creation_input_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+  };
+  const written = cached.cache_creation_input_tokens ?? 0;
+  const read = cached.cache_read_input_tokens ?? 0;
+  return {
+    input_tokens: usage.input_tokens + Math.round(written * 1.25 + read * 0.1),
+    output_tokens: usage.output_tokens,
+    cache_creation_input_tokens: written,
+    cache_read_input_tokens: read,
+  };
+}
 
 let aiUsageEmitter: AiUsageEmitter | null = null;
 
@@ -65,10 +89,7 @@ export async function createMessage(
 ): Promise<Anthropic.Message> {
   const res = await client().messages.create(params);
   try {
-    aiUsageEmitter?.({
-      input_tokens: res.usage.input_tokens,
-      output_tokens: res.usage.output_tokens,
-    });
+    aiUsageEmitter?.(emittedUsage(res.usage));
   } catch {
     // Emitter bugs are the emitter's problem; the response stands.
   }
@@ -84,10 +105,7 @@ export async function createBetaMessage(
 ): Promise<Anthropic.Beta.Messages.BetaMessage> {
   const res = await client().beta.messages.create(params);
   try {
-    aiUsageEmitter?.({
-      input_tokens: res.usage.input_tokens,
-      output_tokens: res.usage.output_tokens,
-    });
+    aiUsageEmitter?.(emittedUsage(res.usage));
   } catch {
     // Emitter bugs are the emitter's problem; the response stands.
   }

@@ -25,7 +25,7 @@
 //       ANTHROPIC_API_KEY= SHOPIFY_API_KEY=x SHOPIFY_API_SECRET=x \
 //         SHOPIFY_APP_URL=http://localhost:3457 PORT=3457 npm run start
 //   PROBE_MODE=happy — server started WITH the real key (real AI spend: one
-//     speculative types→templates→question-build chain, ~3 calls).
+//     speculative direction→question-build chain, ~2 calls).
 //
 // Run:  set -a; source .env; set +a; BASE=http://localhost:3457 \
 //       PROBE_MODE=fail node e2e/qrtzg1-spec-verify.mjs
@@ -326,8 +326,9 @@ try {
       !dApplied.session.gen_error && !("gen_progress" in dApplied.session));
     ok(
       "session carries the chain's artifacts (retry/Back parity with the normal chain)",
-      (dApplied.session.quiz_types?.length ?? 0) >= 1 &&
-        Boolean(dApplied.session.picked_type_id) &&
+      dApplied.session.quiz_types?.length === 1 &&
+        dApplied.session.rich_templates?.length === 1 &&
+        !dApplied.session.picked_type_id &&
         Boolean(dApplied.session.picked_template) &&
         dApplied.session.ai_generate === true,
     );

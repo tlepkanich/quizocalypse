@@ -5,13 +5,16 @@
 //   1. At the grouping stage, the loader fires the web-research prefetch —
 //      Shop.webResearch appears while the draft is STILL at grouping.
 //   2. continue-buckets → the FLOW-2 HEADLESS chain (funnel-reconfig Phase 3):
-//      "typing" (cached research SKIPS the "research" checkpoint, "types"
-//      checkpoint observed) hands off to "templating" with NO Shape stop
-//      ("templates" → "questions" checkpoints), then stage "question_builder";
-//      gen_progress is CLEARED on the flip.
+//      "typing" (cached-only research — NEVER the "research" checkpoint, no
+//      cache rewrite; "types" checkpoint observed — DRAFT-FAST: ONE merged
+//      direction pass) hands off
+//      to "templating" with NO Shape stop and NO separate templates pass (the
+//      "questions" checkpoint), then stage "question_builder"; gen_progress is
+//      CLEARED on the flip.
 //   4. retry-gen from a (simulated) stalled NON-headless typing stage (the
 //      shape-regenerate class — ai_generate stripped) REUSES the cached
-//      research — no second Shop.webResearch write (same `at`).
+//      research when it covers the quiz's focus (same `at`), else re-runs it
+//      once FOCUSED (GEN-GROUND: focus_hash stamped).
 // Timings are logged (informational). Seed/restore discipline: draft doc,
 // Category rows, Shop.webResearch and Shop.brandIdentity all restored.
 //
@@ -181,8 +184,10 @@ try {
     fd.stage === "templating" || fd.stage === "question_builder",
     `stage=${fd.stage}, ${out.timings.typingMs}ms, progress=[${out.progressSeen.typing}]`,
   );
+  // DRAFT-FAST — the headless chain never WAITS for research: it uses the
+  // cache when the record serves this quiz's focus, model knowledge otherwise.
   ok(
-    "cached research SKIPS the research checkpoint",
+    "headless chain never shows the research checkpoint (cached-only research)",
     !out.progressSeen.typing.includes("research"),
     `saw [${out.progressSeen.typing}]`,
   );
@@ -191,14 +196,20 @@ try {
     await prisma.shop.findUnique({ where: { id: shopId }, select: { webResearch: true } })
   )?.webResearch;
   ok(
-    "typing job reused the cached research (no rewrite)",
+    "headless typing job never rewrites the research cache",
     researchAfterTyping?.at === researchAt1,
     `at=${researchAfterTyping?.at}`,
   );
+  // DRAFT-FAST — ONE merged direction pass: the kept type + its template land
+  // in the SAME write that leaves "typing" (picked_type_id stays cleared, so
+  // a killed build retries the question build, not a template pass).
   ok(
-    "headless auto-pick recorded (quiz_types + picked_type_id persisted)",
-    (fd.quizTypes?.length ?? 0) >= 1 && Boolean(fd.pickedTypeId),
-    `${fd.quizTypes?.length} cards, picked=${fd.pickedTypeId}`,
+    "headless direction recorded (1 type + 1 template + working copy; no picked_type_id)",
+    fd.quizTypes?.length === 1 &&
+      fd.richTemplates?.length === 1 &&
+      Boolean(fd.pickedTemplate) &&
+      !fd.pickedTypeId,
+    `${fd.quizTypes?.length} type, ${fd.richTemplates?.length} template, picked_type_id=${fd.pickedTypeId}`,
   );
 
   // ── 3. (chained) templating → question_builder ──────────────────────────────
@@ -217,8 +228,8 @@ try {
     `${out.timings.templatingMs}ms, progress=[${out.progressSeen.templating}]`,
   );
   ok(
-    "templates→questions checkpoints observed",
-    out.progressSeen.templating.includes("templates") && out.progressSeen.templating.includes("questions"),
+    "questions checkpoint observed, no separate templates pass (DRAFT-FAST)",
+    out.progressSeen.templating.includes("questions") && !out.progressSeen.templating.includes("templates"),
     `saw [${out.progressSeen.templating}]`,
   );
   ok("gen_progress cleared on the stage flip", fd.genProgress === null);
@@ -265,14 +276,21 @@ try {
   const researchAfterRetry = (
     await prisma.shop.findUnique({ where: { id: shopId }, select: { webResearch: true } })
   )?.webResearch;
+  // GEN-GROUND — the Shape-route retry asks for FOCUSED research: the cached
+  // brand-level record serves when it topically covers the quiz's buckets (no
+  // rewrite, no research checkpoint); otherwise research re-runs ONCE,
+  // focus-stamped. Both are the contract; a focusless rewrite is not.
+  const retryReused = researchAfterRetry?.at === researchAt1;
   ok(
-    "retry reused cached research — NO second Shop.webResearch write",
-    researchAfterRetry?.at === researchAt1,
-    `at unchanged (${out.timings.retryTypingMs}ms ≈ types-only, no 40s research)`,
+    "retry reused cached research, or re-ran it FOCUSED (GEN-GROUND)",
+    retryReused || Boolean(researchAfterRetry?.focus_hash),
+    retryReused
+      ? `at unchanged (${out.timings.retryTypingMs}ms ≈ types-only, no 40s research)`
+      : `focused re-run, focus_hash=${researchAfterRetry?.focus_hash} (${out.timings.retryTypingMs}ms)`,
   );
   ok(
-    "retry skipped the research checkpoint too",
-    !out.progressSeen.retry.includes("research"),
+    "retry showed the research checkpoint only when research re-ran",
+    out.progressSeen.retry.includes("research") === !retryReused,
     `saw [${out.progressSeen.retry}]`,
   );
 } catch (err) {
