@@ -515,21 +515,26 @@ body[data-qz] .qz-btn:focus-visible { outline: none; box-shadow: var(--qz-shadow
 .qz-badge.qz-crit  { color: var(--qz-crit); background: var(--qz-crit-tint); }
 .qz-badge.qz-crit::before  { background: var(--qz-crit); }
 
-/* — Credit tag (BILLING-HANDOFF "Credit tag", mock .ctag) — the grey pill on a
-   control that turns on an AI feature charged per use. It states a cost, not a
-   warning: one grey on every feature, never the teal signal. The type resets
-   keep it the same inside a heading, a button or a menu row. */
+/* — Credit tag (BILLING-HANDOFF "Credit tag") — the grey pill on a control
+   that turns on an AI feature charged per use. It states a cost, not a
+   warning: one grey on every feature, never the teal signal.
+   Owner 2026-10-05: it takes Home's chip style (first-run handoff §13.4, the
+   same values as .hm3-tag.is-draft) — pill, 2px 7px, 10.5px/700, .04em,
+   uppercase, no ring. The type resets keep it the same inside a heading, a
+   button or a menu row; the text stays sentence case in the DOM. */
 .qz-ctag {
   flex: none; display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 9px 3px 7px;
+  padding: 2px 7px;
   border-radius: 999px; background: var(--qz-cream-2);
-  box-shadow: inset 0 0 0 1px var(--qz-rule);
-  color: var(--qz-ink-3);
-  font: 600 11.5px/1.3 var(--qz-font-body);
-  letter-spacing: 0; text-transform: none; white-space: nowrap;
+  color: var(--qz-ink-4);
+  font: 700 10.5px/1.3 var(--qz-font-body);
+  letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
   font-variant-numeric: tabular-nums; vertical-align: middle;
 }
-.qz-ctag svg { flex: none; width: 12px; height: 12px; }
+.qz-ctag svg { flex: none; width: 11px; height: 11px; }
+/* A button that carries a credit tag (the add-a-screen rows) may be wider
+   than a narrow rail: let the tag drop under the label instead of clipping. */
+.qz-btn:has(> .qz-ctag) { flex-wrap: wrap; justify-content: flex-start; max-width: 100%; row-gap: 4px; }
 
 /* — Banner — */
 .qz-banner {
