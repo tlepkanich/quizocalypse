@@ -64,6 +64,12 @@ for (let i = 0; i < 5 && !draftId; i++) {
   const id = new URL(resp.url()).pathname.split("/").pop();
   const fd0 = await readFunnel(id).catch(() => null);
   if (fd0?.logicModel === "decider" && fd0?.stage === "grouping") { draftId = id; break; }
+  // A failed read (or a body with no stage) says nothing about the draft —
+  // stop here; never graduate a draft the probe could not read.
+  if (fd0?.stage === undefined) {
+    ok("funnel loader readable for the front-door draft", false, `${id} — not graduated`);
+    await browser.close(); process.exit(1);
+  }
   console.log(`… graduating in-flight draft ${id} (stage ${fd0?.stage})`);
   const loaded = await readBuilder(id);
   await putDoc(id, { ...loaded.doc, build_session: { ...(loaded.doc.build_session ?? {}), stage: "done", built: true } });

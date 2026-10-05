@@ -57,6 +57,12 @@ for (let i = 0; i < 4 && !draftId; i++) {
   const id = new URL(resp.url()).pathname.split("/").pop();
   const fd = await readFunnel(id).catch(() => null);
   if (fd?.logicModel === "decider" && fd?.stage === "grouping") { draftId = id; break; }
+  // A failed read (or a body with no stage) says nothing about the draft —
+  // stop here; never graduate a draft the probe could not read.
+  if (fd?.stage === undefined) {
+    ok("funnel loader readable for the front-door draft", false, `${id} — not graduated`);
+    await browser.close(); process.exit(1);
+  }
   // A pre-flip legacy strandee (the flagged cmr3… class) — graduate it via the
   // builder's verbatim PUT so the front door seeds fresh next round.
   console.log(`… graduating in-flight draft ${id} (stage ${fd?.stage}, logicModel ${fd?.logicModel ?? "null"})`);
