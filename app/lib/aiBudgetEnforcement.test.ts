@@ -13,7 +13,7 @@ import { action as recCopyAction } from "../routes/q.$id.rec-copy";
 import { action as whyCopyAction } from "../routes/api.generate-why-copy";
 import { action as pathQualityAction } from "../routes/api.path-quality";
 import { startStep2Types, startQuestionBuild } from "./step2Build.server";
-import { runAiOnboardingBuild } from "./onboardingBuild.server";
+import { prefetchQuestionPlan, runAiOnboardingBuild } from "./onboardingBuild.server";
 import { getOrStartShopWebResearch, peekFreshShopWebResearch } from "./shopWebResearch.server";
 import { buildSeedQuiz } from "./seedQuiz";
 
@@ -61,6 +61,7 @@ vi.mock("./shopWebResearch.server", () => ({
 // The question build itself is out of scope here.
 vi.mock("./onboardingBuild.server", () => ({
   runAiOnboardingBuild: vi.fn().mockResolvedValue(undefined),
+  prefetchQuestionPlan: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("./log.server", () => ({
@@ -213,6 +214,32 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
     expect(getOrStartShopWebResearch).toHaveBeenCalledTimes(1);
   });
 
+  const DIRECTION = {
+    type: {
+    id: "needs-matcher",
+    experience_type: "product_match",
+    name: "Needs Matcher",
+    achieves: "Matches riders to boards.",
+    question_range: { min: 5, max: 5 },
+    best_practice_note: "",
+    rationale: "",
+    web_research_excerpt: "",
+    },
+    template: {
+    id: "find-your-board",
+    experience_type: "product_match",
+    title: "Find Your Board",
+    angle: "Starts with where you ride.",
+    rationale: "",
+    sample_questions: ["Where do you ride?", "How long have you ridden?"],
+    feature_notes: ["Opens with terrain"],
+    dials: { imagery: "medium", graphics: "medium", word_forward: "medium", lines: "rounded" },
+    rec_defaults: { max_products: 3, oos_behavior: "show_with_badge", fallback_collection_id: "" },
+    recommended_bucket_ids: [],
+    question_count: 5,
+    },
+  };
+
   // DRAFT-FAST — the headless chain (goal-first / pop-up AI) drafts ONE
   // direction in ONE pass and goes straight to the question build: the two
   // card passes never run, the ceiling is checked once (this job's kick), and
@@ -223,31 +250,7 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
     p.collection.findMany.mockResolvedValue([]);
     p.category.findMany.mockResolvedValue([]);
     p.shop.findUnique.mockResolvedValue({ brandIdentity: null });
-    (generateQuizDirection as Mock).mockResolvedValue({
-      type: {
-        id: "needs-matcher",
-        experience_type: "product_match",
-        name: "Needs Matcher",
-        achieves: "Matches riders to boards.",
-        question_range: { min: 5, max: 5 },
-        best_practice_note: "",
-        rationale: "",
-        web_research_excerpt: "",
-      },
-      template: {
-        id: "find-your-board",
-        experience_type: "product_match",
-        title: "Find Your Board",
-        angle: "Starts with where you ride.",
-        rationale: "",
-        sample_questions: ["Where do you ride?", "How long have you ridden?"],
-        feature_notes: ["Opens with terrain"],
-        dials: { imagery: "medium", graphics: "medium", word_forward: "medium", lines: "rounded" },
-        rec_defaults: { max_products: 3, oos_behavior: "show_with_badge", fallback_collection_id: "" },
-        recommended_bucket_ids: [],
-        question_count: 5,
-      },
-    });
+    (generateQuizDirection as Mock).mockResolvedValue(DIRECTION);
     (runAiOnboardingBuild as Mock).mockResolvedValue({ degraded: false });
     // A research cache MISS: the headless chain must not wait for a run.
     (peekFreshShopWebResearch as Mock).mockResolvedValueOnce(null);
@@ -284,6 +287,95 @@ describe("funnel gen jobs — merchant ceiling at kick", () => {
     expect(handoff?.picked_template).toMatchObject({ template_id: "find-your-board", question_count: 5 });
     // Cleared on purpose: a killed build retries the question build directly.
     expect(handoff?.picked_type_id).toBeUndefined();
+    // No confirmed buckets → nothing to plan for ahead of the direction.
+    expect(prefetchQuestionPlan).not.toHaveBeenCalled();
+  });
+
+  // OVERLAP — a pool small enough to route whole: the question plan runs
+  // BESIDE the direction pass and rides into the build; every confirmed
+  // bucket stays enabled and the working copy takes the plan's count.
+  const bucketRows = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `cat${i + 1}`,
+      name: `Bucket ${i + 1}`,
+      tags: [`tag${i + 1}`],
+      productIds: [`p${i + 1}`],
+      source: "manual",
+    }));
+  const QUESTION_PLAN = {
+    input: { goalPrompt: "sell boards" },
+    plan: Array.from({ length: 7 }, (_, i) => ({
+      text: `q${i + 1}`,
+      question_type: "single_select",
+      role: i === 0 ? "decides" : "info",
+    })),
+  };
+  type BuildArgs = {
+    questionCount: number;
+    preResolvedBuckets: Array<{ id: string }>;
+    prefetchedQuestionPlan?: unknown;
+  };
+  const seedHeadless = (buckets: number) => {
+    seedDraft();
+    p.product.findMany.mockResolvedValue([]);
+    p.collection.findMany.mockResolvedValue([]);
+    p.category.findMany.mockResolvedValue(bucketRows(buckets));
+    p.shop.findUnique.mockResolvedValue({ brandIdentity: null });
+    (generateQuizDirection as Mock).mockResolvedValue({
+      ...DIRECTION,
+      // The direction flags ONE bucket as most relevant.
+      template: { ...DIRECTION.template, recommended_bucket_ids: ["cat1"] },
+    });
+    (runAiOnboardingBuild as Mock).mockResolvedValue({ degraded: false });
+  };
+
+  it("headless + a small pool → the plan is drafted beside the direction and handed to the build", async () => {
+    seedHeadless(2);
+    (prefetchQuestionPlan as Mock).mockResolvedValue(QUESTION_PLAN);
+
+    startStep2Types("s1", "qz1", { goal: "sell boards", struggle: "too many specs" }, { headless: {} });
+    await vi.waitFor(() => expect(runAiOnboardingBuild).toHaveBeenCalled());
+
+    expect(prefetchQuestionPlan).toHaveBeenCalledTimes(1);
+    expect((prefetchQuestionPlan as Mock).mock.calls[0]?.[0]).toMatchObject({
+      shopId: "s1",
+      quizId: "qz1",
+      goalPrompt: "sell boards\n\nShoppers struggle with: too many specs",
+      buckets: [
+        { id: "cat1", name: "Bucket 1", tags: ["tag1"] },
+        { id: "cat2", name: "Bucket 2", tags: ["tag2"] },
+      ],
+    });
+    const build = (runAiOnboardingBuild as Mock).mock.calls[0]?.[0] as BuildArgs;
+    expect(build.prefetchedQuestionPlan).toBe(QUESTION_PLAN);
+    // The direction's bucket pick is dropped: both confirmed buckets route.
+    expect(build.preResolvedBuckets.map((b) => b.id)).toEqual(["cat1", "cat2"]);
+    // …and the working copy carries the PLAN's count (7), not the direction's 5.
+    expect(build.questionCount).toBe(7);
+  });
+
+  it("headless + a small pool, plan prefetch failed → the direction stands as it came", async () => {
+    seedHeadless(2);
+    (prefetchQuestionPlan as Mock).mockResolvedValue(undefined);
+
+    startStep2Types("s1", "qz1", { goal: "sell boards" }, { headless: {} });
+    await vi.waitFor(() => expect(runAiOnboardingBuild).toHaveBeenCalled());
+
+    const build = (runAiOnboardingBuild as Mock).mock.calls[0]?.[0] as BuildArgs;
+    expect(build.prefetchedQuestionPlan).toBeUndefined();
+    expect(build.preResolvedBuckets.map((b) => b.id)).toEqual(["cat1"]);
+    expect(build.questionCount).toBe(5);
+  });
+
+  it("headless + a large pool → no plan ahead of the direction; its bucket pick is kept", async () => {
+    seedHeadless(8);
+
+    startStep2Types("s1", "qz1", { goal: "sell boards" }, { headless: {} });
+    await vi.waitFor(() => expect(runAiOnboardingBuild).toHaveBeenCalled());
+
+    expect(prefetchQuestionPlan).not.toHaveBeenCalled();
+    const build = (runAiOnboardingBuild as Mock).mock.calls[0]?.[0] as BuildArgs;
+    expect(build.preResolvedBuckets.map((b) => b.id)).toEqual(["cat1"]);
   });
 
   it("startQuestionBuild (direct kick) over budget → gen_error, build never starts", async () => {

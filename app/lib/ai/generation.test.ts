@@ -537,6 +537,40 @@ describe("the planned question build — one plan, then the questions written in
     expect(tasks.find((t) => t.includes("question #2 of"))).not.toContain("Its planned answers");
   });
 
+  it("OVERLAP: the plan picks the count itself when asked to; a pin still wins", async () => {
+    serve([planItem("d", "decides")]);
+    await generateQuestionPlan({ ...base, chooseQuestionCount: true });
+    expect(calls()[0]!.system[1]!.text).toContain("Question count: choose it by category norm");
+    expect(calls()[0]!.system[1]!.text).not.toContain("Target question count");
+
+    createMessageMock.mockClear();
+    await generateQuestionPlan({ ...base, questionCount: 1, exactQuestionCount: 1, chooseQuestionCount: true });
+    expect(calls()[0]!.system[1]!.text).toContain("EXACTLY 1 questions");
+    expect(calls()[0]!.system[1]!.text).not.toContain("choose it by category norm");
+  });
+
+  it("OVERLAP: late guidance rides each write call's own message, never the cached prefix", async () => {
+    const plan = [planItem("Where do you ride?", "decides"), planItem("Who is it for?", "info")];
+    serve(plan);
+    const input = { ...base };
+    const built = await generateQuestionPlan(input);
+    createMessageMock.mockClear();
+    serve(plan);
+    await writePlannedQuestions(input, built, "Quiz direction: start with terrain.\n- IMAGERY HIGH");
+    const writes = calls();
+    expect(writes).toHaveLength(2);
+    for (const w of writes) {
+      expect(w.messages[0]!.content).toContain("Style guidance for this quiz");
+      expect(w.messages[0]!.content).toContain("Quiz direction: start with terrain.");
+      expect(w.system.map((b) => b.text).join("\n")).not.toContain("start with terrain");
+    }
+    // No guidance → no guidance block (the inline plan already saw the direction).
+    createMessageMock.mockClear();
+    serve(plan);
+    await writePlannedQuestions(input, built);
+    expect(calls()[0]!.messages[0]!.content).not.toContain("Style guidance for this quiz");
+  });
+
   it("only the questions the plan marked keep a helper line or the explainer card", async () => {
     serve(
       [
@@ -578,6 +612,25 @@ describe("the planned question build — one plan, then the questions written in
     const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
     expect(flow.questions[0]!.text).toBe("Where do you ride?");
     expect(flow.questions[0]!.answers.map((a) => a.text)).toEqual(["Groomers, fast and smooth", "Park"]);
+  });
+
+  it("drops an AI-written image_url that is not a real http(s) URL (a placeholder fails the doc schema)", async () => {
+    serve([planItem("Where do you ride?", "decides")], () => ({
+      text: "Where do you ride?",
+      question_type: "image_tile",
+      answers: [
+        { text: "Groomers", tags: ["carve"], image_url: "<UNKNOWN>" },
+        { text: "Park", tags: ["park"], image_url: "park.jpg" },
+        { text: "Powder", tags: ["carve"], image_url: "https://cdn.shop.example/powder.jpg" },
+      ],
+    }));
+    const flow = await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
+    expect(flow.questions[0]!.answers.map((a) => a.image_url)).toEqual([
+      undefined,
+      undefined,
+      "https://cdn.shop.example/powder.jpg",
+    ]);
+    expect(calls()[1]!.messages[0]!.content).toContain("Never invent an image_url");
   });
 
   it("a pinned count that misses retries the plan, then trims an overshoot (never the decider)", async () => {

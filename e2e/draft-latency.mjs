@@ -18,6 +18,11 @@
 //               (single | planned) pins the build's question-flow strategy —
 //               one Sonnet response vs an outline + parallel writes. Needs a
 //               shop with a synced collection (the build's fallback page).
+//   chain     — the whole headless chain after research, as the detached
+//               jobs run it: draftHeadlessDirection (the direction pass, with
+//               the question plan beside it for a small pool), then the build
+//               in capture mode. DRAFT_OVERLAP=off runs the two in sequence
+//               (direction, then a build that plans inline) for comparison.
 //
 // Run:  set -a; source .env; set +a; \
 //       DRAFT_QUIZ=<local quiz id> DRAFT_TRIALS=5 DRAFT_VARIANT=baseline \
@@ -52,8 +57,8 @@ if (!process.env.ANTHROPIC_API_KEY) {
   console.error("ANTHROPIC_API_KEY missing — source .env first. Probe NOT run.");
   process.exit(1);
 }
-if (!["baseline", "direction", "questions"].includes(VARIANT)) {
-  console.error(`Unknown DRAFT_VARIANT "${VARIANT}" — use baseline | direction | questions.`);
+if (!["baseline", "direction", "questions", "chain"].includes(VARIANT)) {
+  console.error(`Unknown DRAFT_VARIANT "${VARIANT}" — use baseline | direction | questions | chain.`);
   process.exit(1);
 }
 if (VARIANT !== "baseline" && typeof step2.generateStep2Direction !== "function") {
@@ -166,8 +171,7 @@ if (VARIANT === "questions") {
 
 // Mirrors buildQuizFromPicked's assembly (step2Build.server.ts), in capture
 // mode: the finished doc is returned, never written.
-async function runQuestions() {
-  const { template } = fixedDirection;
+async function buildQuestions(template, questionPlan) {
   const { tokenPatch, promptDirectives } = dialsToBuildDirectives(template.dials);
   const strategy = process.env.DRAFT_QUESTION_FLOW;
   const build = await timed(() =>
@@ -194,6 +198,7 @@ async function runQuestions() {
       },
       captureDoc: true,
       ...(strategy ? { questionFlow: strategy } : {}),
+      ...(questionPlan ? { prefetchedQuestionPlan: questionPlan } : {}),
     }),
   );
   if (!build.value.doc) throw new Error(`degraded build: ${build.value.degraded}`);
@@ -228,7 +233,32 @@ async function runQuestions() {
   };
 }
 
-const RUNNERS = { baseline: runBaseline, direction: runDirection, questions: runQuestions };
+const runQuestions = () => buildQuestions(fixedDirection.template);
+
+async function runChain() {
+  const overlap = process.env.DRAFT_OVERLAP !== "off";
+  const draft = await timed(() =>
+    overlap
+      ? step2.draftHeadlessDirection(quiz.shopId, quiz.id, { goal, cats: buckets, webResearchText })
+      : step2.generateStep2Direction(quiz.shopId, quiz.id, { goal, buckets, webResearchText }),
+  );
+  const built = await buildQuestions(draft.value.template, draft.value.questionPlan);
+  return {
+    passes: {
+      drafting: { ...meta(draft), plan: Boolean(draft.value.questionPlan) },
+      questions: built.passes.questions,
+    },
+    picked: { type: draft.value.type, template: draft.value.template },
+    built: built.built,
+  };
+}
+
+const RUNNERS = {
+  baseline: runBaseline,
+  direction: runDirection,
+  questions: runQuestions,
+  chain: runChain,
+};
 const trials = [];
 for (let i = 1; i <= TRIALS; i++) {
   const t0 = Date.now();

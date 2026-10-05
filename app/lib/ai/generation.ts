@@ -414,6 +414,11 @@ export interface GenerateQuestionFlowInput {
   // EXACTLY this many; a final overshoot is trimmed (clampQuestionsTo).
   // Absent → "Target question count" stays a hint, byte-identical to before.
   exactQuestionCount?: number;
+  // OVERLAP — PLANNED build only: the plan step picks the count itself, by
+  // category norm (the build's plan now starts before the direction pass
+  // that used to pick it has finished). Ignored when exactQuestionCount is
+  // set, and by the single-call generator.
+  chooseQuestionCount?: boolean;
 }
 
 // Per-type prompt addendum (E2). Empty for the historical product_match.
@@ -812,7 +817,9 @@ function plannedBuildPrefix(input: GenerateQuestionFlowInput): {
     `Tone: ${input.tone}.`,
     exact
       ? `Question count: EXACTLY ${exact} questions — no more, no fewer. The merchant chose this number.`
-      : `Target question count: ${input.questionCount}.`,
+      : input.chooseQuestionCount
+        ? "Question count: choose it by category norm — 5 to 7 questions for most catalogs, up to 9 where shoppers need more guidance before they can choose (wellness, skincare routines, nutrition)."
+        : `Target question count: ${input.questionCount}.`,
     "Merchant's quiz goal (verbatim):",
     input.goalPrompt || "(none — infer from the catalog + buckets)",
     "",
@@ -950,6 +957,21 @@ function planSlices(count: number): number[][] {
 
 type WrittenQuestion = z.infer<typeof WrittenQuestionsSchema>["questions"][number];
 
+// An AI-written image_url is kept only when it is a real absolute http(s)
+// URL. The writer has no image URLs to draw on, and a placeholder
+// ("<UNKNOWN>", seen live when the IMAGERY HIGH directive asks for answer
+// images) fails the doc schema — which would cost the merchant the WHOLE
+// build over one optional field.
+function realImageUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "https:" || protocol === "http:" ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // What the plan decided for ONE question, restated for the call that writes
 // it. A write call sees one slice in isolation, so the quiz-wide budgets (one
 // explainer card, a couple of reassurance lines) are the plan's to hand out.
@@ -982,6 +1004,7 @@ async function writePlanSlice(
   prefix: ReturnType<typeof plannedBuildPrefix>,
   plan: QuestionPlan,
   indexes: number[],
+  guidance: string | undefined,
 ): Promise<WrittenQuestion[]> {
   const numbers = indexes.map((i) => `#${i + 1}`).join(" and ");
   const task = [
@@ -989,7 +1012,11 @@ async function writePlanSlice(
     ...plan.map(planLine),
     "",
     `Write ONLY question ${numbers} of this plan, in full: the final question text, its input type, and its answers with tags. Keep each question's planned concept and role; refine the wording. The other questions are written separately — do not cover their concepts, and do not repeat their answer sets.`,
+    "Never invent an image_url or a placeholder for one: give an answer an image_url only when the catalog summary shows that exact URL.",
     ...indexes.flatMap((i) => sliceRules(plan[i]!, i + 1)),
+    ...(guidance
+      ? ["", "Style guidance for this quiz — honor it where natural; the per-question rules above win:", guidance, ""]
+      : []),
     `Emit exactly ${indexes.length} question${indexes.length === 1 ? "" : "s"} via emit_questions, in plan order.`,
   ].join("\n");
 
@@ -1042,14 +1069,21 @@ async function writePlanSlice(
 // single-call generator); the same deterministic copy passes run here as
 // there. Emits questions only — never welcome / email-gate copy, so the
 // caller takes this path only when the flow needs neither.
+//
+// `input` MUST be the input the plan was generated from: it is the cached
+// prefix the write calls read. `guidance` is for context that arrived AFTER
+// the plan (OVERLAP — the direction pass's angle and style directives, when
+// the plan ran concurrently with it); it rides each call's own message, so it
+// never touches the cache.
 export async function writePlannedQuestions(
   input: GenerateQuestionFlowInput,
   plan: QuestionPlan,
+  guidance?: string,
 ): Promise<GeneratedQuestionFlow> {
   const prefix = plannedBuildPrefix(input);
   const slices = planSlices(plan.length);
   const written = (
-    await Promise.all(slices.map((indexes) => writePlanSlice(prefix, plan, indexes)))
+    await Promise.all(slices.map((indexes) => writePlanSlice(prefix, plan, indexes, guidance)))
   ).flat();
   return {
     questions: written.map((q, i) => {
@@ -1076,7 +1110,7 @@ export async function writePlannedQuestions(
           text: stripAnswerEmDash(stripEmoji(a.text)),
           tags: a.tags,
           ...(a.collection_filter ? { collection_filter: a.collection_filter } : {}),
-          ...(a.image_url ? { image_url: a.image_url } : {}),
+          ...(realImageUrl(a.image_url) ? { image_url: a.image_url } : {}),
         })),
       };
     }),

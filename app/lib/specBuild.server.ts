@@ -30,7 +30,7 @@ import type { Quiz as QuizDocT } from "./quizSchema";
 import { parseBrandIdentitySafe } from "./brandIdentity";
 import { suggestQuizGoal } from "./goalSuggest";
 import {
-  generateStep2Direction,
+  draftHeadlessDirection,
   initPickedTemplate,
   buildQuizFromPicked,
   failToBlankQuestions,
@@ -266,17 +266,22 @@ function startSpeculativeBuild(
 
       if (!(await specAlive(quizId, signature))) return;
       await writeGenProgress(quizId, "types");
-      // DRAFT-FAST — ONE merged direction pass, the same seam the normal
-      // headless chain runs (the flow1 question-length pin rides inside it).
+      // DRAFT-FAST / OVERLAP — the same drafting seam the normal headless
+      // chain runs: ONE merged direction pass, with the question plan beside
+      // it for a pool small enough to route whole (the flow1 question-length
+      // pin rides inside both).
       const tDirection = Date.now();
-      const { type, template } = await generateStep2Direction(shopId, quizId, {
+      const { type, template, questionPlan } = await draftHeadlessDirection(shopId, quizId, {
         goal: inputs.goal,
         ...(inputs.struggle ? { struggle: inputs.struggle } : {}),
-        buckets: inputs.cats.map((c) => ({ id: c.id, name: c.name, tags: c.tags })),
+        cats: inputs.cats,
         webResearchText,
         ...(inputs.questionLength ? { questionLength: inputs.questionLength } : {}),
       });
-      log.info({ quizId, ms: Date.now() - tDirection }, "speculative direction took");
+      log.info(
+        { quizId, ms: Date.now() - tDirection, plan: Boolean(questionPlan) },
+        "speculative direction took",
+      );
       const picked = initPickedTemplate(
         template,
         inputs.cats.map((c) => ({ id: c.id, name: c.name, product_ids: c.productIds })),
@@ -293,8 +298,7 @@ function startSpeculativeBuild(
         picked,
         inputs.goal,
         inputs.struggle,
-        undefined,
-        /* captureDoc */ true,
+        { captureDoc: true, ...(questionPlan ? { questionPlan } : {}) },
       );
       log.info({ quizId, ms: Date.now() - tBuild }, "speculative question-build took");
       if (result.degraded || !result.doc) {

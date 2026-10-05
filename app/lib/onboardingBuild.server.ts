@@ -25,6 +25,7 @@ import {
   writePlannedQuestions,
   QuizGenerationError,
   type GenerateQuestionFlowInput,
+  type QuestionPlan,
   type QuizTone,
 } from "./claude";
 import { applyQuestionFlow, applyDeciderQuestionFlow, type SmartBuildBucket } from "./smartBuild";
@@ -149,6 +150,12 @@ export interface OnboardingBuildInput {
   // (the latency probe's baseline). Legacy builds are ALWAYS single-call,
   // whatever this says. ABSENT → the default for the doc's logic model.
   questionFlow?: "single" | "planned";
+  // OVERLAP — a question plan generated BEFORE this build started (the
+  // headless chains run it concurrently with the direction pass; see
+  // prefetchQuestionPlan). Used only when it still describes this build —
+  // the same buckets and the same pinned count — else the build plans
+  // inline. ABSENT → the build plans inline, as before.
+  prefetchedQuestionPlan?: PrefetchedQuestionPlan;
 }
 
 // FAST F2 — the shape of the prefetched catalog inputs (mirrors the catalog
@@ -157,6 +164,14 @@ export interface PrefetchedBuildCatalog {
   products: Product[];
   collections: Collection[];
   shop: { brandGuidelines: unknown; brandIdentity: unknown } | null;
+}
+
+// OVERLAP — a plan together with the EXACT input it was generated from. The
+// write step must reuse that input: it is the cached prefix the write calls
+// read (and the context the plan's wording assumes).
+export interface PrefetchedQuestionPlan {
+  input: GenerateQuestionFlowInput;
+  plan: QuestionPlan;
 }
 
 export interface OnboardingBuildResult {
@@ -288,20 +303,11 @@ export async function runAiOnboardingBuild(
   // 2. Catalog: a fallback collection is REQUIRED to create result pages.
   // FAST F2 — a caller-prefetched catalog (fetched concurrently with template
   // generation) short-circuits these queries; absent → identical inline reads.
-  const [allProducts, allCollections, shop] = input.prefetchedCatalog
-    ? ([
-        input.prefetchedCatalog.products,
-        input.prefetchedCatalog.collections,
-        input.prefetchedCatalog.shop,
-      ] as const)
-    : await Promise.all([
-        prisma.product.findMany({ where: { shopId } }),
-        prisma.collection.findMany({ where: { shopId } }),
-        prisma.shop.findUnique({
-          where: { id: shopId },
-          select: { brandGuidelines: true, brandIdentity: true },
-        }),
-      ]);
+  const {
+    products: allProducts,
+    collections: allCollections,
+    shop,
+  } = input.prefetchedCatalog ?? (await loadBuildCatalog(shopId));
   const firstCollection = allCollections[0]?.collectionId ?? "";
   if (!firstCollection) {
     return {
@@ -368,21 +374,16 @@ export async function runAiOnboardingBuild(
   // loadGenerationBuckets drops invisible ai-discovery leftovers whenever the
   // merchant has curated rows of their own, so a narrowed selection actually
   // narrows this scope.
-  const chosenProductIds = new Set(
-    (await loadGenerationBuckets(shopId, quizId)).flatMap((c) => c.productIds),
-  );
-  const chosenScope = scopeCatalogToChosen(allProducts, allCollections, chosenProductIds);
-  const indexed = buildScopedIndex(
-    chosenScope.products,
-    chosenScope.collections,
+  const { catalogSummary, toneSample, brandGuidelines } = await questionFlowCatalogContext(
+    shopId,
+    quizId,
+    { products: allProducts, collections: allCollections, shop },
     doc.scope.collection_ids,
   );
-  const brandGuidelines = effectiveBrandGuidelines(shop);
-  // Optional enrichment: catalog tone sample + merchant website text. Both are
-  // best-effort — ingestWebsite returns "" on any failure, never throwing.
+  // Optional enrichment: merchant website text. Best-effort — ingestWebsite
+  // returns "" on any failure, never throwing.
   // FAST F2 — a caller-prefetched website text (already best-effort "") skips
   // the inline ingest; undefined keeps today's exact path.
-  const toneSample = toneSampleFromCatalog(allProducts);
   const websiteText =
     input.prefetchedWebsiteText !== undefined
       ? input.prefetchedWebsiteText
@@ -395,7 +396,7 @@ export async function runAiOnboardingBuild(
     experienceType: xtype,
     questionCount: input.questionCount,
     ...(input.questionCountExact ? { exactQuestionCount: input.questionCount } : {}),
-    catalogSummary: indexed.summary,
+    catalogSummary,
     buckets: (decider ? buckets : smartBuckets).map((b) => ({
       id: b.id,
       name: b.name,
@@ -412,10 +413,25 @@ export async function runAiOnboardingBuild(
   // The planned build emits questions only, so a flow that also wants welcome
   // copy keeps the single call (decider email_gate is already forced off).
   const planned = decider && input.questionFlow !== "single" && !flow.welcome_message;
+  // OVERLAP — a prefetched plan never saw the direction (it ran beside it), so
+  // the direction's angle + style directives reach the WRITE step as guidance.
+  const prefetchedPlan = planned
+    ? usablePrefetchedPlan(input.prefetchedQuestionPlan, flowInput, { shopId, quizId })
+    : undefined;
+  const writeGuidance = [
+    input.directionAngle ? `Quiz direction: ${input.directionAngle}` : "",
+    input.dialDirectives ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   let generated;
   try {
     generated = planned
-      ? await generatePlannedQuestionFlow(flowInput, { shopId, quizId })
+      ? await generatePlannedQuestionFlow(
+          flowInput,
+          { shopId, quizId },
+          prefetchedPlan ? { ...prefetchedPlan, guidance: writeGuidance } : undefined,
+        )
       : await generateQuestionFlow(flowInput);
   } catch (err) {
     reportError(err, { scope: "onboardingBuild", msg: "question flow build failed (degraded draft)", shopId, quizId });
@@ -483,6 +499,125 @@ export async function runAiOnboardingBuild(
   return { quizId };
 }
 
+// The catalog-derived half of a question-flow input, shared by the build and
+// the plan prefetch so both ground in the same thing: the catalog summary
+// scoped to the quiz's CHOSEN products (the confirmed buckets — owner intent:
+// questions and answers ground in the merchant's recommendations, not the
+// whole catalog; scopeCatalogToChosen falls back to the full catalog when the
+// quiz has no buckets, and loadGenerationBuckets drops invisible ai-discovery
+// leftovers so a narrowed selection actually narrows the scope), the catalog
+// tone sample, and the brand voice.
+async function questionFlowCatalogContext(
+  shopId: string,
+  quizId: string,
+  catalog: PrefetchedBuildCatalog,
+  scopeCollectionIds: string[],
+) {
+  const chosenProductIds = new Set(
+    (await loadGenerationBuckets(shopId, quizId)).flatMap((c) => c.productIds),
+  );
+  const chosenScope = scopeCatalogToChosen(catalog.products, catalog.collections, chosenProductIds);
+  const indexed = buildScopedIndex(chosenScope.products, chosenScope.collections, scopeCollectionIds);
+  return {
+    catalogSummary: indexed.summary,
+    toneSample: toneSampleFromCatalog(catalog.products),
+    brandGuidelines: effectiveBrandGuidelines(catalog.shop),
+  };
+}
+
+// OVERLAP — the question plan, started BEFORE the direction pass has finished
+// (the headless chains run the two concurrently: the plan was the next ~5 s
+// of the wait). It therefore plans from what is known at that moment — the
+// goal, the confirmed buckets, the catalog — and picks the question count
+// itself unless the merchant pinned one; the direction's angle and style
+// directives reach the write step later, as guidance.
+// NEVER rejects: any failure resolves undefined and the build plans inline.
+export async function prefetchQuestionPlan(args: {
+  shopId: string;
+  quizId: string;
+  goalPrompt: string;
+  questionLength?: number;
+  buckets: Array<{ id: string; name: string; tags: string[] }>;
+  catalog?: Promise<PrefetchedBuildCatalog | undefined>;
+}): Promise<PrefetchedQuestionPlan | undefined> {
+  const { shopId, quizId } = args;
+  try {
+    const tPlan = Date.now();
+    const catalog =
+      (args.catalog ? await args.catalog : undefined) ?? (await loadBuildCatalog(shopId));
+    const { catalogSummary, toneSample, brandGuidelines } = await questionFlowCatalogContext(
+      shopId,
+      quizId,
+      catalog,
+      [],
+    );
+    const input: GenerateQuestionFlowInput = {
+      goalPrompt: args.goalPrompt,
+      experienceType: "product_match",
+      // The plan picks the count (chooseQuestionCount) unless it is pinned.
+      questionCount: args.questionLength ?? 0,
+      ...(args.questionLength
+        ? { exactQuestionCount: args.questionLength }
+        : { chooseQuestionCount: true }),
+      catalogSummary,
+      buckets: args.buckets,
+      flow: { welcome_message: false, email_gate: false, mixed_input_types: false },
+      tone: "friendly",
+      logicModel: "decider",
+      ...(toneSample ? { toneSample } : {}),
+      ...(brandGuidelines ? { brandGuidelines } : {}),
+    };
+    const plan = await generateQuestionPlan(input);
+    logFor("onboardingBuild").info(
+      { shopId, quizId, questions: plan.length, ms: Date.now() - tPlan },
+      "question plan prefetched",
+    );
+    return { input, plan };
+  } catch (err) {
+    logFor("onboardingBuild").warn(
+      { err, shopId, quizId },
+      "question plan prefetch failed (the build will plan inline)",
+    );
+    return undefined;
+  }
+}
+
+// The product / collection / shop rows a build reads — the inline twin of the
+// FAST F2 prefetch (step2Build's prefetchBuildCatalog).
+async function loadBuildCatalog(shopId: string): Promise<PrefetchedBuildCatalog> {
+  const [products, collections, shop] = await Promise.all([
+    prisma.product.findMany({ where: { shopId } }),
+    prisma.collection.findMany({ where: { shopId } }),
+    prisma.shop.findUnique({
+      where: { id: shopId },
+      select: { brandGuidelines: true, brandIdentity: true },
+    }),
+  ]);
+  return { products, collections, shop };
+}
+
+// A prefetched plan is used only while it still describes THIS build: the
+// same buckets (ids, names, routing tags, order) and the same pinned count.
+// Anything else — a bucket the working copy disabled, a membership refresh
+// that changed routing tags — discards it and the build plans inline.
+function usablePrefetchedPlan(
+  prefetched: PrefetchedQuestionPlan | undefined,
+  flowInput: GenerateQuestionFlowInput,
+  ctx: { shopId: string; quizId: string },
+): PrefetchedQuestionPlan | undefined {
+  if (!prefetched) return undefined;
+  const sameBuckets =
+    JSON.stringify(prefetched.input.buckets) === JSON.stringify(flowInput.buckets);
+  const sameCount =
+    (prefetched.input.exactQuestionCount ?? null) === (flowInput.exactQuestionCount ?? null);
+  if (sameBuckets && sameCount) return prefetched;
+  logFor("onboardingBuild").warn(
+    { ...ctx, sameBuckets, sameCount },
+    "prefetched question plan no longer matches the build — planning inline",
+  );
+  return undefined;
+}
+
 // QBUILD-FAST — the planned build, with the single-call generator as its
 // fallback. Only a VALIDATION failure falls back (the plan or one slice kept
 // missing its schema): an API failure — credits, rate limits, a timeout —
@@ -491,15 +626,27 @@ export async function runAiOnboardingBuild(
 async function generatePlannedQuestionFlow(
   flowInput: GenerateQuestionFlowInput,
   ctx: { shopId: string; quizId: string },
+  prefetched?: PrefetchedQuestionPlan & { guidance: string },
 ) {
   try {
     const tPlan = Date.now();
-    const plan = await generateQuestionPlan(flowInput);
+    const plan = prefetched?.plan ?? (await generateQuestionPlan(flowInput));
     const planMs = Date.now() - tPlan;
     const tWrite = Date.now();
-    const generated = await writePlannedQuestions(flowInput, plan);
+    // The write step reads the cache the plan's own input wrote.
+    const generated = await writePlannedQuestions(
+      prefetched?.input ?? flowInput,
+      plan,
+      prefetched?.guidance || undefined,
+    );
     logFor("onboardingBuild").info(
-      { ...ctx, questions: plan.length, planMs, writeMs: Date.now() - tWrite },
+      {
+        ...ctx,
+        questions: plan.length,
+        planMs,
+        writeMs: Date.now() - tWrite,
+        prefetchedPlan: Boolean(prefetched),
+      },
       "planned question build took",
     );
     return generated;
