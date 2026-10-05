@@ -9705,6 +9705,27 @@ body[data-qz] .qz-cust-row:focus-visible {
   gap: 12px; padding: 11px 14px; border: 1px solid var(--qz-rule-2); border-radius: 12px;
   background: var(--qz-ls-cell-bg);
 }
+/* The Engagement panel inside a crest page (account Settings): its intro,
+   each section and its closing note are cards; chips and toggles take Home's
+   shapes. The per-quiz engagement page has no wrapper and keeps its look. */
+.qz-crest .qz-eng-intro,
+.qz-crest .qz-eng-sec,
+.qz-crest .qz-eng-note {
+  margin: 0 !important; border: 0; border-radius: 22px; background: var(--qz-paper); box-shadow: var(--qz-edge);
+}
+.qz-crest .qz-eng-intro { align-items: center; gap: 16px; padding: 18px 22px; }
+.qz-crest .qz-eng-intro .qz-display { font-size: 21px !important; font-weight: 700; letter-spacing: -.02em; }
+.qz-crest .qz-eng-note { padding: 14px 22px; }
+.qz-crest .qz-eng-head { padding: 16px 22px; }
+.qz-crest .qz-eng-body { padding: 6px 22px 20px; }
+/* Fields read as a form column, not a 960px stretch. */
+.qz-crest .qz-eng-body > * { max-width: 640px; }
+.qz-crest .qz-eng-chip { padding: 2px 7px; border-radius: 999px; letter-spacing: .04em; text-transform: uppercase; }
+.qz-crest .qz-eng-warn { border-radius: 12px; }
+.qz-crest .qz-eng-tg { width: 34px; height: 20px; border-radius: 999px; background: var(--qz-rule); }
+.qz-crest .qz-eng-tg.is-on { background: var(--qz-accent); }
+.qz-crest .qz-eng-knob { width: 16px; height: 16px; border-radius: 999px; }
+.qz-crest .qz-eng-tg.is-on .qz-eng-knob { transform: translateX(14px); }
 /* A switch beside copy: keep it level with the first line; Home's row type. */
 .qz-crest .qz-rp2-check { gap: 12px; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
 .qz-crest .qz-reccopy-help { margin-top: 4px; font-size: 13px; line-height: 1.5; }

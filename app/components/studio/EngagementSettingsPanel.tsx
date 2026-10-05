@@ -27,9 +27,13 @@ function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
 export function EngagementSettingsPanel({
   initial,
   accountDefaults,
+  nested = false,
 }: {
   initial: EngagementSettingsT;
   accountDefaults?: EngagementSettingsT | null;
+  /** The host page already has its own <h1> (account Settings): the panel's
+      title renders as an <h2> so the page keeps one top heading. */
+  nested?: boolean;
 }) {
   const [eng, setEng] = useState<EngagementSettingsT>(initial);
   const formRef = useRef<HTMLFormElement>(null);
@@ -40,6 +44,7 @@ export function EngagementSettingsPanel({
     setEng((e) => ({ ...e, [section]: { ...(e[section] ?? {}), ...fields } }));
 
   const save = () => formRef.current?.requestSubmit();
+  const Heading = nested ? "h2" : "h1";
 
   return (
     <>
@@ -48,10 +53,10 @@ export function EngagementSettingsPanel({
         <input type="hidden" name="engagement" value={JSON.stringify(eng)} />
       </Form>
 
-      <div className="qz-row" style={{ marginBottom: 18 }}>
+      <div className="qz-row qz-eng-intro" style={{ marginBottom: 18 }}>
         <div>
           <div className="qz-label">Quiz builder</div>
-          <h1 className="qz-display" style={{ fontSize: 26, margin: "4px 0 4px" }}>Engagement</h1>
+          <Heading className="qz-display" style={{ fontSize: 26, margin: "4px 0 4px" }}>Engagement</Heading>
           <p className="qz-muted" style={{ margin: 0, fontSize: 14, maxWidth: 560 }}>
             Mechanics that lift completion, capture, and conversion. Tasteful defaults on; loud ones opt-in and
             measurable via Analytics.
@@ -161,7 +166,7 @@ export function EngagementSettingsPanel({
           on={eff.emailFlows.abandoned} onToggle={(v) => patch("emailFlows", { abandoned: v })} />
       </Sec>
 
-      <p className="qz-muted" style={{ fontSize: 12.5, marginTop: 20 }}>
+      <p className="qz-muted qz-eng-note" style={{ fontSize: 12.5, marginTop: 20 }}>
         Settings bake into the quiz at publish — <strong>republish</strong> for changes to reach shoppers.
       </p>
     </>

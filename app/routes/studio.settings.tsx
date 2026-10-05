@@ -41,13 +41,16 @@ export default function StudioSettings() {
   const { engagement } = useLoaderData<typeof loader>();
   return (
     <QzPage>
-      <QzPageHeader
-        title="Settings"
-        actions={<Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">← Home</Link>}
-      />
-      {/* accountDefaults=null → the panel edits THESE as the base (no lower layer). */}
-      <div className="qz-formcol">
-        <EngagementSettingsPanel initial={engagement} accountDefaults={null} />
+      {/* The Crest surface (.qz-crest, owner 2026-10-05): print ground, one
+          960px column, every block a card — the title and the panel's own
+          intro and note included, so no text sits on the print. */}
+      <div className="qz-crest">
+        <QzPageHeader
+          title="Settings"
+          actions={<Link to="/studio" className="qz-btn qz-btn-ghost qz-btn-sm">← Home</Link>}
+        />
+        {/* accountDefaults=null → the panel edits THESE as the base (no lower layer). */}
+        <EngagementSettingsPanel initial={engagement} accountDefaults={null} nested />
       </div>
     </QzPage>
   );
