@@ -7,6 +7,7 @@ import {
 import type { BrandIdentity } from "../../lib/brandIdentity";
 import { BrandTone, TONE_LABEL, type BrandVoice } from "../../lib/brandGuidelines";
 import type { DesignTokens } from "../../lib/quizSchema";
+import { cleanColors, colorsToPatch, normalizeHex, readHexDraft, type ColorKey } from "../../lib/designTokens";
 import {
   BRAND_BOOK_SECTIONS,
   BRAND_GROUPS,
@@ -54,7 +55,11 @@ const IMAGERY_STYLES: { value: NonNullable<BrandIdentity["design"]["imagery_styl
   { value: "minimal", label: "Minimal" },
 ];
 
-const COLOR_ROLES: { key: keyof NonNullable<DesignTokens["colors"]>; label: string }[] = [
+// The native color input cannot be empty; this is only where its picker opens
+// for an unset role. It is never shown and never saved by itself.
+const UNSET_PICKER_START = "#ffffff";
+
+const COLOR_ROLES: { key: ColorKey; label: string }[] = [
   { key: "primary", label: "Primary" }, { key: "secondary", label: "Secondary" }, { key: "accent", label: "Accent" },
   { key: "background", label: "Background" }, { key: "surface", label: "Surface" }, { key: "text", label: "Text" }, { key: "muted", label: "Muted" },
 ];
@@ -74,7 +79,9 @@ export function BrandBook({
   const tokFetcher = useFetcher();
   const voiceFetcher = useFetcher();
   const [ident, setIdent] = useState<BrandIdentity | null>(initialIdentity);
-  const [tok, setTok] = useState<DesignTokens>(initialTokens);
+  // Colors enter the editor already clean, so what it shows is what a save
+  // stores: a stored value that is not a valid hex reads as an unset role.
+  const [tok, setTok] = useState<DesignTokens>(() => (initialTokens.colors ? { ...initialTokens, colors: cleanColors(initialTokens.colors) } : initialTokens));
   const [voice, setVoice] = useState<BrandVoice>(initialVoice ?? EMPTY_VOICE);
   const [active, setActive] = useState<BrandSectionId>("identity");
   // Every module starts OPEN (handoff): the merchant sees the whole book at once.
@@ -100,7 +107,10 @@ export function BrandBook({
     const next = fn(tok);
     setTok(next);
     if (tokTimer.current) clearTimeout(tokTimer.current);
-    tokTimer.current = setTimeout(() => tokFetcher.submit({ intent: "save-tokens", tokens: JSON.stringify(next) }, { method: "post" }), 650);
+    // The save merges over the stored tokens, so an unset color role goes on
+    // the wire as "" (colorsToPatch): that is what removes it server-side.
+    const payload = { ...next, colors: colorsToPatch(next.colors) };
+    tokTimer.current = setTimeout(() => tokFetcher.submit({ intent: "save-tokens", tokens: JSON.stringify(payload) }, { method: "post" }), 650);
   };
   const patchVoice = (fn: (v: BrandVoice) => BrandVoice) => {
     const next = fn(voice);
@@ -413,19 +423,63 @@ function LogoEditor({ tok, ed }: { tok: DesignTokens; ed: Editors }) {
 }
 
 function ColorsEditor({ tok, ed }: { tok: DesignTokens; ed: Editors }) {
-  const colors = tok.colors ?? {};
-  const setColor = (key: string, v: string) => ed.patchTok((t) => ({ ...t, colors: { ...(t.colors ?? {}), [key]: v } }));
+  const colors = cleanColors(tok.colors);
+  // hex = a normalized "#rrggbb"; null unsets the role (the key leaves `colors`).
+  const setColor = (key: ColorKey, hex: string | null) =>
+    ed.patchTok((t) => {
+      const next = { ...(t.colors ?? {}) };
+      if (hex) next[key] = hex;
+      else delete next[key];
+      return { ...t, colors: next };
+    });
   return (
     <div className="qz-bb-swatches">
-      {COLOR_ROLES.map(({ key, label }) => {
-        const val = (colors as Record<string, string | undefined>)[key] ?? "";
-        return (
-          <div key={key} className="qz-bb-swatch">
-            <input type="color" aria-label={`${label} color`} value={/^#[0-9a-f]{6}$/i.test(val) ? val : "#000000"} onChange={(e) => setColor(key, e.target.value)} />
-            <div><div className="qz-bb-lab" style={{ margin: 0 }}>{label}</div><input className="qz-bb-hex" value={val} placeholder="#______" onChange={(e) => setColor(key, e.target.value)} /></div>
-          </div>
-        );
-      })}
+      {COLOR_ROLES.map(({ key, label }) => (
+        <ColorRole key={key} label={label} hex={colors[key]} onChange={(hex) => setColor(key, hex)} />
+      ))}
+    </div>
+  );
+}
+
+// One color role: the picker well + the hex text field. The raw text lives in
+// local state while the merchant types; the tokens only ever receive a valid
+// normalized hex, or null when the field is emptied.
+function ColorRole({ label, hex, onChange }: { label: string; hex: string | undefined; onChange: (hex: string | null) => void }) {
+  const [draft, setDraft] = useState(hex ?? "");
+  // The role changed from outside this field (the picker): show the new value,
+  // unless the text already means the same color (typed "#ABC" for "#aabbcc").
+  useEffect(() => {
+    setDraft((d) => ((normalizeHex(d) ?? "") === (hex ?? "") ? d : hex ?? ""));
+  }, [hex]);
+  const commit = (next: string | null) => {
+    if ((next ?? "") !== (hex ?? "")) onChange(next);
+  };
+  const onType = (text: string) => {
+    setDraft(text);
+    const parsed = readHexDraft(text);
+    if (parsed.kind === "set") commit(parsed.hex);
+    else if (parsed.kind === "unset") commit(null);
+  };
+  return (
+    <div className="qz-bb-swatch">
+      {/* An unset role has no color to show: the well renders empty (dashed,
+          struck through) over the invisible-but-clickable native picker. */}
+      <span className={`qz-bb-well${hex ? "" : " is-unset"}`}>
+        <input type="color" aria-label={hex ? `${label} color` : `${label} color, not set`} value={hex ?? UNSET_PICKER_START} onChange={(e) => commit(normalizeHex(e.target.value))} />
+      </span>
+      <div>
+        <div className="qz-bb-lab" style={{ margin: 0 }}>{label}</div>
+        <input
+          className="qz-bb-hex"
+          value={draft}
+          placeholder="#______"
+          aria-invalid={readHexDraft(draft).kind === "pending" || undefined}
+          onChange={(e) => onType(e.target.value)}
+          // Leaving the field settles it on the saved value: a valid entry shows
+          // normalized, an unfinished one goes back to what the tokens hold.
+          onBlur={() => setDraft(hex ?? "")}
+        />
+      </div>
     </div>
   );
 }

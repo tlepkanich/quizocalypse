@@ -11,6 +11,7 @@ import {
   confirmBrandIdentity,
 } from "../lib/brandIdentityBuild.server";
 import { DesignTokens } from "../lib/quizSchema";
+import { mergeColorPatch } from "../lib/designTokens";
 import { parseBrandGuidelinesSafe, BrandVoice, type BrandGuidelines } from "../lib/brandGuidelines";
 import { QzPage, QzPageHeader } from "../components/qz";
 import { BrandBook } from "../components/studio/BrandBook";
@@ -78,6 +79,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         base[k] = v;
       }
     }
+    // Colors get their own merge: only valid hex persists (normalized), and a
+    // blank value in the payload removes that role. The DesignTokens schema
+    // stays loose on purpose (legacy published docs must keep parsing), so
+    // this write path is where the brand colors are held to a real hex.
+    const colors = mergeColorPatch(existing.success ? existing.data.colors : undefined, parsedTokens.data.colors);
+    if (Object.keys(colors).length > 0) base.colors = colors;
+    else delete base.colors;
     await prisma.shop.update({ where: { id: shop.id }, data: { brandTokens: base as never } });
     return json({ ok: true });
   }

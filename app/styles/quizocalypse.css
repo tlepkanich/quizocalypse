@@ -6560,7 +6560,15 @@ body[data-qz] .qz-allcard-add:focus-visible { outline: 2px solid var(--qz-accent
 .qz-bb-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 .qz-bb-swatch { display: flex; align-items: center; gap: 10px; }
 .qz-bb-swatch input[type="color"] { width: 36px; height: 36px; padding: 0; border: 1px solid var(--qz-rule, #00000022); border-radius: 8px; background: none; cursor: pointer; flex: 0 0 auto; }
+/* The picker well. A set role shows the native swatch as before; an unset role
+   shows an empty dashed well with a strike, and the native input sits over it
+   invisible so a click still opens the picker. */
+.qz-bb-well { position: relative; display: flex; width: 36px; height: 36px; flex: 0 0 auto; border-radius: 8px; box-sizing: border-box; }
+.qz-bb-well.is-unset { border: 1px dashed var(--qz-rule-strong); background: linear-gradient(to top right, transparent calc(50% - 0.75px), var(--qz-rule-strong) calc(50% - 0.75px), var(--qz-rule-strong) calc(50% + 0.75px), transparent calc(50% + 0.75px)) var(--qz-paper, #fff); }
+.qz-bb-well.is-unset input[type="color"] { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; opacity: 0; }
+.qz-bb-well.is-unset:focus-within { outline: 2px solid var(--qz-accent); outline-offset: 2px; }
 .qz-bb-hex { border: 1px solid var(--qz-rule, #00000022); border-radius: 6px; padding: 3px 7px; font: inherit; font-size: 12px; width: 92px; font-variant-numeric: tabular-nums; }
+.qz-bb-hex[aria-invalid="true"] { border-color: var(--qz-crit); }
 .qz-bb-logoprev { padding: 12px; border: 1px solid var(--qz-rule, #00000014); border-radius: var(--qz-radius); background: var(--qz-cream-2, #00000006); display: inline-block; }
 .qz-bb-logoprev img { max-height: 48px; max-width: 200px; display: block; }
 .qz-bb-scale { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--qz-rule, #00000012); padding-top: 12px; }

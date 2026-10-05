@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { normalizeHex, mergeHexIntoTokens, tokensToCssVars, resolveDesignTokens } from "./designTokens";
+import {
+  normalizeHex,
+  mergeHexIntoTokens,
+  tokensToCssVars,
+  resolveDesignTokens,
+  cleanColors,
+  colorsToPatch,
+  mergeColorPatch,
+  readHexDraft,
+} from "./designTokens";
+import { DesignTokens } from "./quizSchema";
 import {
   stylesFor,
   PAGE_PAD_DEFAULT_PX,
@@ -19,6 +29,85 @@ describe("normalizeHex", () => {
     expect(normalizeHex("red")).toBeNull();
     expect(normalizeHex("#1234")).toBeNull();
     expect(normalizeHex("#gggggg")).toBeNull();
+  });
+});
+
+// The values found in a real local shop row (brand editor saved raw field text).
+const DIRTY_STORED = { primary: "#5563DE", muted: " #000000", surface: " #000000", secondary: " #000000#10da14" };
+
+describe("cleanColors", () => {
+  it("normalizes valid hex and drops everything else", () => {
+    expect(cleanColors(DIRTY_STORED)).toEqual({ primary: "#5563de", muted: "#000000", surface: "#000000" });
+    expect(cleanColors({ primary: "#0AF", accent: "", text: "red", background: "   " })).toEqual({ primary: "#00aaff" });
+  });
+  it("returns an empty set for no colors", () => {
+    expect(cleanColors(undefined)).toEqual({});
+    expect(cleanColors(null)).toEqual({});
+    expect(cleanColors({})).toEqual({});
+  });
+});
+
+describe("colorsToPatch", () => {
+  it("sends every role: a set role as its hex, an unset or invalid role as an explicit blank", () => {
+    expect(colorsToPatch({ primary: "#2F6B4F", secondary: " #000000#10da14" })).toEqual({
+      primary: "#2f6b4f", secondary: "", accent: "", background: "", surface: "", text: "", muted: "",
+    });
+  });
+});
+
+describe("mergeColorPatch", () => {
+  it("sets a valid hex, normalized, and keeps the untouched siblings", () => {
+    expect(mergeColorPatch({ primary: "#111111", text: "#222222" }, { primary: " #ABC " })).toEqual({
+      primary: "#aabbcc", text: "#222222",
+    });
+  });
+  it("removes a role on a blank value — the key is gone, never stored as an empty string", () => {
+    const out = mergeColorPatch({ primary: "#111111", surface: "#eeeeee" }, { surface: "" });
+    expect(out).toEqual({ primary: "#111111" });
+    expect("surface" in out).toBe(false);
+    expect(mergeColorPatch({ surface: "#eeeeee" }, { surface: "   " })).toEqual({});
+  });
+  it("ignores an invalid value and keeps the stored color", () => {
+    expect(mergeColorPatch({ secondary: "#2c7a4b" }, { secondary: " #000000#10da14" })).toEqual({ secondary: "#2c7a4b" });
+    expect(mergeColorPatch({}, { accent: "red" })).toEqual({});
+  });
+  it("leaves a role the patch does not mention", () => {
+    expect(mergeColorPatch({ muted: "#666666" }, {})).toEqual({ muted: "#666666" });
+    expect(mergeColorPatch({ muted: "#666666" }, undefined)).toEqual({ muted: "#666666" });
+  });
+  it("never carries a stored invalid value forward", () => {
+    expect(mergeColorPatch(DIRTY_STORED, { accent: "#BB6622" })).toEqual({
+      primary: "#5563de", muted: "#000000", surface: "#000000", accent: "#bb6622",
+    });
+  });
+  it("round-trips the editor's wire patch: clearing a role in the editor removes it from the stored set", () => {
+    const stored = { primary: "#5563de", surface: "#000000" };
+    const editorColors = { primary: "#5563de" }; // the merchant emptied Surface
+    expect(mergeColorPatch(stored, colorsToPatch(editorColors))).toEqual({ primary: "#5563de" });
+  });
+});
+
+describe("readHexDraft", () => {
+  it("commits a valid hex, normalized", () => {
+    expect(readHexDraft("#2F6B4F")).toEqual({ kind: "set", hex: "#2f6b4f" });
+    expect(readHexDraft(" abc ")).toEqual({ kind: "set", hex: "#aabbcc" });
+  });
+  it("unsets on an emptied field", () => {
+    expect(readHexDraft("")).toEqual({ kind: "unset" });
+    expect(readHexDraft("  ")).toEqual({ kind: "unset" });
+  });
+  it("holds anything else as still being typed", () => {
+    expect(readHexDraft("#")).toEqual({ kind: "pending" });
+    expect(readHexDraft("#12")).toEqual({ kind: "pending" });
+    expect(readHexDraft(" #000000#10da14")).toEqual({ kind: "pending" });
+  });
+});
+
+describe("DesignTokens schema stays loose on colors (legacy docs must keep parsing)", () => {
+  it("still parses a non-hex color unchanged", () => {
+    const parsed = DesignTokens.safeParse({ colors: DIRTY_STORED });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.colors).toEqual(DIRTY_STORED);
   });
 });
 

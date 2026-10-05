@@ -49,6 +49,87 @@ export function normalizeHex(input: string): string | null {
   return `#${full.toLowerCase()}`;
 }
 
+type TokenColors = NonNullable<DesignTokensT["colors"]>;
+
+// Every color role in DesignTokens.colors (quizSchema.ts).
+export const COLOR_KEYS = [
+  "primary",
+  "secondary",
+  "accent",
+  "background",
+  "surface",
+  "text",
+  "muted",
+] as const satisfies ReadonlyArray<keyof TokenColors>;
+export type ColorKey = (typeof COLOR_KEYS)[number];
+
+/**
+ * Keep only the roles that hold a valid hex, each normalized to "#rrggbb".
+ * Blank and invalid values are dropped, so the result is safe to persist and
+ * to turn into `--qz-color-*` CSS variables.
+ */
+export function cleanColors(colors: TokenColors | null | undefined): TokenColors {
+  const out: TokenColors = {};
+  for (const key of COLOR_KEYS) {
+    const hex = normalizeHex(colors?.[key] ?? "");
+    if (hex) out[key] = hex;
+  }
+  return out;
+}
+
+/**
+ * The brand editor's wire form of its colors: every role present, a set role
+ * as its normalized hex and an unset role as "". The save merges over the
+ * stored set, so an omitted key would keep its stored value; "" is the
+ * explicit "clear this role" signal that `mergeColorPatch` reads.
+ */
+export function colorsToPatch(colors: TokenColors | null | undefined): TokenColors {
+  const clean = cleanColors(colors);
+  const patch: TokenColors = {};
+  for (const key of COLOR_KEYS) patch[key] = clean[key] ?? "";
+  return patch;
+}
+
+/**
+ * Merge a colors patch over the stored colors. Per role: a valid hex replaces
+ * the stored value (normalized), a blank value REMOVES the role, an absent or
+ * invalid value leaves the stored value alone. Stored values that are not a
+ * valid hex are dropped, so the result never carries one forward.
+ */
+export function mergeColorPatch(
+  stored: TokenColors | null | undefined,
+  patch: TokenColors | null | undefined,
+): TokenColors {
+  const out = cleanColors(stored);
+  for (const key of COLOR_KEYS) {
+    const incoming = patch?.[key];
+    if (incoming === undefined) continue;
+    if (incoming.trim() === "") {
+      delete out[key];
+      continue;
+    }
+    const hex = normalizeHex(incoming);
+    if (hex) out[key] = hex;
+  }
+  return out;
+}
+
+/**
+ * What a hex text field's draft means for the stored role: a valid hex is
+ * committed (normalized), a blank draft unsets the role, anything else is
+ * still being typed and must not touch the tokens.
+ */
+export type HexDraft =
+  | { kind: "set"; hex: string }
+  | { kind: "unset" }
+  | { kind: "pending" };
+
+export function readHexDraft(draft: string): HexDraft {
+  if (draft.trim() === "") return { kind: "unset" };
+  const hex = normalizeHex(draft);
+  return hex ? { kind: "set", hex } : { kind: "pending" };
+}
+
 /**
  * Map a shop's Shopify Branding colors (primary/secondary backgrounds) to our
  * color tokens, normalizing hex and dropping invalid/empty values. Pure and
@@ -80,8 +161,6 @@ export function mergeHexIntoTokens(
   if (!normalized) return base;
   return { ...base, colors: { ...(base.colors ?? {}), primary: normalized } };
 }
-
-type TokenColors = NonNullable<DesignTokensT["colors"]>;
 
 function isDifferentColor(inherited: string | undefined, next: string | undefined): boolean {
   if (next === undefined) return false;
