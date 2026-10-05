@@ -171,6 +171,50 @@ describe("Design Settings spec (Drive 1_p1V) — D0 token carry + byte-stable", 
   });
 })
 
+describe("resolveDesignTokens surface follows the scheme it sits on", () => {
+  const brandKit = {
+    colors: { background: "#000000", text: "#000000", primary: "#000000", surface: " #000000" },
+  };
+  const linen = { colors: { background: "#FBF4EC", text: "#2A211A", primary: "#AD4B2E" } };
+
+  it("drops a lower layer's surface when a later layer changes background or text", () => {
+    const resolved = resolveDesignTokens(brandKit, linen);
+    expect(resolved.colors && "surface" in resolved.colors).toBe(false);
+    // …so the runtime derives the chip tint from the quiz's own scheme.
+    expect(tokensToCssVars(resolved)["--qz-color-surface"]).toBe(
+      "color-mix(in srgb, #2A211A 6%, #FBF4EC)",
+    );
+  });
+
+  it("drops it when ONLY the background or ONLY the text changes", () => {
+    const base = { colors: { background: "#FFFFFF", text: "#111111", surface: "#F4F4F4" } };
+    expect(resolveDesignTokens(base, { colors: { background: "#101010" } }).colors?.surface).toBeUndefined();
+    expect(resolveDesignTokens(base, { colors: { text: "#EEEEEE" } }).colors?.surface).toBeUndefined();
+  });
+
+  it("keeps it when the later layer leaves background and text alone", () => {
+    const base = { colors: { background: "#FFFFFF", text: "#111111", surface: "#F4F4F4" } };
+    expect(resolveDesignTokens(base, { colors: { primary: "#123456" } }).colors?.surface).toBe("#F4F4F4");
+    expect(resolveDesignTokens(base, { radius: "pill" }).colors?.surface).toBe("#F4F4F4");
+    // A layer that restates the SAME scheme (case/space-insensitive) is no change.
+    expect(
+      resolveDesignTokens(base, { colors: { background: " #ffffff", text: "#111111" } }).colors?.surface,
+    ).toBe("#F4F4F4");
+  });
+
+  it("a layer that names its own surface always wins", () => {
+    const resolved = resolveDesignTokens(brandKit, {
+      colors: { ...linen.colors, surface: "#EFE6DA" },
+    });
+    expect(resolved.colors?.surface).toBe("#EFE6DA");
+  });
+
+  it("a single layer keeps its own surface (published docs resolve as one layer)", () => {
+    const baked = { colors: { background: "#F1EEE5", text: "#14231C", surface: "#E2E2DA" } };
+    expect(resolveDesignTokens(null, baked, null, null).colors?.surface).toBe("#E2E2DA");
+  });
+});
+
 describe("suggestContrastText (Design Settings §1)", () => {
   it("picks near-black on light backgrounds, near-white on dark", async () => {
     const { suggestContrastText } = await import("./designTokens");

@@ -81,6 +81,26 @@ export function mergeHexIntoTokens(
   return { ...base, colors: { ...(base.colors ?? {}), primary: normalized } };
 }
 
+type TokenColors = NonNullable<DesignTokensT["colors"]>;
+
+function isDifferentColor(inherited: string | undefined, next: string | undefined): boolean {
+  if (next === undefined) return false;
+  return inherited?.trim().toLowerCase() !== next.trim().toLowerCase();
+}
+
+// The surface is a tint of the background and text it sits on, so it belongs
+// to the layer that set them. A layer that moves either one without naming its
+// own surface must not keep the surface from the layer below — that is how a
+// brand kit's surface leaked under every quiz theme (black chips under dark
+// ink). Dropping it lets tokensToCssVars derive one from the resolved scheme.
+function inheritedSurfaceIsStale(inherited: TokenColors, layer: TokenColors): boolean {
+  if (inherited.surface === undefined || layer.surface !== undefined) return false;
+  return (
+    isDifferentColor(inherited.background, layer.background) ||
+    isDifferentColor(inherited.text, layer.text)
+  );
+}
+
 export function resolveDesignTokens(
   ...layers: Array<DesignTokensT | null | undefined>
 ): DesignTokensT {
@@ -88,7 +108,9 @@ export function resolveDesignTokens(
   for (const layer of layers) {
     if (!layer) continue;
     if (layer.colors) {
+      const dropSurface = inheritedSurfaceIsStale(out.colors ?? {}, layer.colors);
       out.colors = { ...out.colors, ...layer.colors };
+      if (dropSurface) delete out.colors.surface;
     }
     if (layer.typography) {
       out.typography = out.typography ?? {};
