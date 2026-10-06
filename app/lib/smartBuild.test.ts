@@ -567,6 +567,44 @@ describe("applyDeciderQuestionFlow", () => {
     expect(validateQuiz(out)).toEqual([]);
   });
 
+  // The wrong-decider defect, end to end: an untagged question with as many
+  // answers as there are buckets, placed FIRST, used to be elected and its
+  // answers mapped to buckets by position.
+  it("elects the generator's marked decider over an earlier untagged question", () => {
+    const seed = Quiz.parse({ ...buildSeedQuiz("Decider"), logic_model: "decider" });
+    const generated = {
+      questions: [
+        {
+          text: "How old is your dog?",
+          question_type: "single_select" as const,
+          role: "info" as const,
+          answers: [
+            { text: "Under 1 year", tags: [] },
+            { text: "1 to 7 years", tags: [] },
+            { text: "8 years or older", tags: [] },
+          ],
+        },
+        {
+          text: "What do you notice most about your skin?",
+          question_type: "single_select" as const,
+          role: "decides" as const,
+          answers: [
+            { text: "Shiny by midday", tags: ["oily"] },
+            { text: "Tight after cleansing", tags: ["dry"] },
+          ],
+        },
+      ],
+    };
+    const out = applyDeciderQuestionFlow(seed, generated as never, deciderBuckets, FB);
+    const [first, second] = out.nodes.filter((n) => n.type === "question");
+    if (first?.type !== "question" || second?.type !== "question") throw new Error("unreachable");
+    expect(first.data.role).toBe("qualifier");
+    expect(first.data.answers.some((a) => Boolean(a.target_id))).toBe(false);
+    expect(second.data.role).toBe("decides");
+    expect(second.data.answers.map((a) => a.target_id)).toEqual(["cat_oily", "cat_dry"]);
+    expect(validateQuiz(out)).toEqual([]);
+  });
+
   it("is idempotent — re-running rebuilds the same shape without duplicates", () => {
     const once = build();
     const twice = applyDeciderQuestionFlow(once, generatedDecider as never, deciderBuckets, FB);

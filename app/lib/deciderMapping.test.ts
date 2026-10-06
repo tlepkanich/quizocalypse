@@ -82,6 +82,51 @@ describe("pickDeciderIndex — distinct-coverage score, earliest tie-break", () 
   });
 });
 
+// The wrong-decider defect: the unused-bucket fill gave an UNTAGGED question
+// with enough answers full coverage, so placed first it tied the real decider
+// and won — the quiz then routed shoppers by answer position.
+describe("pickDeciderIndex — the fill never outranks real evidence", () => {
+  const untagged = (count: number) => ({
+    question_type: "single_select",
+    answers: Array.from({ length: count }, () => ({ tags: [] as string[] })),
+  });
+  const tagged = {
+    question_type: "single_select",
+    answers: [{ tags: ["dry"] }, { tags: ["oily"] }, { tags: ["combo"] }],
+  };
+
+  it("an untagged question placed first does not beat the tagged decider", () => {
+    expect(pickDeciderIndex([untagged(4), tagged], buckets)).toBe(1);
+    // Even a partly tagged decider (2 of 3 buckets by tags) beats pure fill.
+    const partly = { ...tagged, answers: [{ tags: ["dry"] }, { tags: ["oily"] }, { tags: [] }] };
+    expect(pickDeciderIndex([untagged(3), partly], buckets)).toBe(1);
+  });
+
+  it('the generator\'s "decides" mark wins over stronger tag overlap elsewhere', () => {
+    // A narrowing question whose catalog values coincide with bucket tags.
+    const narrows = { ...tagged, role: "narrows" };
+    const marked = { ...untagged(3), role: "decides" };
+    expect(pickDeciderIndex([narrows, marked], buckets)).toBe(1);
+  });
+
+  it("among several marked questions, tag overlap decides, then the earliest", () => {
+    const strayMark = { ...untagged(3), role: "decides" };
+    expect(pickDeciderIndex([strayMark, { ...tagged, role: "decides" }], buckets)).toBe(1);
+    expect(pickDeciderIndex([strayMark, { ...strayMark }], buckets)).toBe(0);
+  });
+
+  it("a mark is ignored on a freeform question or one that cannot separate two targets", () => {
+    const freeform = { question_type: "text", role: "decides", answers: tagged.answers };
+    expect(pickDeciderIndex([freeform, tagged], buckets)).toBe(1);
+    const oneAnswer = { question_type: "single_select", role: "decides", answers: [{ tags: [] }] };
+    expect(pickDeciderIndex([oneAnswer, tagged], buckets)).toBe(1);
+  });
+
+  it("with no marks and no tag overlap, the fill still elects (most targets, earliest)", () => {
+    expect(pickDeciderIndex([untagged(2), untagged(3), untagged(3)], buckets)).toBe(1);
+  });
+});
+
 describe("deciderAddendum — prompt byte-stability", () => {
   it("absent flag returns the EMPTY string (legacy system prompt identical)", () => {
     expect(deciderAddendum(undefined)).toBe("");

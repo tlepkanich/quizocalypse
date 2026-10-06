@@ -950,8 +950,8 @@ function parsePlanLine(line: string, n: number): PlannedQuestion | string {
 }
 
 // The model's draft → the plan. Exactly one question decides: a second
-// "decides" is demoted to narrows (the deterministic decider pick downstream
-// would ignore it anyway); NONE is a validation failure. The quiz-wide
+// "decides" is demoted to narrows (the build's decider pick honours the
+// mark, so the plan must carry exactly one); NONE is a validation failure. The quiz-wide
 // budgets are enforced here, not trusted: one explainer, two helper lines.
 function assemblePlan(draft: z.infer<typeof QuestionPlanDraft>): QuestionPlan | string {
   const plan: QuestionPlan = [];
