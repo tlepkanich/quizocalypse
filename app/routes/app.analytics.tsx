@@ -37,13 +37,17 @@ export default function AggregateAnalytics() {
   return (
     <QzPage width="wide">
       <TitleBar title="Analytics" />
-      <AnalyticsHomeView
-        data={data}
-        quizHref={(id) => `/app/quizzes/${id}/studio`}
-        analyticsHref={(id) => `/app/quizzes/${id}/analytics`}
-        createHref="/app/quizzes"
-        exportBase={null}
-      />
+      {/* The Crest surface (.qz-crest, owner 2026-10-05) — the same wrapper
+          as /studio/analytics, so the two surfaces look the same. */}
+      <div className="qz-crest is-wide">
+        <AnalyticsHomeView
+          data={data}
+          quizHref={(id) => `/app/quizzes/${id}/studio`}
+          analyticsHref={(id) => `/app/quizzes/${id}/analytics`}
+          createHref="/app/quizzes"
+          exportBase={null}
+        />
+      </div>
     </QzPage>
   );
 }

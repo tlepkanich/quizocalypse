@@ -61,13 +61,16 @@ export default function Settings() {
     <QzPage>
       <TitleBar title="Settings" />
 
-      <QzPageHeader
-        eyebrow="Configuration"
-        title="Settings"
-        subtitle="Where Wiskr connects to your shop and other systems. Webhook delivery, real KMS for token encryption, and the public App Store billing setup all land here."
-      />
+      {/* The Crest surface (.qz-crest, owner 2026-10-05): print ground, one
+          960px column, the title on a header card and each block a card
+          18px apart (the old 720px inner column is gone). */}
+      <div className="qz-crest">
+        <QzPageHeader
+          eyebrow="Configuration"
+          title="Settings"
+          subtitle="Where Wiskr connects to your shop and other systems. Webhook delivery, real KMS for token encryption, and the public App Store billing setup all land here."
+        />
 
-      <div style={{ maxWidth: 720 }} className="qz-col qz-gap-24">
         <RecCopyToggleCard enabled={shop?.aiRecCopyEnabled ?? false} />
 
         <QzCard>
