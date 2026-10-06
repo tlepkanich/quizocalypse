@@ -9,8 +9,9 @@
 // through setAiUsageEmitter below.
 //
 // Model choices are code constants in ./ai/client.ts (MODEL / MODEL_FAST /
-// MODEL_SPEED) and deliberately NOT re-exported — the Haiku middle passes are
-// owner-approved (FAST F4); change them there, with a side-by-side.
+// MODEL_SPEED / MODEL_PLAN) and deliberately NOT re-exported — the Haiku
+// middle passes (FAST F4) and the Opus outline (QBUILD-FAST) are
+// owner-approved; change them there, with a side-by-side.
 export {
   QuizGenerationError,
   setAiUsageEmitter,

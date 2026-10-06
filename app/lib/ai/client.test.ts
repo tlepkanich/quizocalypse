@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createMessage, setAiUsageEmitter } from "./client";
+import { MODEL_PLAN, createMessage, setAiUsageEmitter, warmPromptCache } from "./client";
 
 // QBUILD-FAST — prompt-cached input is billed outside usage.input_tokens
 // (writes at 1.25×, reads at 0.1×). The usage emit folds it in at those
@@ -62,11 +62,40 @@ describe("createMessage — usage emit", () => {
     );
   });
 
+  // The ledger prices every token at the Sonnet rate; Opus 4.8 costs 5/3 of
+  // it on input and output, so its tokens are emitted at that weight.
+  it("a model priced above the ledger's Sonnet rate emits its tokens weighted", async () => {
+    create.mockResolvedValue({
+      usage: { input_tokens: 300, output_tokens: 300, cache_creation_input_tokens: 2400 },
+    });
+    await createMessage({ ...(params as object), model: MODEL_PLAN } as never);
+    expect(emitted).toHaveBeenLastCalledWith({
+      input_tokens: 5500, // (300 + 2400 × 1.25) × 5/3
+      output_tokens: 500,
+      cache_creation_input_tokens: 2400,
+      cache_read_input_tokens: 0,
+    });
+  });
+
   it("an emitter that throws never fails a generation that succeeded", async () => {
     setAiUsageEmitter(() => {
       throw new Error("ledger down");
     });
     create.mockResolvedValue({ usage: { input_tokens: 1, output_tokens: 1 } });
     await expect(createMessage(params)).resolves.toMatchObject({ usage: { input_tokens: 1 } });
+  });
+});
+
+describe("warmPromptCache", () => {
+  it("sends the prefix for ONE output token and records its usage", async () => {
+    create.mockResolvedValue({ usage: { input_tokens: 10, output_tokens: 1 } });
+    await warmPromptCache({ model: "m", max_tokens: 4096, messages: [] } as never);
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ model: "m", max_tokens: 1 }));
+    expect(emitted).toHaveBeenCalledTimes(1);
+  });
+
+  it("never rejects: a failed warm-up only costs the cache discount", async () => {
+    create.mockRejectedValue(new Error("529 overloaded"));
+    await expect(warmPromptCache(params)).resolves.toBeUndefined();
   });
 });

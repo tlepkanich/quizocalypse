@@ -19,9 +19,10 @@ import {
 } from "./generation";
 
 const createMessageMock = vi.hoisted(() => vi.fn());
+const warmPromptCacheMock = vi.hoisted(() => vi.fn());
 vi.mock("./client", async (importOriginal) => {
   const actual = await importOriginal<typeof ClientModule>();
-  return { ...actual, createMessage: createMessageMock };
+  return { ...actual, createMessage: createMessageMock, warmPromptCache: warmPromptCacheMock };
 });
 
 describe("QUESTION_WRITING_RULES — anti-slop copy standards in the prompt", () => {
@@ -127,6 +128,7 @@ const toolResponse = (name: string, input: unknown) => ({
 
 beforeEach(() => {
   createMessageMock.mockReset();
+  warmPromptCacheMock.mockReset();
 });
 
 describe("generation parse boundary — emoji-laden AI output lands clean", () => {
@@ -764,10 +766,10 @@ describe("the planned question build — a compact plan, then the questions writ
     expect(createMessageMock).toHaveBeenCalledTimes(1);
   });
 
-  it("runs both steps on the question model unless a probe overrides them", async () => {
+  it("outlines on the plan model and writes on the question model unless a probe overrides them", async () => {
     serve(planDraft(["decides | single_select | - | where they ride"]));
     await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
-    expect(calls().map((c) => c.model)).toEqual(["claude-sonnet-4-6", "claude-sonnet-4-6"]);
+    expect(calls().map((c) => c.model)).toEqual(["claude-opus-4-8", "claude-sonnet-4-6"]);
 
     createMessageMock.mockClear();
     await generateQuestionFlowPlanned({
@@ -776,5 +778,30 @@ describe("the planned question build — a compact plan, then the questions writ
       plannedModels: { plan: "probe-plan-model", write: "probe-write-model" },
     });
     expect(calls().map((c) => c.model)).toEqual(["probe-plan-model", "probe-write-model"]);
+  });
+
+  // The prompt cache is per model. With the outline on another model, nothing
+  // would write the cache the parallel writes read — every one of them would
+  // miss and pay the cache write.
+  it("warms the writing model's cache beside the plan, with the writes' own prefix", async () => {
+    serve(planDraft(["decides | single_select | - | where they ride"]));
+    await generateQuestionFlowPlanned({ ...base, questionCount: 1 });
+    expect(warmPromptCacheMock).toHaveBeenCalledTimes(1);
+    const warm = warmPromptCacheMock.mock.calls[0]![0] as PlannedCall;
+    const write = calls()[1]!;
+    expect(warm.model).toBe(write.model);
+    expect(warm.system).toEqual(write.system);
+    expect(warm.tools).toEqual(write.tools);
+    expect(warm.tool_choice).toEqual(write.tool_choice);
+  });
+
+  it("skips the warm-up when one model does both steps: the plan call writes the cache", async () => {
+    serve(planDraft(["decides | single_select | - | where they ride"]));
+    await generateQuestionFlowPlanned({
+      ...base,
+      questionCount: 1,
+      plannedModels: { plan: "one-model", write: "one-model" },
+    });
+    expect(warmPromptCacheMock).not.toHaveBeenCalled();
   });
 });

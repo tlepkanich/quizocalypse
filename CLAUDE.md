@@ -141,7 +141,9 @@ verify with ts-prune + grep first.
 **Model choices are code constants, not env** (`app/lib/ai/client.ts`; the
 AI surfaces re-export through the `app/lib/claude.ts` barrel):
 `MODEL = claude-sonnet-4-6` for question builds/edits/research;
-`MODEL_SPEED = claude-haiku-4-5` for the funnel's type/template middle passes.
+`MODEL_SPEED = claude-haiku-4-5` for the funnel's type/template middle passes;
+`MODEL_PLAN = claude-opus-4-8` for the planned question build's OUTLINE step
+only (the question wording stays on Sonnet).
 The Haiku middle passes are **owner-approved via side-by-side comparison** —
 do not "fix" them back to Sonnet as a quality hunch.
 

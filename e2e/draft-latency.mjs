@@ -238,7 +238,7 @@ const runQuestions = () => buildQuestions(fixedDirection.template);
 async function runChain() {
   const overlap = process.env.DRAFT_OVERLAP !== "off";
   // DRAFT_PLAN_MODEL / DRAFT_WRITE_MODEL — a model id per planned-build step
-  // (side-by-side comparisons; the app itself runs both on Sonnet).
+  // (side-by-side comparisons; the app outlines on Opus 4.8 and writes on Sonnet).
   const plannedModels = {
     ...(process.env.DRAFT_PLAN_MODEL ? { plan: process.env.DRAFT_PLAN_MODEL } : {}),
     ...(process.env.DRAFT_WRITE_MODEL ? { write: process.env.DRAFT_WRITE_MODEL } : {}),

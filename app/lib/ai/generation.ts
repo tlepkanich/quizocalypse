@@ -19,10 +19,12 @@ import { clampQuestionsTo } from "../questionCountClamp";
 import { z } from "zod";
 import {
   MODEL,
+  MODEL_PLAN,
   MODEL_SPEED,
   MAX_TOKENS,
   MAX_ATTEMPTS,
   createMessage,
+  warmPromptCache,
   QuizGenerationError,
 } from "./client";
 
@@ -637,9 +639,9 @@ export async function generateQuestionFlow(
 // generateQuestionFlow (above) writes the whole quiz in ONE Sonnet response:
 // ~1,400 output tokens ≈ 20 s. Measured on the real requests: Sonnet writes
 // this JSON at ~60 tokens/s and does not stream it, so every call's wall time
-// IS its output size. The planned build keeps every word on the same model
-// (the owner's keep-Sonnet decision) and cuts the wall time by making each
-// call write little:
+// IS its output size. The planned build keeps every WORD on that model (the
+// owner's keep-Sonnet decision; the outline alone runs on MODEL_PLAN) and
+// cuts the wall time by making each call write little:
 //   1. generateQuestionPlan  — the quiz's OUTLINE, one compact line per
 //      question (role | input type | chapter | topic), plus a short answer
 //      outline for the deciding question. ~110 tokens ≈ 2.5 s. One author
@@ -649,11 +651,16 @@ export async function generateQuestionFlow(
 //      tag"). 80–170 tokens ≈ 3 s for the slowest. Wall time is the slowest
 //      call, not the sum.
 // Both steps send ONE byte-identical request prefix — both tools, the system
-// rules, and the quiz context as a cached system block — so the plan call
-// writes the prompt cache and every write call reads it: N parallel calls
-// cost ~0.1× the shared input each instead of N× the full prompt.
-// (tool_choice differs per step; it does not invalidate the tools + system
-// cache.)
+// rules, and the quiz context as a cached system block — so every write call
+// READS the prompt cache: N parallel calls cost ~0.1× the shared input each
+// instead of N× the full prompt. (tool_choice differs per step; it does not
+// invalidate the tools + system cache.) The cache is per MODEL: when the
+// outline and the writing run on the same one, the plan call writes it; when
+// they differ (the default), a one-token warm-up on the writing model is
+// fired beside the plan — unwarmed, every parallel write misses and pays the
+// 1.25× write (measured: ~28k billed input tokens instead of ~6k). The
+// warm-up takes 1–2 s against a plan of ~5 s; if it ever loses that race the
+// writes still succeed, at the unwarmed price.
 //
 // The compact lines are a deliberate token diet, not a style choice: the same
 // content as JSON objects costs ~2× the output tokens, i.e. ~2× the wait.
@@ -985,6 +992,18 @@ export async function generateQuestionPlan(
   input: GenerateQuestionFlowInput,
 ): Promise<QuestionPlan> {
   const prefix = plannedBuildPrefix(input);
+  const planModel = input.plannedModels?.plan ?? MODEL_PLAN;
+  const writeModel = input.plannedModels?.write ?? MODEL;
+  if (planModel !== writeModel) {
+    void warmPromptCache({
+      model: writeModel,
+      max_tokens: 1,
+      system: prefix.system,
+      tools: prefix.tools,
+      tool_choice: { type: "tool", name: "emit_questions" },
+      messages: [{ role: "user", content: "." }],
+    });
+  }
   const exact = input.exactQuestionCount;
   let lastIssue: string | undefined;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -995,7 +1014,7 @@ export async function generateQuestionPlan(
     const response = await hedged(
       () =>
         createMessage({
-          model: input.plannedModels?.plan ?? MODEL,
+          model: planModel,
           max_tokens: MAX_TOKENS,
           system: prefix.system,
           tools: prefix.tools,

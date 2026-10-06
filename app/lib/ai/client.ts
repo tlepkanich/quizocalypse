@@ -20,6 +20,14 @@ export const MODEL_FAST = MODEL;
 // MODEL_FAST per the owner's keep-Sonnet decision. Haiku 4.5 takes plain
 // forced-tool messages.create (no effort param — it would 400).
 export const MODEL_SPEED = "claude-haiku-4-5";
+// QBUILD-FAST — the planned question build's OUTLINE step only
+// (generateQuestionPlan). Owner-approved 2026-10-05 after a blind side-by-side
+// (7 stores, 144 builds): an Opus 4.8 outline with Sonnet writing gave better
+// deciding questions and better whole quizzes at the same wall time. The
+// WRITING stays on MODEL — Opus-written copy rated worst on plain wording.
+// Opus 4.8 takes a plain forced-tool messages.create; Opus 5.5 does not (it
+// 400s on forced tool use and cannot disable thinking).
+export const MODEL_PLAN = "claude-opus-4-8";
 export const MAX_TOKENS = 8192;
 const AI_TIMEOUT_MS = 60_000;
 const AI_TRANSIENT_RETRIES = 2;
@@ -54,20 +62,27 @@ export type AiUsageEmitter = (usage: {
   cache_read_input_tokens: number;
 }) => void;
 
+// The per-shop ledger converts tokens at the SONNET rate (aiBudget.server.ts).
+// A model priced above that rate emits its tokens weighted by the price
+// ratio, so the ceiling keeps erring early, never late. Opus 4.8 is $5/$25
+// per MTok against Sonnet's $3/$15: 5/3 on input and output alike.
+const LEDGER_TOKEN_WEIGHT: Record<string, number> = { [MODEL_PLAN]: 5 / 3 };
+
 // Prompt-cached input bills at 1.25× (write) and 0.1× (read) of the input
 // rate and is reported OUTSIDE usage.input_tokens. Fold it in at those
 // weights so the per-shop ledger keeps counting every billed token. A
-// response with no cache activity emits exactly what it did before.
-function emittedUsage(usage: { input_tokens: number; output_tokens: number }) {
+// Sonnet-rate response with no cache activity emits exactly what it did before.
+function emittedUsage(usage: { input_tokens: number; output_tokens: number }, model: string) {
   const cached = usage as {
     cache_creation_input_tokens?: number | null;
     cache_read_input_tokens?: number | null;
   };
   const written = cached.cache_creation_input_tokens ?? 0;
   const read = cached.cache_read_input_tokens ?? 0;
+  const weight = LEDGER_TOKEN_WEIGHT[model] ?? 1;
   return {
-    input_tokens: usage.input_tokens + Math.round(written * 1.25 + read * 0.1),
-    output_tokens: usage.output_tokens,
+    input_tokens: Math.round((usage.input_tokens + written * 1.25 + read * 0.1) * weight),
+    output_tokens: Math.round(usage.output_tokens * weight),
     cache_creation_input_tokens: written,
     cache_read_input_tokens: read,
   };
@@ -89,11 +104,27 @@ export async function createMessage(
 ): Promise<Anthropic.Message> {
   const res = await client().messages.create(params);
   try {
-    aiUsageEmitter?.(emittedUsage(res.usage));
+    aiUsageEmitter?.(emittedUsage(res.usage, params.model));
   } catch {
     // Emitter bugs are the emitter's problem; the response stands.
   }
   return res;
+}
+
+// QBUILD-FAST — write `params`' cached prompt prefix for its model without
+// waiting on real output: one output token, response discarded. For a burst
+// of parallel calls whose cache nothing else writes — unwarmed, EVERY call in
+// the burst misses and pays the 1.25× write. Best-effort by contract: it
+// never rejects, because a failed warm-up only costs the cache discount and
+// the real calls that follow surface any API error themselves.
+export async function warmPromptCache(
+  params: Anthropic.MessageCreateParamsNonStreaming,
+): Promise<void> {
+  try {
+    await createMessage({ ...params, max_tokens: 1 });
+  } catch {
+    // Deliberately dropped — see above.
+  }
 }
 
 // Beta twin of createMessage for the one surface that needs it (brand-PDF
@@ -105,7 +136,7 @@ export async function createBetaMessage(
 ): Promise<Anthropic.Beta.Messages.BetaMessage> {
   const res = await client().beta.messages.create(params);
   try {
-    aiUsageEmitter?.(emittedUsage(res.usage));
+    aiUsageEmitter?.(emittedUsage(res.usage, params.model));
   } catch {
     // Emitter bugs are the emitter's problem; the response stands.
   }
