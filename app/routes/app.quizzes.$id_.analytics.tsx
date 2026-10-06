@@ -41,7 +41,11 @@ export default function QuizAnalytics() {
   return (
     <QzPage width="wide">
       <TitleBar title="Analytics" />
-      <QuizAnalyticsView data={data} surface="app" exportBase={null} />
+      {/* The Crest surface (.qz-crest, owner 2026-10-05) — the same wrapper
+          as /studio/:id/analytics. */}
+      <div className="qz-crest is-wide">
+        <QuizAnalyticsView data={data} surface="app" exportBase={null} />
+      </div>
     </QzPage>
   );
 }

@@ -9680,7 +9680,8 @@ body[data-qz] .qz-cust-row:focus-visible {
    18px apart, 12px inner rows, pill chips / badges / buttons. No text sits on
    the print — the page title rides a white header card, as on Quizzes.
    Scoped overrides only: pages without the wrapper are untouched. */
-.qz-shell-main:has(.qz-crest) { background: var(--qz-ground-crest); }
+.qz-shell-main:has(.qz-crest),
+.qz-main:has(.qz-crest) { background: var(--qz-ground-crest); } /* studio shell · embedded /app shell */
 .qz-crest { width: 100%; max-width: 960px; margin-inline: auto; display: flex; flex-direction: column; gap: 18px; }
 /* A data page whose table cannot fit 960 (Analytics: eight columns need
    1108px) takes the wide column. Below it the table scrolls in its own box. */
@@ -9828,6 +9829,10 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-crest .qz-eng-tg.is-on { background: var(--qz-accent); }
 .qz-crest .qz-eng-knob { width: 16px; height: 16px; border-radius: 999px; }
 .qz-crest .qz-eng-tg.is-on .qz-eng-knob { transform: translateX(14px); }
+/* Notices inside a crest card are inner boxes, and a card's own title is a
+   sub-heading (the embedded /app Settings cards use .qz-h1 for it). */
+.qz-crest .qz-card .qz-banner { border-color: var(--qz-rule-2); border-radius: 12px; box-shadow: none; }
+.qz-crest .qz-card .qz-h1 { font-size: 17px; font-weight: 700; letter-spacing: -.015em; }
 /* A switch beside copy: keep it level with the first line; Home's row type. */
 .qz-crest .qz-rp2-check { gap: 12px; font-size: 14.5px; font-weight: 600; line-height: 1.3; color: var(--qz-ink); }
 .qz-crest .qz-reccopy-help { margin-top: 4px; font-size: 13px; line-height: 1.5; }
