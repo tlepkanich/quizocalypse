@@ -9768,6 +9768,43 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-crest .qz-anbtn, .qz-crest .qz-anseg, .qz-crest .qz-anseg button, .qz-crest .qz-ansearch { border-radius: 999px; }
 .qz-crest .qz-empty { padding: 40px 22px; }
 
+/* The per-quiz Analytics page inside a crest page. The control bar is the
+   header card (rules above); the tab strip is a card; and everything under
+   the tabs (.qz-anbody) is ONE card, Home's "Last 30 days" pattern: its stat
+   tiles, tables, charts and findings are 12px inner boxes, and its headings
+   are sub-headings split by a hairline. So seven tabbed sections take the
+   surface with no change inside them. */
+.qz-crest .qz-antabs,
+.qz-crest .qz-anbody {
+  margin: 0; border: 0; border-radius: 22px; background: var(--qz-paper); box-shadow: var(--qz-edge);
+}
+.qz-crest .qz-antabs { gap: 4px; padding: 8px 12px; }
+.qz-crest .qz-antabs a { margin: 0; padding: 7px 13px; border: 0; border-radius: 999px; }
+.qz-crest .qz-antabs a:hover { background: var(--qz-cream-2); }
+.qz-crest .qz-antabs a.is-active { background: var(--qz-accent-wash); color: var(--qz-accent-ink); }
+.qz-crest .qz-anbody { padding: 20px 22px 22px; }
+.qz-crest .qz-anbody > :first-child { margin-top: 0; }
+.qz-crest .qz-anbody > :last-child { margin-bottom: 0; }
+/* Sub-headings: a hairline above every one but the first block. */
+.qz-crest .qz-anbody .qz-anhead { margin: 22px 0 14px; padding-top: 20px; border-top: 1px solid var(--qz-rule-2); align-items: center; }
+.qz-crest .qz-anbody > .qz-anhead:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.qz-crest .qz-anbody .qz-anhead h2 { font-size: 17px; font-weight: 700; letter-spacing: -.015em; }
+/* Inner boxes, not cards: tiles, plain cards, and the empty state. */
+.qz-crest .qz-anbody .qz-antiles { gap: 10px; margin: 0; }
+.qz-crest .qz-anbody .qz-antile {
+  padding: 14px 16px; border: 1px solid var(--qz-rule-2); border-radius: 12px;
+  background: var(--qz-ls-cell-bg); box-shadow: none;
+}
+.qz-crest .qz-anbody .qz-antile.is-hero { background: var(--qz-accent-wash); border-color: var(--qz-accent-line); }
+.qz-crest .qz-anbody .qz-card {
+  padding: 16px 18px; border: 1px solid var(--qz-rule-2); border-radius: 12px;
+  background: var(--qz-ls-cell-bg); box-shadow: none;
+}
+/* A flush card only frames a table or chart, which draws its own box. */
+.qz-crest .qz-anbody .qz-card.qz-flush { padding: 0; border: 0; background: transparent; }
+.qz-crest .qz-anbody .qz-empty { padding: 32px 16px; border-radius: 12px; background: transparent; box-shadow: none; }
+.qz-crest .qz-anbody .qz-anselect { border-radius: 999px; padding-inline: 12px; }
+
 /* The Engagement panel inside a crest page (account Settings): its intro,
    each section and its closing note are cards; chips and toggles take Home's
    shapes. The per-quiz engagement page has no wrapper and keeps its look. */
@@ -11309,7 +11346,7 @@ button.qz-pb-row:hover { background: var(--qz-cream-2); }
    Page identity left, the range control (the page's controlling input, so it
    carries accent weight) beside it, Export pushed right. */
 .qz-anbar-row { display: flex; align-items: center; gap: 14px; min-height: 56px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--qz-rule); flex-wrap: wrap; }
-.qz-anbar-title { flex: none; display: inline-flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--qz-ink); }
+.qz-anbar-title { margin: 0; flex: none; display: inline-flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; color: var(--qz-ink); }
 .qz-anback { color: var(--qz-ink); text-decoration: none; display: inline-flex; align-items: center; gap: 7px; }
 .qz-anback:hover { color: var(--qz-accent-ink); }
 .qz-anbtn { font: inherit; font-size: 12.5px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: var(--qz-radius-sm); border: 1px solid var(--qz-rule); background: var(--qz-paper); color: var(--qz-ink-2); cursor: pointer; transition: border-color var(--qz-dur-fast) var(--qz-ease), color var(--qz-dur-fast) var(--qz-ease); }

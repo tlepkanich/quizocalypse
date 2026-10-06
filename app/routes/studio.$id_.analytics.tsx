@@ -34,7 +34,12 @@ export default function StudioQuizAnalytics() {
   const { data } = useLoaderData<typeof loader>();
   return (
     <QzPage width="wide">
-      <QuizAnalyticsView data={data} surface="studio" exportBase="/studio/customers/export" />
+      {/* The Crest surface (.qz-crest, owner 2026-10-05) — wide, like the
+          Analytics home: its tables need the room. The embedded /app renders
+          this view without the wrapper. */}
+      <div className="qz-crest is-wide">
+        <QuizAnalyticsView data={data} surface="studio" exportBase="/studio/customers/export" />
+      </div>
     </QzPage>
   );
 }

@@ -348,15 +348,17 @@ export function QuizAnalyticsView({
     return (
       <div className="qz-anwrap">
         {tabs}
-        <QzCard style={{ marginBottom: 20 }}>
-          <div className="qz-label">This quiz isn&rsquo;t live yet</div>
-          <p className="qz-muted qz-mt-8" style={{ margin: "8px 0 0" }}>
-            Numbers start the moment you publish. The checks below read your quiz&rsquo;s logic, so they work
-            now — and they&rsquo;re worth clearing first.
-          </p>
-        </QzCard>
-        <SectionHead title="Fix before you publish" sub="from your quiz logic" />
-        <InsightList data={data} surface={surface} searchParams={searchParams} emptyCopy="Every path resolves. Publish when ready." />
+        <div className="qz-anbody">
+          <QzCard style={{ marginBottom: 20 }}>
+            <div className="qz-label">This quiz isn&rsquo;t live yet</div>
+            <p className="qz-muted qz-mt-8" style={{ margin: "8px 0 0" }}>
+              Numbers start the moment you publish. The checks below read your quiz&rsquo;s logic, so they work
+              now — and they&rsquo;re worth clearing first.
+            </p>
+          </QzCard>
+          <SectionHead title="Fix before you publish" sub="from your quiz logic" />
+          <InsightList data={data} surface={surface} searchParams={searchParams} emptyCopy="Every path resolves. Publish when ready." />
+        </div>
       </div>
     );
   }
@@ -365,24 +367,26 @@ export function QuizAnalyticsView({
     return (
       <div className="qz-anwrap">
         {tabs}
-        <QzCard style={{ marginBottom: 20 }}>
-          <div className="qz-label">You&rsquo;re live — now get shoppers to it</div>
-          <ul className="qz-anchecklist">
-            <li className="is-done">✓ Quiz published{data.quiz.publishedAt ? ` · ${formatDate(data.quiz.publishedAt)}` : ""}</li>
-            <li>⬜ First response — waiting</li>
-          </ul>
-          <p className="qz-muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
-            Every section turns on with the first response. We don&rsquo;t show rates until there are enough of
-            them to mean something.
-          </p>
-        </QzCard>
-        <SectionHead title="Checked before launch" sub="from your quiz logic" />
-        <InsightList
-          data={data}
-          surface={surface}
-          searchParams={searchParams}
-          emptyCopy={`Every path resolves${data.productMeta ? `, and all ${data.productMeta.mapped} mapped products can be reached` : ""}.`}
-        />
+        <div className="qz-anbody">
+          <QzCard style={{ marginBottom: 20 }}>
+            <div className="qz-label">You&rsquo;re live — now get shoppers to it</div>
+            <ul className="qz-anchecklist">
+              <li className="is-done">✓ Quiz published{data.quiz.publishedAt ? ` · ${formatDate(data.quiz.publishedAt)}` : ""}</li>
+              <li>⬜ First response — waiting</li>
+            </ul>
+            <p className="qz-muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
+              Every section turns on with the first response. We don&rsquo;t show rates until there are enough of
+              them to mean something.
+            </p>
+          </QzCard>
+          <SectionHead title="Checked before launch" sub="from your quiz logic" />
+          <InsightList
+            data={data}
+            surface={surface}
+            searchParams={searchParams}
+            emptyCopy={`Every path resolves${data.productMeta ? `, and all ${data.productMeta.mapped} mapped products can be reached` : ""}.`}
+          />
+        </div>
       </div>
     );
   }
@@ -391,91 +395,97 @@ export function QuizAnalyticsView({
     <div className="qz-anwrap">
       {controlBar}
       {tabs}
-      {data.truncated ? (
-        <p className="qz-dim" style={{ fontSize: 12, margin: "0 0 14px" }}>
-          Showing the most recent {5000} sessions in this range — narrow the range for older activity.
-        </p>
-      ) : null}
-      {dataState === "low" ? (
-        <p className="qz-dim" style={{ fontSize: 12.5, margin: "0 0 14px" }}>
-          {kpis.engaged} response{kpis.engaged === 1 ? "" : "s"} so far — rates unlock as volume grows, and each
-          tile says what it needs.
-        </p>
-      ) : null}
+      {/* .qz-anbody — everything under the tabs, as ONE block. A crest page
+          draws it as a single card (tiles, tables and findings become inner
+          boxes), so no heading or note sits on the print. Unstyled elsewhere:
+          a plain block, so the embedded /app layout is unchanged. */}
+      <div className="qz-anbody">
+        {data.truncated ? (
+          <p className="qz-dim" style={{ fontSize: 12, margin: "0 0 14px" }}>
+            Showing the most recent {5000} sessions in this range — narrow the range for older activity.
+          </p>
+        ) : null}
+        {dataState === "low" ? (
+          <p className="qz-dim" style={{ fontSize: 12.5, margin: "0 0 14px" }}>
+            {kpis.engaged} response{kpis.engaged === 1 ? "" : "s"} so far — rates unlock as volume grows, and each
+            tile says what it needs.
+          </p>
+        ) : null}
 
-      {section === "overview" ? (
-        <>
-          <div className="qz-antiles">
-            <GatedTile
-              label={<>Completion rate <MethodInfo onClick={() => setMethodOpen(true)} /></>}
-              gated={kpis.completion}
-              unit="sessions"
-              hero
-              deltaPoints={kpis.deltas.completionPoints}
-              detail={`${kpis.completed} of ${kpis.engaged} who started`}
-            />
-            <CountTile
-              label="Reached recommendations"
-              value={kpis.completed.toLocaleString()}
-              detail={
-                kpis.deltas.sessionsPct != null ? (
-                  <>
-                    <span className={kpis.deltas.sessionsPct >= 0 ? "qz-anup" : "qz-andown"}>
-                      {kpis.deltas.sessionsPct >= 0 ? "▲" : "▼"} {Math.abs(kpis.deltas.sessionsPct)}% sessions
-                    </span>{" "}
-                    · of {kpis.engaged.toLocaleString()} who started
-                  </>
-                ) : (
-                  `of ${kpis.engaged.toLocaleString()} who started`
-                )
-              }
-            />
-            <GatedTile
-              label="Email capture"
-              gated={kpis.capture}
-              unit="finishers"
-              detail={`${kpis.captureSessions} of ${kpis.completed} finished`}
-            />
-            {data.attribution === "none" ? (
-              // NOT the same as a thin sample: attribution is structurally
-              // impossible here (W6), so there is no figure to disclose.
-              <CountTile
-                label="Revenue influenced"
-                value={<span className="qz-annotmeas">Not measurable</span>}
-                detail="No Shopify order feed on this workspace."
+        {section === "overview" ? (
+          <>
+            <div className="qz-antiles">
+              <GatedTile
+                label={<>Completion rate <MethodInfo onClick={() => setMethodOpen(true)} /></>}
+                gated={kpis.completion}
+                unit="sessions"
+                hero
+                deltaPoints={kpis.deltas.completionPoints}
+                detail={`${kpis.completed} of ${kpis.engaged} who started`}
               />
-            ) : (
               <CountTile
-                label={<>Revenue influenced <MethodInfo onClick={() => setMethodOpen(true)} /></>}
-                value={kpis.revenue.formatted}
-                detail={kpis.revenue.orders > 0 ? `${kpis.revenue.orders} orders · 7-day window` : "no attributed orders yet"}
+                label="Reached recommendations"
+                value={kpis.completed.toLocaleString()}
+                detail={
+                  kpis.deltas.sessionsPct != null ? (
+                    <>
+                      <span className={kpis.deltas.sessionsPct >= 0 ? "qz-anup" : "qz-andown"}>
+                        {kpis.deltas.sessionsPct >= 0 ? "▲" : "▼"} {Math.abs(kpis.deltas.sessionsPct)}% sessions
+                      </span>{" "}
+                      · of {kpis.engaged.toLocaleString()} who started
+                    </>
+                  ) : (
+                    `of ${kpis.engaged.toLocaleString()} who started`
+                  )
+                }
               />
-            )}
-          </div>
+              <GatedTile
+                label="Email capture"
+                gated={kpis.capture}
+                unit="finishers"
+                detail={`${kpis.captureSessions} of ${kpis.completed} finished`}
+              />
+              {data.attribution === "none" ? (
+                // NOT the same as a thin sample: attribution is structurally
+                // impossible here (W6), so there is no figure to disclose.
+                <CountTile
+                  label="Revenue influenced"
+                  value={<span className="qz-annotmeas">Not measurable</span>}
+                  detail="No Shopify order feed on this workspace."
+                />
+              ) : (
+                <CountTile
+                  label={<>Revenue influenced <MethodInfo onClick={() => setMethodOpen(true)} /></>}
+                  value={kpis.revenue.formatted}
+                  detail={kpis.revenue.orders > 0 ? `${kpis.revenue.orders} orders · 7-day window` : "no attributed orders yet"}
+                />
+              )}
+            </div>
 
-          <SectionHead title="What to fix" sub={data.insights.cards.length ? "ranked by shoppers affected" : undefined} />
-          <InsightList
-            data={data}
-            surface={surface}
-            searchParams={searchParams}
-            emptyCopy={`Your quiz logic and the ${data.range.label.toLowerCase()} of activity both came back clean.`}
-          />
+            <SectionHead title="What to fix" sub={data.insights.cards.length ? "ranked by shoppers affected" : undefined} />
+            <InsightList
+              data={data}
+              surface={surface}
+              searchParams={searchParams}
+              emptyCopy={`Your quiz logic and the ${data.range.label.toLowerCase()} of activity both came back clean.`}
+            />
 
-          {data.abTests.length > 0 ? <AbSection abTests={data.abTests} /> : null}
-        </>
-      ) : null}
+            {data.abTests.length > 0 ? <AbSection abTests={data.abTests} /> : null}
+          </>
+        ) : null}
 
-      {section === "revenue" ? (
-        <RevenueSection data={data} onMethod={() => setMethodOpen(true)} />
-      ) : null}
+        {section === "revenue" ? (
+          <RevenueSection data={data} onMethod={() => setMethodOpen(true)} />
+        ) : null}
 
-      {section === "answers" ? <AnswersSection data={data} /> : null}
-      {section === "products" ? <ProductsSection data={data} /> : null}
-      {section === "flow" ? <FlowSection data={data} /> : null}
-      {section === "customers" ? (
-        <CustomersSection data={data} cohort={cohort} setCohort={setCohort} exportBase={exportBase} />
-      ) : null}
-      {section === "compare" ? <CompareSection data={data} /> : null}
+        {section === "answers" ? <AnswersSection data={data} /> : null}
+        {section === "products" ? <ProductsSection data={data} /> : null}
+        {section === "flow" ? <FlowSection data={data} /> : null}
+        {section === "customers" ? (
+          <CustomersSection data={data} cohort={cohort} setCohort={setCohort} exportBase={exportBase} />
+        ) : null}
+        {section === "compare" ? <CompareSection data={data} /> : null}
+      </div>
 
       <MethodDrawer open={methodOpen} onClose={() => setMethodOpen(false)} />
     </div>
