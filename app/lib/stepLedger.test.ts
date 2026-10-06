@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
-import { buildStepLedger, lastAnswers } from "./stepLedger";
+import { STEEPEST_MIN_REACHED, buildStepLedger, lastAnswers, typicalStepDropoff } from "./stepLedger";
 
 // ANALYTICS P0 — the merged step ledger. Reconciliation (reached = continued +
 // skipped + left) is the whole point; it's asserted here on hand-computable
@@ -76,7 +76,11 @@ describe("linear ledger", () => {
     for (const row of [q1, q2]) {
       expect(row.reached).toBe(row.continued! + row.skipped! + row.left!);
     }
-    expect(ledger.steepestNodeId).toBe("q1");
+    // Three shoppers cannot name a steepest step: that needs 30 at the step.
+    expect(ledger.steepestNodeId).toBeNull();
+    // Typical = the middle drop-off of the steps that have one (intro 0,
+    // q1 1/3, q2 0): the lower middle of [0, 0, 1/3].
+    expect(ledger.typicalDropoff).toBe(0);
     // Intro carries engaged; the single result carries completed.
     expect(ledger.steps[0]).toMatchObject({ kind: "intro", reached: 3 });
     expect(ledger.steps.at(-1)).toMatchObject({ kind: "result", reached: 2 });
@@ -209,5 +213,36 @@ describe("branching docs", () => {
     expect(laneQ.reached).toBe(1);
     expect(laneQ.dropoff).toBeNull(); // never a cross-lane drop-off claim
     expect(ledger.steepestNodeId).toBeNull();
+  });
+});
+
+describe("steepest and typical drop-off", () => {
+  // 40 shoppers start; 10 leave at q1, 3 leave at q2, 27 finish.
+  const cohort = () => {
+    const events = [];
+    for (let i = 0; i < 40; i += 1) {
+      const sid = `s${i}`;
+      events.push(ans(sid, "q1", ["a1"]));
+      if (i >= 10) events.push(ans(sid, "q2", ["b1"]));
+      if (i >= 13) events.push(done(sid));
+    }
+    return events;
+  };
+
+  it("names the steepest step once 30 shoppers reached it", () => {
+    const ledger = buildStepLedger(LINEAR, cohort(), 40, 27);
+    const q1 = ledger.steps.find((s) => s.nodeId === "q1")!;
+    expect(q1.reached).toBeGreaterThanOrEqual(STEEPEST_MIN_REACHED);
+    expect(q1).toMatchObject({ reached: 40, left: 10, dropoff: 0.25 });
+    expect(ledger.steepestNodeId).toBe("q1");
+  });
+
+  it("typical drop-off is the middle of the steps' drop-offs; an even count takes the lower middle", () => {
+    const ledger = buildStepLedger(LINEAR, cohort(), 40, 27);
+    // intro 0, q1 10/40, q2 3/30 → sorted [0, 0.1, 0.25] → 0.1
+    expect(ledger.typicalDropoff).toBeCloseTo(0.1, 10);
+    const step = (dropoff: number | null) => ({ ...ledger.steps[0]!, dropoff });
+    expect(typicalStepDropoff([step(0.4), step(0.1), step(0.2), step(0.3)])).toBe(0.2);
+    expect(typicalStepDropoff([step(null)])).toBeNull();
   });
 });

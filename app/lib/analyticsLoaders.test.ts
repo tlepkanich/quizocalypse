@@ -260,7 +260,8 @@ describe("step ledger", () => {
     expect(q1).toMatchObject({ reached: 3, continued: 2, skipped: 0, left: 1 });
     expect(q1.reached).toBe(q1.continued! + q1.skipped! + q1.left!);
     expect(q2).toMatchObject({ reached: 2, continued: 1, skipped: 1, left: 0 });
-    expect(data.ledger!.steepestNodeId).toBe("q1");
+    // Three shoppers is under STEEPEST_MIN_REACHED: no step is named steepest.
+    expect(data.ledger!.steepestNodeId).toBeNull();
   });
 
   it("answer distributions bucket the skip separately", async () => {

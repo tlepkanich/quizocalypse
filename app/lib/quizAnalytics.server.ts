@@ -22,6 +22,7 @@ import { answerDistributions, type QuestionDistribution } from "./answerDistribu
 import { computeReachability } from "./quizReachability";
 import { buildQuizInsights, distinctOutcomes, INSIGHT_SNOOZE_DAYS, type InsightsResult } from "./quizInsights";
 import { gateRate, type GatedRate } from "./analyticsConfidence";
+import { ATTRIBUTION_WINDOW_DAYS } from "./conversionAttribution";
 
 // ── Range ──────────────────────────────────────────────────────────────────
 
@@ -91,8 +92,9 @@ export function resolveAnalyticsRange(searchParams: URLSearchParams, now = new D
  *  disclose truncation rather than silently sample (W15). */
 export const ANALYTICS_SESSION_CAP = 5000;
 
-/** Attribution look-back, printed beside every revenue figure (§6.5). */
-export const ATTRIBUTION_WINDOW_DAYS = 7;
+/** The attribution window, printed beside every revenue figure (§6.5). One
+ *  constant, owned by the matcher the orders webhook runs. */
+export { ATTRIBUTION_WINDOW_DAYS };
 
 interface CohortEventRow {
   sessionId: string;
