@@ -68,6 +68,12 @@ export interface InsightsResult {
   more: number;
   /** True when every rule came back clean. */
   clean: boolean;
+  /**
+   * Findings that still apply but are snoozed (`InsightInputs.dismissed`).
+   * They are taken out BEFORE the cap, so dismissing a card brings the next
+   * one up instead of leaving a hole.
+   */
+  hidden?: InsightCard[];
 }
 
 const CARD_CAP = 3;
@@ -87,6 +93,10 @@ export interface InsightInputs {
   contactsNoMatch?: number;
   contactsTotal?: number;
   contactsNoMatchBought?: number;
+  /** Card ids currently snoozed; they leave the list before it is capped. */
+  dismissed?: ReadonlySet<string>;
+  /** Cards to return. Default 3; the shop overview passes Infinity. */
+  cap?: number;
 }
 
 function words(s: string): number {
@@ -232,8 +242,9 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
     const qRows = ledger.steps.filter((s) => s.kind === "question" && s.dropoff != null);
     const target = qRows.find((s) => s.nodeId === ledger.steepestNodeId);
     if (target && target.reached != null && qRows.length >= 2) {
-      const others = qRows.filter((s) => s.nodeId !== target.nodeId).map((s) => s.dropoff!) .sort((a, b) => a - b);
-      const median = others[Math.floor(others.length / 2)] ?? 0;
+      // The baseline is the ledger's own "typical step drop-off" — the figure
+      // the Quiz flow tab prints — so the card and the tab quote one number.
+      const median = ledger.typicalDropoff ?? 0;
       const n = target.reached;
       const drop = target.dropoff!;
       const meaningful = drop >= 0.1 && drop >= median * 2;
@@ -249,20 +260,20 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
             ? `"${target.label}" loses ${Math.round(drop * 100)}% of the shoppers who reach it`
             : `"${target.label}" is the steepest drop in this quiz`,
           body: exact
-            ? `That's well above the ${Math.round(median * 100)}% typical of your other steps.`
+            ? `That's well above the ${Math.round(median * 100)}% typical step drop-off in this quiz.`
             : "At this volume we can rank the step but an exact percentage would swing on luck. It appears here because it is consistently your worst step.",
           evidence: exact
             ? [
                 { label: "Reached", value: String(n) },
                 { label: "Left here", value: String(target.left ?? 0) },
-                { label: "Other steps", value: `${Math.round(median * 100)}%` },
+                { label: "Typical step", value: `${Math.round(median * 100)}%` },
                 ...(perMonth > 0 ? [{ label: "About", value: `${perMonth} shoppers a month` }] : []),
               ]
             : [{ label: "Reached", value: String(n) }],
           basis: "Read from per-question answer events against the quiz's own step order",
           action: { label: "See it in the flow", kind: "flow", nodeId: target.nodeId },
           math: exact
-            ? `${n} shoppers reached this step. ${Math.round(drop * 100)}% left here, against ${Math.round(median * 100)}% at every other step — so about ${excess} more shoppers left than the rest of the quiz would predict, across ${input.rangeDays} days. This is an estimate of how many shoppers are affected, not a measurement of lost sales.`
+            ? `${n} shoppers reached this step. ${Math.round(drop * 100)}% left here, against a typical ${Math.round(median * 100)}% across the steps — so about ${excess} more shoppers left than the rest of the quiz would predict, across ${input.rangeDays} days. This is an estimate of how many shoppers are affected, not a measurement of lost sales.`
             : undefined,
           excess,
         });
@@ -316,9 +327,14 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
 
   // ── Rank + cap ───────────────────────────────────────────────────────────
   cards.sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.excess - a.excess);
+  // Snoozed cards leave BEFORE the cap, so the next finding moves up.
+  const dismissed = input.dismissed;
+  const visible = dismissed ? cards.filter((c) => !dismissed.has(c.id)) : cards;
+  const cap = input.cap ?? CARD_CAP;
   return {
-    cards: cards.slice(0, CARD_CAP),
-    more: Math.max(0, cards.length - CARD_CAP),
-    clean: cards.length === 0,
+    cards: visible.slice(0, cap),
+    more: Math.max(0, visible.length - cap),
+    clean: visible.length === 0,
+    ...(dismissed ? { hidden: cards.filter((c) => dismissed.has(c.id)) } : {}),
   };
 }

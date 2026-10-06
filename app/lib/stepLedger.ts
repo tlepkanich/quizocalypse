@@ -51,8 +51,36 @@ export interface StepLedger {
   /** True ⇒ the doc branches; per-lane rows carry answered counts only. */
   branching: boolean;
   steps: LedgerStep[];
-  /** nodeId of the steepest RELATIVE drop among question rows (linear only). */
+  /**
+   * nodeId of the steepest RELATIVE drop among the steps that
+   * STEEPEST_MIN_REACHED or more shoppers reached. null below that volume: a
+   * "worst step" picked from a handful of shoppers is luck, not a finding.
+   */
   steepestNodeId: string | null;
+  /**
+   * "Typical step drop-off": the middle drop-off across all the steps that
+   * have one. The Quiz flow figure and the drop-off insight both read THIS
+   * number, so the two can never disagree.
+   */
+  typicalDropoff: number | null;
+}
+
+/** A step needs this many shoppers before it can be named the steepest drop,
+ *  and before its drop-off is shown as a percentage. */
+export const STEEPEST_MIN_REACHED = 30;
+
+/**
+ * The middle value of the steps' drop-offs. With an even count it is the
+ * LOWER of the two middle values — a real step's figure, never an average
+ * that no step on the page shows.
+ */
+export function typicalStepDropoff(steps: LedgerStep[]): number | null {
+  const drops = steps
+    .map((s) => s.dropoff)
+    .filter((d): d is number => d != null)
+    .sort((a, b) => a - b);
+  if (drops.length === 0) return null;
+  return drops[Math.floor((drops.length - 1) / 2)]!;
 }
 
 interface AnswerFact {
@@ -289,15 +317,18 @@ export function buildStepLedger(
     }
   }
 
-  // Steepest RELATIVE drop among linear question rows.
+  // Steepest RELATIVE drop among the steps enough shoppers reached. The
+  // Start row counts: shoppers who press Start and answer nothing are a step's
+  // worth of loss like any other.
   let steepestNodeId: string | null = null;
   let steepest = 0;
   for (const s of steps) {
-    if (s.kind === "question" && s.dropoff != null && s.dropoff > steepest) {
+    if (s.dropoff == null || (s.reached ?? 0) < STEEPEST_MIN_REACHED) continue;
+    if (s.dropoff > steepest) {
       steepest = s.dropoff;
       steepestNodeId = s.nodeId;
     }
   }
 
-  return { branching, steps, steepestNodeId };
+  return { branching, steps, steepestNodeId, typicalDropoff: typicalStepDropoff(steps) };
 }

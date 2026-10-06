@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Quiz } from "./quizSchema";
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { buildQuizInsights, distinctOutcomes, type InsightInputs } from "./quizInsights";
-import type { StepLedger, LedgerStep } from "./stepLedger";
+import { typicalStepDropoff, type StepLedger, type LedgerStep } from "./stepLedger";
 
 // ANALYTICS P0 — the deterministic insight rules. Doc-static (Tier A) cards
 // fire at zero traffic; Tier B cards gate themselves on n; the list caps at 3.
@@ -76,7 +76,7 @@ function ledgerOf(rows: Array<Partial<LedgerStep> & { nodeId: string }>): StepLe
       steepestNodeId = s.nodeId;
     }
   }
-  return { branching: false, steps, steepestNodeId };
+  return { branching: false, steps, steepestNodeId, typicalDropoff: typicalStepDropoff(steps) };
 }
 
 describe("Tier A — doc-static", () => {
@@ -138,6 +138,28 @@ describe("Tier B — gated on n", () => {
     const leak = r.cards.find((c) => c.id === "leak:q2")!;
     expect(leak.headline).toContain("20%");
     expect(leak.evidence.some((e) => e.label === "Reached" && e.value === "900")).toBe(true);
+    // The baseline is the ledger's own typical step drop-off (the middle of
+    // 3%, 4%, 20%), the same figure the Quiz flow tab prints.
+    expect(ledger.typicalDropoff).toBe(0.04);
+    expect(leak.evidence).toContainEqual({ label: "Typical step", value: "4%" });
+  });
+
+  it("a dismissed card leaves BEFORE the cap, so the next finding moves up", () => {
+    const ledger = ledgerOf([
+      { nodeId: "q1", reached: 1000, dropoff: 0.03, left: 30 },
+      { nodeId: "q2", reached: 900, dropoff: 0.2, left: 180 },
+      { nodeId: "q3", reached: 700, dropoff: 0.04, left: 28 },
+    ]);
+    const base = inputs({ doc, ledger, engaged: 150, completed: 90, contactsNoMatch: 4, contactsTotal: 40 });
+    const all = buildQuizInsights({ ...base, cap: Infinity }).cards.map((c) => c.id);
+    expect(all.length).toBeGreaterThanOrEqual(3);
+    const capped = buildQuizInsights({ ...base, cap: 2 });
+    expect(capped.cards.map((c) => c.id)).toEqual(all.slice(0, 2));
+    expect(capped.more).toBe(all.length - 2);
+    const afterDismiss = buildQuizInsights({ ...base, cap: 2, dismissed: new Set([all[0]!]) });
+    expect(afterDismiss.cards.map((c) => c.id)).toEqual(all.slice(1, 3));
+    expect(afterDismiss.more).toBe(all.length - 3);
+    expect(afterDismiss.hidden?.map((c) => c.id)).toEqual([all[0]]);
   });
 
   it("the same leak at 30 ≤ n < 100 ranks WITHOUT a percentage", () => {

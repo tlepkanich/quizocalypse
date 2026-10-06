@@ -457,7 +457,7 @@ export function QuizAnalyticsView({
                 <CountTile
                   label={<>Revenue influenced <MethodInfo onClick={() => setMethodOpen(true)} /></>}
                   value={kpis.revenue.formatted}
-                  detail={kpis.revenue.orders > 0 ? `${kpis.revenue.orders} orders · 7-day window` : "no attributed orders yet"}
+                  detail={kpis.revenue.orders > 0 ? `${kpis.revenue.orders} orders · within ${data.attributionDays} days of starting the quiz` : "no attributed orders yet"}
                 />
               )}
             </div>
@@ -681,7 +681,7 @@ function RevenueSection({ data, onMethod }: { data: QuizAnalyticsData; onMethod:
                 </button>
               ))}
             </div>
-            <span className="qz-anattr">{data.attributionDays}-day attribution</span>
+            <span className="qz-anattr">Orders within {data.attributionDays} days of starting the quiz</span>
           </div>
           <QzCard flush>
             <div className="qz-anlegend">

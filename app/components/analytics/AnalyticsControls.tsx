@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { useSearchParams } from "@remix-run/react";
 import { QzDrawer, QzMenu } from "../qz-overlays";
 import { formatDate } from "../../lib/formatDate";
+import { ATTRIBUTION_WINDOW_DAYS } from "../../lib/conversionAttribution";
 import type { RangePreset } from "../../lib/quizAnalytics.server";
 
 export const RANGE_PRESETS: Array<{ value: RangePreset; label: string }> = [
@@ -160,8 +161,9 @@ export function MethodDrawer({ open, onClose }: { open: boolean; onClose: () => 
         <div>
           <h3 className="qz-h2" style={{ marginBottom: 6 }}>Why this won&rsquo;t match Shopify</h3>
           <p style={{ margin: 0 }}>
-            Shopify credits the last marketing click a shopper made, looking back 30 days. We credit a completed
-            quiz, looking back 7. Both are right — they answer different questions. Klaviyo, Meta and Google each
+            Shopify credits the last marketing click a shopper made, looking back 30 days. We credit the quiz when
+            an order holding a product it recommended is placed within {ATTRIBUTION_WINDOW_DAYS} days of the shopper
+            starting it. Both are right — they answer different questions. Klaviyo, Meta and Google each
             use their own model too, so adding them together counts the same order several times.
           </p>
         </div>
