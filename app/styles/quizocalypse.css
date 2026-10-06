@@ -9805,9 +9805,9 @@ body[data-qz] .qz-cust-row:focus-visible {
 .qz-crest .qz-anbody .qz-empty { padding: 32px 16px; border-radius: 12px; background: transparent; box-shadow: none; }
 .qz-crest .qz-anbody .qz-anselect { border-radius: 999px; padding-inline: 12px; }
 
-/* The Engagement panel inside a crest page (account Settings): its intro,
-   each section and its closing note are cards; chips and toggles take Home's
-   shapes. The per-quiz engagement page has no wrapper and keeps its look. */
+/* The Engagement panel inside a crest page (account Settings and the
+   per-quiz Engagement page): its intro, each section and its closing note
+   are cards; chips and toggles take Home's shapes. */
 .qz-crest .qz-eng-intro,
 .qz-crest .qz-eng-sec,
 .qz-crest .qz-eng-note {
@@ -9815,6 +9815,8 @@ body[data-qz] .qz-cust-row:focus-visible {
 }
 .qz-crest .qz-eng-intro { align-items: center; gap: 16px; padding: 18px 22px; }
 .qz-crest .qz-eng-intro .qz-display { font-size: 21px !important; font-weight: 700; letter-spacing: -.02em; }
+/* On the per-quiz page the intro IS the header card: page-title type. */
+.qz-crest .qz-eng-intro h1.qz-display { font-size: 30px !important; line-height: 1.1; }
 .qz-crest .qz-eng-note { padding: 14px 22px; }
 .qz-crest .qz-eng-head { padding: 16px 22px; }
 .qz-crest .qz-eng-body { padding: 6px 22px 20px; }

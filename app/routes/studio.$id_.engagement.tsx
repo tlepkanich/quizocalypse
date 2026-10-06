@@ -67,7 +67,10 @@ export default function StudioEngagement() {
   const { engagement, accountDefaults } = useLoaderData<typeof loader>();
   return (
     <QzPage>
-      <div className="qz-formcol">
+      {/* The Crest surface (.qz-crest, owner 2026-10-05), as on account
+          Settings. Not `nested`: here the panel's intro is the header card
+          and its "Engagement" title is the page's <h1>. */}
+      <div className="qz-crest">
         <EngagementSettingsPanel initial={engagement} accountDefaults={accountDefaults} />
       </div>
     </QzPage>
