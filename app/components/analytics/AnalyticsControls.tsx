@@ -72,7 +72,8 @@ export function AnalyticsControlBar({
   return (
     <>
       <div className="qz-anbar-row">
-        <div className="qz-anbar-title">{title}</div>
+        {/* The page's one top heading (both analytics pages had none). */}
+        <h1 className="qz-anbar-title">{title}</h1>
         {/* The range is the page's controlling input, so it carries accent
             weight; Export stays a plain action. */}
         <QzMenu
