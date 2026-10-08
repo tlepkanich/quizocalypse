@@ -161,7 +161,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
       tier: "A",
       severity: "warn",
       headline: `${reach.unreachable.length} of your ${reach.mapped} mapped products can never be recommended`,
-      body: "They sit in no result group and no fallback, so no combination of answers reaches them. This comes from your quiz's own logic, not from traffic.",
+      body: "No combination of answers reaches them: no starting set, narrowing answer or rule puts them on a results page. This comes from your quiz's own logic, not from traffic.",
       evidence: [
         { label: "Unreachable", value: String(reach.unreachable.length) },
         { label: "Mapped", value: String(reach.mapped) },

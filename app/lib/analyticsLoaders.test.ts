@@ -24,6 +24,7 @@ vi.mock("../db.server", () => ({
     product: { findMany: vi.fn() },
     backInStockRequest: { findMany: vi.fn() },
     category: { findMany: vi.fn() },
+    collection: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 
@@ -404,9 +405,9 @@ describe("product reach paths (decider docs)", () => {
     const data = await runLoader();
     const p1 = data.products.find((r) => r.productId === "p1")!;
     expect(p1.groupCount).toBe(2);
-    expect(p1.paths.map((x) => `${x.answer}→${x.target}`).sort()).toEqual([
-      "Dry→Dry & Sensitive",
-      "Oily→Oily",
+    expect(p1.ways.map((x) => x.sentence).sort()).toEqual([
+      "Dry opens the Dry & Sensitive set, which includes this product.",
+      "Oily opens the Oily set, which includes this product.",
     ]);
   });
 
@@ -414,7 +415,7 @@ describe("product reach paths (decider docs)", () => {
     const data = await runLoader();
     const orphan = data.products.find((r) => r.productId === "p9")!;
     expect(orphan.noLogic).toBe(true);
-    expect(orphan.paths).toEqual([]);
+    expect(orphan.ways).toEqual([]);
     expect(orphan.impressions).toBe(0);
   });
 

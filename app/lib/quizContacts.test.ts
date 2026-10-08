@@ -16,6 +16,7 @@ vi.mock("../db.server", () => ({
     product: { findMany: vi.fn() },
     backInStockRequest: { findMany: vi.fn() },
     category: { findMany: vi.fn() },
+    collection: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 

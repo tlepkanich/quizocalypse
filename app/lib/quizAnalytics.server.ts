@@ -17,9 +17,7 @@ import type { Quiz as QuizDoc } from "./quizSchema";
 import { totalRevenue, formatRevenue } from "./funnelAggregation";
 import { productPerformance, type ProductPerfRow } from "./productPerformance";
 import { findAbBranches, aggregateVariantFunnel } from "./abAnalytics";
-import type { StepLedger } from "./stepLedger";
 import type { QuestionDistribution } from "./answerDistribution";
-import { computeReachability } from "./quizReachability";
 import { buildQuizInsights, distinctOutcomes, INSIGHT_SNOOZE_DAYS, type InsightsResult } from "./quizInsights";
 import { gateRate, type GatedRate } from "./analyticsConfidence";
 import { ATTRIBUTION_WINDOW_DAYS } from "./conversionAttribution";
@@ -35,6 +33,9 @@ import {
 import { buildResultContext } from "./sessionResult";
 import { lineRevenueByProduct } from "./orderLines";
 import { returnsByProduct } from "./orderRefunds";
+import { logicReachability } from "./logicReachability";
+import type { ReachWay } from "./productReach";
+import { questionPath, type QuestionPath, type StepLedger } from "./stepLedger";
 
 // ── Range ──────────────────────────────────────────────────────────────────
 
@@ -252,11 +253,12 @@ export interface ProductRow extends ProductPerfRow {
   /** impressions ÷ finishers (exposure share). */
   share: number | null;
   /**
-   * "How shoppers reach this product" (§04) — the answer that routes to each
-   * result group holding it. Doc-static on decider docs: it is the quiz's own
-   * logic, so it is right at zero traffic. Empty on legacy docs.
+   * "How shoppers reach this product" (§04) — every way in, in the Logic
+   * step's own words (starting set, narrows, rules), each with the result it
+   * lands on (productReach.ts). Doc-static on published decider docs, so it is
+   * right at zero traffic. Empty on legacy docs.
    */
-  paths: Array<{ answer: string; question: string; target: string }>;
+  ways: ReachWay[];
   /** How many result groups hold this product. */
   groupCount: number;
 }
@@ -344,6 +346,9 @@ export interface QuizAnalyticsData {
   dismissed: Array<{ id: string; headline: string; severity: "info" | "warn" | "crit"; until: string }>;
   ledger: StepLedger | null;
   answers: QuestionDistribution[];
+  /** questionId → the path that alone sees it (branching quizzes). Absent =
+   *  every shopper sees the question. */
+  answerPaths: Record<string, QuestionPath>;
   /** Finished shoppers per result (legacy result nodes, decider targets). */
   outcomes: Array<{ label: string; count: number }>;
   results: ResultSummaryRow[];
@@ -679,7 +684,14 @@ export async function quizAnalyticsForShop(
 
   // Products — every product (no cap), preview events excluded (W4).
   const perfRows = productPerformance(cohortEvents, productMetaRows, { limit: Number.POSITIVE_INFINITY });
-  const reachability = published ? computeReachability(quiz.publishedJson) : null;
+  // "No logic" and the ways in — ONE computation for the Products table and
+  // the unreachable-products insight (logicReachability.ts).
+  const collectionRows = published
+    ? await prisma.collection.findMany({ where: { shopId: shop.id }, select: { collectionId: true, title: true } })
+    : [];
+  const { report: reachability, reach: productReach } = published
+    ? logicReachability(doc, quiz.publishedJson, new Map(collectionRows.map((c) => [c.collectionId, c.title])))
+    : { report: null, reach: null };
   const orderEvents = fig.orderEvents;
 
   // productId → distinct attributed ORDERS that contained it (E7), deduped by
@@ -720,27 +732,13 @@ export async function quizAnalyticsForShop(
   let lineRevenueTotal = 0;
   for (const v of lines.byProduct.values()) lineRevenueTotal += v.revenue;
 
-  // productId → the (question, answer) pairs whose target group holds it.
-  const pathsByProduct = new Map<string, Array<{ answer: string; question: string; target: string }>>();
-  const groupsByProduct = new Map<string, Set<string>>();
+  // productId → how many result groups hold it (the baked target map).
+  const groupsByProduct = new Map<string, number>();
   {
     const baked = asRecord(quiz.publishedJson)?.target_product_ids_map as Record<string, string[]> | undefined;
-    if (doc?.logic_model === "decider" && baked && resultCtx) {
-      for (const n of doc.nodes) {
-        if (n.type !== "question" || n.data.role !== "decides") continue;
-        for (const a of n.data.answers) {
-          if (!a.target_id) continue;
-          const members = baked[a.target_id] ?? [];
-          const targetName = resultCtx.targetIndex[a.target_id]?.name ?? a.target_id;
-          for (const pid of members) {
-            const arr = pathsByProduct.get(pid) ?? [];
-            if (arr.length < 4) arr.push({ answer: a.text, question: n.data.text, target: targetName });
-            pathsByProduct.set(pid, arr);
-            const g = groupsByProduct.get(pid) ?? new Set<string>();
-            g.add(a.target_id);
-            groupsByProduct.set(pid, g);
-          }
-        }
+    if (doc?.logic_model === "decider" && baked) {
+      for (const members of Object.values(baked)) {
+        for (const pid of new Set(members)) groupsByProduct.set(pid, (groupsByProduct.get(pid) ?? 0) + 1);
       }
     }
   }
@@ -758,8 +756,8 @@ export async function quizAnalyticsForShop(
       daysToReturn: returns.get(p.productId)?.medianDays ?? null,
       noLogic: reachability?.stateById.get(p.productId) === "unreachable",
       share: completed > 0 ? p.impressions / completed : null,
-      paths: pathsByProduct.get(p.productId) ?? [],
-      groupCount: groupsByProduct.get(p.productId)?.size ?? 0,
+      ways: productReach?.products.get(p.productId)?.ways ?? [],
+      groupCount: groupsByProduct.get(p.productId) ?? 0,
     };
   };
   const products: ProductRow[] = perfRows.map(toRow);
@@ -1122,6 +1120,14 @@ export async function quizAnalyticsForShop(
     dismissed,
     ledger,
     answers,
+    answerPaths: ledger
+      ? Object.fromEntries(
+          answers.flatMap((q) => {
+            const path = questionPath(ledger, q.questionId);
+            return path ? [[q.questionId, path] as const] : [];
+          }),
+        )
+      : {},
     outcomes,
     results,
     products,
@@ -1340,7 +1346,7 @@ export async function shopAnalyticsForShop(
     // quiz's own logic, so they need no traffic (spec Screen 1/3).
     let flag: string | null = null;
     if (doc) {
-      const reachability = isLive ? computeReachability(q.publishedJson) : null;
+      const reachability = isLive ? logicReachability(doc, q.publishedJson).report : null;
       const r = buildQuizInsights({
         doc,
         reachability,

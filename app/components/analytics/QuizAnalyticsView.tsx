@@ -903,7 +903,7 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
             <tbody>
               {data.products.map((p) => {
                 const st = PRODUCT_STATE_LABEL[p.noLogic ? "unreachable" : p.impressions > 0 ? "healthy" : "no-data"]!;
-                const expandable = p.paths.length > 0;
+                const expandable = p.ways.length > 0;
                 const isOpen = open === p.productId;
                 return [
                   <tr
@@ -933,12 +933,9 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
                     <tr key={`${p.productId}-paths`} className="qz-anprod-detail">
                       <td colSpan={8}>
                         <div className="qz-anpaths-h">How shoppers reach this product</div>
-                        {p.paths.map((path, i) => (
+                        {p.ways.map((way, i) => (
                           <div key={i} className="qz-anpath">
-                            <span className="qz-anpath-q">{path.question}</span>
-                            <span className="qz-anpath-a">{path.answer}</span>
-                            <span aria-hidden>→</span>
-                            <span className="qz-anpath-t">{path.target}</span>
+                            <span className="qz-anpath-a">{way.sentence}</span>
                           </div>
                         ))}
                         {p.groupCount > 1 ? (
