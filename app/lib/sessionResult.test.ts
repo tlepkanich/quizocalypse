@@ -173,9 +173,9 @@ describe("resolveSessionResult — legacy docs", () => {
     expect(r).toMatchObject({ resultId: "rA", name: "The Minimalist", source: "session_row" });
   });
 
-  it("no products shown is a no-match on that node", () => {
+  it("no products shown is No match (the node it landed on is kept)", () => {
     const fromEvent = resolveSessionResult(lctx, facts({ views: [view({ result_node_id: "rA", product_ids: [] })] }));
-    expect(fromEvent).toMatchObject({ resultId: "rA", noMatch: true });
+    expect(fromEvent).toMatchObject({ resultId: NO_MATCH_RESULT_ID, noMatch: true, resultNodeId: "rA" });
     const fromRow = resolveSessionResult(lctx, facts({ row: row({ outcomeId: "rA", matchedProductIds: [] }) }));
     expect(fromRow?.noMatch).toBe(true);
   });

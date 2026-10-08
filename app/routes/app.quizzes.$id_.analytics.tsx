@@ -1,18 +1,29 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, type ShouldRevalidateFunction } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { quizAnalyticsForShop, handleInsightDismissForm } from "../lib/quizAnalytics.server";
 import { QzPage } from "../components/qz";
 import { QuizAnalyticsView } from "../components/analytics/QuizAnalyticsView";
+import analyticsStyles from "../styles/analytics.css?url";
+import { onlyViewParamsChanged } from "../components/analytics/an/chrome";
 
 // ANALYTICS P0 — the embedded twin of /studio/:id/analytics. Both surfaces
 // call the SAME server seam and mount the SAME view, so they can never drift
 // again (the previous hand-copied loaders already had — W12: two capture
-// counts for one quiz). No contacts export here yet: the studio resource route
-// is studio-authed, and an embedded twin lands with the P1 export work.
+// counts for one quiz). Contacts, exports and Klaviyo segments go through the
+// embedded twin of the contacts route (app.quizzes.$id_.analytics_.contacts).
+// The analytics page's own stylesheet (generated from the mock), loaded here
+// rather than on every admin page.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: analyticsStyles }];
+
+// Switching tabs (?s=) or an insight's filter (?pf=, ?cohort=) only changes
+// what is on screen: don't recount. A range or Compare change does.
+export const shouldRevalidate: ShouldRevalidateFunction = ({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }) =>
+  !formMethod && onlyViewParamsChanged(currentUrl, nextUrl) ? false : defaultShouldRevalidate;
+
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const { id } = params;

@@ -163,13 +163,16 @@ function nodeResult(
   source: SessionResult["source"],
   stale = false,
 ): SessionResult {
+  // A shopper who landed on a result page that showed nothing saw the
+  // fallback: they are No match, like the decider shopper (owner ruling,
+  // 7 Oct 2026), so the No match row never hides inside a real result.
+  if (!hasProducts) return noMatch("unresolved", source, nodeId);
   const node = ctx.doc.nodes.find((n) => n.id === nodeId);
   const isResult = node?.type === "result";
   return {
     resultId: nodeId,
     name: isResult ? node.data.headline || UNNAMED_RESULT : RULE_COPY.missingRecommendation,
-    noMatch: !hasProducts,
-    ...(hasProducts ? {} : { noMatchKind: "unresolved" as const }),
+    noMatch: false,
     resultNodeId: nodeId,
     source,
     ...(stale || !isResult ? { stale: true } : {}),

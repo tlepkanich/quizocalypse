@@ -25,6 +25,7 @@ vi.mock("../db.server", () => ({
     backInStockRequest: { findMany: vi.fn() },
     category: { findMany: vi.fn() },
     collection: { findMany: vi.fn().mockResolvedValue([]) },
+    shop: { findUnique: vi.fn().mockResolvedValue(null) },
   },
 }));
 

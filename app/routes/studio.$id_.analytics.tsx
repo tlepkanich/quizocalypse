@@ -1,16 +1,27 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, type ShouldRevalidateFunction } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { quizAnalyticsForShop, handleInsightDismissForm } from "../lib/quizAnalytics.server";
 import { QzPage } from "../components/qz";
 import { QuizAnalyticsView } from "../components/analytics/QuizAnalyticsView";
+import analyticsStyles from "../styles/analytics.css?url";
+import { onlyViewParamsChanged } from "../components/analytics/an/chrome";
 
 // ANALYTICS P0 (spec Screen 2/3) — one quiz in seven sections. This route is a
 // thin shell: auth + the shared seam + the shared view. The SAME view is what
 // the Main Builder will host, so nothing here may grow surface-specific
 // logic — fix things in quizAnalyticsForShop / QuizAnalyticsView instead.
 // `$id_` de-nests it from the editor route.
+// The analytics page's own stylesheet (generated from the mock), loaded here
+// rather than on every admin page.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: analyticsStyles }];
+
+// Switching tabs (?s=) or an insight's filter (?pf=, ?cohort=) only changes
+// what is on screen: don't recount. A range or Compare change does.
+export const shouldRevalidate: ShouldRevalidateFunction = ({ currentUrl, nextUrl, formMethod, defaultShouldRevalidate }) =>
+  !formMethod && onlyViewParamsChanged(currentUrl, nextUrl) ? false : defaultShouldRevalidate;
+
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();

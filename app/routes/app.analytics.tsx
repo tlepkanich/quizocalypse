@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
@@ -7,10 +7,15 @@ import prisma from "../db.server";
 import { shopAnalyticsForShop, handleInsightDismissForm } from "../lib/quizAnalytics.server";
 import { QzPage } from "../components/qz";
 import { AnalyticsHomeView } from "../components/analytics/AnalyticsHomeView";
+import analyticsStyles from "../styles/analytics.css?url";
 
 // ANALYTICS P0 — the embedded twin of /studio/analytics: same seam, same home
 // view (no-fork rule). Also retires the old whole-table Event scan on the
 // unindexed shopId (W15) — the seam queries by quizId.
+// The analytics page's own stylesheet (generated from the mock), loaded here
+// rather than on every admin page.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: analyticsStyles }];
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const shop = await prisma.shop.findUnique({

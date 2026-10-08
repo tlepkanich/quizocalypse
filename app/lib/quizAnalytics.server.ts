@@ -298,6 +298,8 @@ export interface PeriodFigures {
   typicalDropoff: number | null;
   /** answerId → share of the question's answered shoppers. */
   answerShares: Record<string, number>;
+  /** The previous window's daily revenue, for the paired bars. */
+  revenueDays: RevenueDay[];
 }
 
 export interface QuizAnalyticsData {
@@ -378,7 +380,9 @@ export interface QuizAnalyticsData {
     filterOptions: { results: string[]; products: string[] };
   };
   /** Daily revenue buckets; the view rolls them up to week/month on demand. */
-  revenueDays: Array<{ day: string; total: number; orders: number; finishers: number; currency: string }>;
+  revenueDays: RevenueDay[];
+  /** The shop's Klaviyo connection exists ("Create Klaviyo segment" vs "Connect Klaviyo"). */
+  klaviyoConnected: boolean;
   /** Attribution window in days, printed beside the chart. */
   attributionDays: number;
   /** Per-shopper response log (spec §03 "Individual responses"). */
@@ -507,7 +511,7 @@ function toCohortEvents(rows: CohortEventRow[]): CohortEvent[] {
   return rows.map((e) => ({ sessionId: e.sessionId, eventType: e.eventType, payload: e.payload, ts: +e.ts }));
 }
 
-function periodFigures(range: AnalyticsRange, f: CohortFigures): PeriodFigures {
+function periodFigures(range: AnalyticsRange, f: CohortFigures, events: CohortEventRow[]): PeriodFigures {
   const m = money(f.revenue.totalsByCurrency);
   const steps: PeriodFigures["steps"] = {};
   for (const s of f.ledger?.steps ?? []) steps[s.nodeId] = { reached: s.reached, left: s.left, dropoff: s.dropoff };
@@ -528,6 +532,7 @@ function periodFigures(range: AnalyticsRange, f: CohortFigures): PeriodFigures {
     steepestNodeId: f.ledger?.steepestNodeId ?? null,
     typicalDropoff: f.ledger?.typicalDropoff ?? null,
     answerShares,
+    revenueDays: revenueDaysOf(f, events),
   };
 }
 
@@ -611,6 +616,66 @@ export async function loadQuizCohort(
   };
 }
 
+
+export interface RevenueDay {
+  day: string;
+  total: number;
+  orders: number;
+  finishers: number;
+  currency: string;
+}
+
+/**
+ * Revenue by DAY for one cohort — bucketed server-side; the view rolls days up
+ * to week/month. Orders sit on the day they were PLACED (the order's own
+ * created_at; receipt time for older events), each order once, so the days add
+ * up to the total. Finishers land on the day the session ENGAGED, matching the
+ * cohort basis.
+ */
+function revenueDaysOf(fig: CohortFigures, events: CohortEventRow[]): RevenueDay[] {
+  const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+  const orderTime = (e: CohortEvent): Date => {
+    const raw = asRecord(e.payload)?.order_created_at;
+    const t = typeof raw === "string" ? Date.parse(raw) : NaN;
+    return new Date(Number.isFinite(t) ? t : e.ts);
+  };
+  const dayBuckets = new Map<string, { orders: CohortEvent[]; finishers: Set<string> }>();
+  const dayOf = (k: string) => {
+    let b = dayBuckets.get(k);
+    if (!b) {
+      b = { orders: [], finishers: new Set() };
+      dayBuckets.set(k, b);
+    }
+    return b;
+  };
+  const seen = new Set<string>();
+  for (const e of [...fig.orderEvents].sort((a, b) => a.ts - b.ts)) {
+    const id = asRecord(e.payload)?.order_id;
+    if (typeof id === "string") {
+      if (seen.has(id)) continue;
+      seen.add(id);
+    }
+    dayOf(dayKey(orderTime(e))).orders.push(e);
+  }
+  const engageTs = new Map<string, Date>();
+  for (const e of events) {
+    if (e.eventType !== "quiz_engaged") continue;
+    const prev = engageTs.get(e.sessionId);
+    if (!prev || e.ts < prev) engageTs.set(e.sessionId, e.ts);
+  }
+  for (const sid of fig.completedSet) {
+    const ts = engageTs.get(sid);
+    if (ts) dayOf(dayKey(ts)).finishers.add(sid);
+  }
+  return [...dayBuckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, b]) => {
+      const r = totalRevenue(b.orders);
+      const [cur, amt] = Object.entries(r.totalsByCurrency)[0] ?? ["", 0];
+      return { day, total: amt, orders: r.orders, finishers: b.finishers.size, currency: cur };
+    });
+}
+
 export async function quizAnalyticsForShop(
   shop: { id: string; source?: string },
   quizId: string,
@@ -655,7 +720,7 @@ export async function quizAnalyticsForShop(
       captures: prevLoaded.captures,
       sessions: prevLoaded.sessions,
     });
-    prior = periodFigures(prevRange, prevFig);
+    prior = periodFigures(prevRange, prevFig, prevLoaded.events);
   }
 
   const ledger = fig.ledger;
@@ -838,53 +903,14 @@ export async function quizAnalyticsForShop(
     products: [...new Set(allContactRows.map((c) => c.recommended).filter((v): v is string => !!v))].sort(),
   };
 
-  // Revenue by DAY — bucketed server-side. Orders sit on the day they were
-  // PLACED (the order's own created_at; receipt time for older events).
-  const dayKey = (d: Date) => d.toISOString().slice(0, 10);
-  const orderTime = (e: CohortEvent): Date => {
-    const raw = asRecord(e.payload)?.order_created_at;
-    const t = typeof raw === "string" ? Date.parse(raw) : NaN;
-    return new Date(Number.isFinite(t) ? t : e.ts);
-  };
-  const dayBuckets = new Map<string, { orders: CohortEvent[]; finishers: Set<string> }>();
-  const dayOf = (k: string) => {
-    let b = dayBuckets.get(k);
-    if (!b) {
-      b = { orders: [], finishers: new Set() };
-      dayBuckets.set(k, b);
-    }
-    return b;
-  };
-  // Each order once, on its first event — so the days add up to the total.
-  {
-    const seen = new Set<string>();
-    for (const e of [...orderEvents].sort((a, b) => a.ts - b.ts)) {
-      const id = asRecord(e.payload)?.order_id;
-      if (typeof id === "string") {
-        if (seen.has(id)) continue;
-        seen.add(id);
-      }
-      dayOf(dayKey(orderTime(e))).orders.push(e);
-    }
-  }
-  // Finishers land on the day the session ENGAGED, matching the cohort basis.
+  const revenueDays = revenueDaysOf(fig, events);
+  // The month table needs each session's engage time.
   const engageTs = new Map<string, Date>();
   for (const e of events) {
     if (e.eventType !== "quiz_engaged") continue;
     const prev = engageTs.get(e.sessionId);
     if (!prev || e.ts < prev) engageTs.set(e.sessionId, e.ts);
   }
-  for (const sid of completedSet) {
-    const ts = engageTs.get(sid);
-    if (ts) dayOf(dayKey(ts)).finishers.add(sid);
-  }
-  const revenueDays = [...dayBuckets.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([day, b]) => {
-      const r = totalRevenue(b.orders);
-      const [cur, amt] = Object.entries(r.totalsByCurrency)[0] ?? ["", 0];
-      return { day, total: amt, orders: r.orders, finishers: b.finishers.size, currency: cur };
-    });
 
   // Month-by-month compare — recomputed per month, never averaged (§ spec 07).
   // A session's month is its engage month; so are its contact and its orders,
@@ -1085,6 +1111,8 @@ export async function quizAnalyticsForShop(
     }
   }
 
+  const klaviyoRow = await prisma.shop.findUnique({ where: { id: shop.id }, select: { klaviyoApiKey: true } });
+
   // W6 — standalone workspaces have no Shopify order feed.
   const attribution: "shopify" | "none" = (shop.source ?? "shopify") === "standalone" ? "none" : "shopify";
 
@@ -1136,6 +1164,7 @@ export async function quizAnalyticsForShop(
     productMeta: reachability ? { mapped: reachability.mapped, unreachable: reachability.unreachable.length } : null,
     contacts: { rows: contactRows, counts: contactCounts, filterOptions: contactFilterOptions },
     revenueDays,
+    klaviyoConnected: Boolean(klaviyoRow?.klaviyoApiKey),
     attributionDays: ATTRIBUTION_WINDOW_DAYS,
     responses: { rows: responseRows, total: orderedSessions.length },
     effectiveCatalog,
@@ -1185,6 +1214,10 @@ export interface ShopQuizRow {
 export interface ShopAnalyticsData {
   range: { preset: RangePreset; from: string | null; to: string; label: string };
   compare: boolean;
+  /** The one currency revenue is in; null when none or several. */
+  currency: string | null;
+  /** "none" ⇒ standalone workspace, no order feed (W6). */
+  attribution: "shopify" | "none";
   tiles: {
     sessions: number;
     sessionsDeltaPct: number | null;
@@ -1443,6 +1476,8 @@ export async function shopAnalyticsForShop(
       label: range.label,
     },
     compare,
+    currency: Object.keys(total.byCur).length === 1 ? Object.keys(total.byCur)[0]! || null : null,
+    attribution: (shop.source ?? "shopify") === "standalone" ? "none" : "shopify",
     tiles: {
       sessions: total.starts,
       sessionsDeltaPct:

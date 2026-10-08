@@ -1,355 +1,361 @@
-// ANALYTICS P0 — the all-quiz Analytics home (spec Screen 1). One comparison
-// table replaces the old card stack: the only question this page answers is
-// WHICH quiz is working, and three charts per quiz buried that.
-//
-// Live and draft quizzes share ONE table, filtered by status and by name. A
-// draft's metrics render as an em-dash, never 0 — it has no data, which is not
-// the same as having none. Its Status cell carries the worst structural
-// finding ("1 result only"), so a broken quiz is visible without opening it.
-//
-// Shared by /studio and /app so the two homes can never disagree.
+// The Analytics Overview — every quiz, drafts included (ANALYTICS-HANDOFF.md
+// "Analytics Overview (all quizzes)"). Both admin surfaces mount it over the
+// SAME seam (shopAnalyticsForShop). The first card's figures are the totals of
+// the live rows; Compare splits it into this period and the previous one.
 
 import { useMemo, useState } from "react";
-import { Link } from "@remix-run/react";
-import { QzCard, QzEmpty } from "../qz";
+import { useNavigate } from "@remix-run/react";
 import type { ShopAnalyticsData, ShopQuizRow } from "../../lib/quizAnalytics.server";
-import { formatPct } from "../../lib/analyticsConfidence";
-import { INSIGHT_SNOOZE_DAYS } from "../../lib/quizInsights";
-import { CountTile, GatedTile, InsightCardView } from "./QuizAnalyticsView";
+import type { InsightCard } from "../../lib/quizInsights";
+import { gateRate } from "../../lib/analyticsConfidence";
 import {
-  AnalyticsControlBar,
-  DashCell,
-  isLowConfidence,
-  LowConfidence,
-  MethodDrawer,
-  MethodInfo,
-  QuizStatePill,
-  SortTh,
-} from "./AnalyticsControls";
+  AnContext,
+  c,
+  Cut,
+  DASH,
+  downloadCsv,
+  ExportBtn,
+  Fig,
+  Icon,
+  Lead,
+  LeadK,
+  money,
+  num,
+  pct1,
+  Rate,
+  rateText,
+  TipLayer,
+  type AnCtx,
+} from "./an/kit";
+import { Dock, Insights, RangeBar, useToast, type RangeBarProps } from "./an/chrome";
+import { SplitCompare } from "./an/OverviewRevenue";
+import { chgPct, chgPts } from "./an/kit";
 
-type SortKey = "name" | "status" | "starts" | "rate" | "contacts" | "orders" | "revenue" | "rpf";
-type StatusFilter = "all" | "live" | "draft";
-
-/** Sort value per column; null always sinks to the bottom (drafts have no rank). */
-function sortValue(row: ShopQuizRow, key: SortKey): number | string | null {
-  switch (key) {
-    case "name":
-      return row.name.toLowerCase();
-    case "status":
-      return row.live ? 1 : 0;
-    case "starts":
-      return row.starts;
-    case "rate":
-      // Every rate is shown, so every rate sorts. Drafts (no completion at
-      // all) are the only nulls, and nulls still sink to the bottom.
-      return row.completion ? row.completion.rate : null;
-    case "contacts":
-      return row.contacts;
-    case "orders":
-      return row.orders;
-    case "revenue":
-      return row.revenueNumeric;
-    case "rpf":
-      return row.perFinisherNumeric;
-  }
-}
-
-function completionCell(row: ShopQuizRow) {
-  if (!row.completion) return null;
-  const c = row.completion;
-  // No sessions ⇒ no rate. "0.0%" here would be a fabricated number, not a
-  // thin one, and the em-dash already means "no data" everywhere else.
-  if (c.n === 0) return null;
-  return (
-    <>
-      {formatPct(c.rate)}
-      {isLowConfidence(c.state) ? (
-        <LowConfidence
-          n={c.n}
-          showsAt={c.showsAt}
-          confidentAt={c.confidentAt}
-          unit="sessions"
-          lo={c.interval.lo}
-          hi={c.interval.hi}
-        />
-      ) : null}
-    </>
-  );
-}
+type SortKey = "name" | "status" | "starts" | "rate" | "contacts" | "orders" | "rev" | "rpf";
 
 export function AnalyticsHomeView({
   data,
   quizHref,
   analyticsHref,
-  createHref,
-  exportBase,
 }: {
   data: ShopAnalyticsData;
-  /** Builder link for a quiz id. */
+  /** A quiz in the builder (drafts open there). */
   quizHref: (id: string) => string;
-  /** Per-quiz analytics link for a quiz id. */
+  /** A live quiz's analytics. */
   analyticsHref: (id: string) => string;
-  createHref: string;
-  /** Contacts-CSV resource route (null hides Export on this surface). */
-  exportBase: string | null;
+  createHref?: string;
+  exportBase?: string | null;
 }) {
-  const { tiles, rows, counts, findings } = data;
-  const dismissedCount = data.dismissedCount;
-  const [methodOpen, setMethodOpen] = useState(false);
-  const [status, setStatus] = useState<StatusFilter>("all");
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "revenue", dir: -1 });
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [status, setStatus] = useState<"all" | "live" | "draft">("all");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<[SortKey, 1 | -1]>(["rev", -1]);
+  const t = data.tiles;
+  const noRev = data.attribution === "none";
+  const cur = data.currency;
+  const P = data.compare ? t.prior : null;
 
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const filtered = rows.filter((r) => {
-      if (status === "live" && !r.live) return false;
-      if (status === "draft" && r.live) return false;
-      return !q || r.name.toLowerCase().includes(q);
-    });
-    const { key, dir } = sort;
-    return [...filtered].sort((a, b) => {
-      const x = sortValue(a, key);
-      const y = sortValue(b, key);
-      // A draft has no number to rank — keep them together at the bottom
-      // whichever way the column is sorted.
+  const ctx: AnCtx = useMemo(
+    () => ({
+      surface: "studio",
+      currency: cur,
+      compare: Boolean(P),
+      openPanel: () => undefined,
+      say: toast.say,
+      tabHref: () => "?",
+      builderHref: "",
+      openMethod: () => undefined,
+      exportServer: () => undefined,
+    }),
+    [cur, P, toast.say],
+  );
+
+  const barProps: RangeBarProps = {
+    range: { preset: data.range.preset, from: data.range.from, to: data.range.to, widened: false },
+    canCompare: true,
+    compare: data.compare,
+    prev: P && data.range.from ? prevDates(data.range.from, data.range.to) : null,
+  };
+  const bar = <RangeBar {...barProps} />;
+  const comp = t.completion;
+
+  const top = P ? (
+    <SplitCompare
+      bar={bar}
+      dates={[data.range.from ?? data.range.to, data.range.to, barProps.prev?.from ?? "", barProps.prev?.to ?? ""]}
+      big={[
+        <Rate key="c" g={comp} unit="sessions" />,
+        <Rate key="p" g={gateRate("completion_rate", P.finished, P.starts)} unit="sessions" />,
+        "completion rate",
+        chgPts(comp.rate, P.starts ? P.finished / P.starts : 0),
+      ]}
+      rows={[
+        ["Started", t.sessions, P.starts, null],
+        ["Finished", t.finished, P.finished, null],
+        ["Left an email", t.contacts, P.contacts, null],
+      ]}
+      base={[t.sessions, P.starts]}
+      extra={noRev ? null : ["Revenue influenced", money(t.revenueNumeric, cur, 0), money(P.revenueNumeric, cur, 0), chgPct(t.revenueNumeric, P.revenueNumeric), null]}
+      foot={<span>Across your {t.liveQuizzes} live quiz{t.liveQuizzes === 1 ? "" : "zes"}. Open a quiz below to compare it month by month.</span>}
+    />
+  ) : (
+    <Lead
+      aria="All quizzes"
+      bar={bar}
+      main={
+        <LeadK eyebrow="Quiz sessions" tip={`Across ${t.liveQuizzes} live quiz${t.liveQuizzes === 1 ? "" : "zes"} in this range.`}>
+          <p className={c("lead-n")}>{num(t.sessions)}</p>
+        </LeadK>
+      }
+      side={
+        <div className={c("figs")}>
+          <Fig
+            value={<Rate g={comp} unit="sessions" />}
+            long={false}
+            label="Completion rate"
+            tip={comp.state !== "confident" && comp.n ? `${num(t.finished)} finished · ${rateText(comp)} rests on ${num(comp.n)} sessions` : `${num(t.finished)} finished`}
+          />
+          <Fig
+            value={num(t.contacts)}
+            label="Contacts captured"
+            tip={t.finished ? `${rateText(t.captureOfFinishers)} of completions` : "no completions yet"}
+          />
+          {noRev ? (
+            <Fig value="Not measurable" label="Revenue influenced" tip="No Shopify order feed on this workspace." word />
+          ) : (
+            <Fig
+              value={money(t.revenueNumeric, cur, 0)}
+              label="Revenue influenced"
+              tip={`${num(t.orders)} orders${t.perFinisher ? ` · ${t.finished ? money(t.revenueNumeric / t.finished, cur) : ""} per completion` : ""}`}
+            />
+          )}
+        </div>
+      }
+    />
+  );
+
+  const val: Record<SortKey, (r: ShopQuizRow) => number | string | null> = {
+    name: (r) => r.name.toLowerCase(),
+    status: (r) => (r.live ? 1 : 0),
+    starts: (r) => r.starts,
+    rate: (r) => (r.live && r.completion && r.completion.n ? r.completion.rate : null),
+    contacts: (r) => r.contacts,
+    orders: (r) => r.orders,
+    rev: (r) => r.revenueNumeric,
+    rpf: (r) => r.perFinisherNumeric,
+  };
+  const q = query.trim().toLowerCase();
+  const vis = data.rows
+    .filter((r) => (status === "all" || (status === "live") === r.live) && (!q || r.name.toLowerCase().includes(q)))
+    .sort((a, b) => {
+      const x = val[sort[0]](a);
+      const y = val[sort[0]](b);
       if (x == null && y == null) return a.name.localeCompare(b.name);
       if (x == null) return 1;
       if (y == null) return -1;
-      if (x < y) return -dir;
-      if (x > y) return dir;
-      return a.name.localeCompare(b.name);
+      return x < y ? -sort[1] : x > y ? sort[1] : a.name.localeCompare(b.name);
     });
-  }, [rows, status, search, sort]);
-
-  const onSort = (k: string) => {
-    const key = k as SortKey;
-    setSort((prev) =>
-      prev.key === key ? { key, dir: (prev.dir * -1) as 1 | -1 } : { key, dir: key === "name" ? 1 : -1 },
-    );
-  };
-
-  if (rows.length === 0) {
-    return (
-      <QzEmpty
-        title={
-          <>
-            Analytics start with your first quiz.
-            <br />
-            <span className="qz-dim" style={{ fontSize: 13, fontWeight: 400 }}>
-              Once a quiz is live, this page compares every one you run — starts, completion, contacts and
-              the revenue each one influenced.
-            </span>
-          </>
-        }
-        action={
-          <Link to={createHref} className="qz-btn qz-btn-primary">
-            Create a quiz
-          </Link>
-        }
-      />
-    );
-  }
-
-  return (
-    <div className="qz-anwrap">
-      <AnalyticsControlBar
-        title="Analytics"
-        rangeLabel={data.range.label}
-        from={data.range.from}
-        to={data.range.to}
-        widened={false}
-        exports={exportBase ? [{ label: "Contacts .csv (all quizzes)", href: `${exportBase}?segment=all` }] : []}
-      />
-
-      <div className="qz-antiles">
-        <CountTile
-          label="Quiz sessions"
-          value={tiles.sessions.toLocaleString()}
-          hero
-          detail={
-            tiles.sessionsDeltaPct != null ? (
-              <span className={tiles.sessionsDeltaPct >= 0 ? "qz-anup" : "qz-andown"}>
-                {tiles.sessionsDeltaPct >= 0 ? "▲" : "▼"} {Math.abs(tiles.sessionsDeltaPct)}% vs previous period
-              </span>
-            ) : (
-              data.range.label.toLowerCase()
-            )
-          }
-        />
-        <GatedTile
-          label="Completion rate"
-          gated={tiles.completion}
-          unit="sessions"
-          detail={`${tiles.finished.toLocaleString()} finished · across ${counts.live} live quiz${counts.live === 1 ? "" : "zes"}`}
-        />
-        <CountTile
-          label="Contacts captured"
-          value={tiles.contacts.toLocaleString()}
-          detail={
-            tiles.finished > 0 ? (
-              <>
-                {formatPct(tiles.captureOfFinishers.rate)}
-                {isLowConfidence(tiles.captureOfFinishers.state) ? (
-                  <LowConfidence
-                    n={tiles.captureOfFinishers.n}
-                    showsAt={tiles.captureOfFinishers.showsAt}
-                    confidentAt={tiles.captureOfFinishers.confidentAt}
-                    unit="finishers"
-                    lo={tiles.captureOfFinishers.interval.lo}
-                    hi={tiles.captureOfFinishers.interval.hi}
-                  />
-                ) : null}{" "}
-                of finishers
-              </>
-            ) : undefined
-          }
-        />
-        <CountTile
-          label={
-            <>
-              Revenue influenced <MethodInfo onClick={() => setMethodOpen(true)} />
-            </>
-          }
-          value={tiles.revenue}
-          detail={
-            tiles.orders > 0
-              ? `${tiles.orders} orders${tiles.perFinisher ? ` · ${tiles.perFinisher} per finisher` : ""}`
-              : "no attributed orders yet"
-          }
-        />
-      </div>
-
-      {/* Each heading and its body share one .qz-ansec, so a crest page can
-          draw the pair as one card (no heading loose on the print). Without
-          the wrapper's styles it is a plain block: the layout is unchanged. */}
-      <section className="qz-ansec">
-        <div className="qz-anhead">
-          <h2 className="qz-h1">Quizzes</h2>
-          <div className="qz-anseg" role="group" aria-label="Filter by status">
+  const th = (k: SortKey, label: string, r?: boolean) => (
+    <th className={r ? c("r") : undefined} aria-sort={sort[0] === k ? (sort[1] === 1 ? "ascending" : "descending") : "none"}>
+      <button type="button" onClick={() => setSort((s) => (s[0] === k ? [k, (-s[1]) as 1 | -1] : [k, k === "name" ? 1 : -1]))}>
+        {label}
+      </button>
+    </th>
+  );
+  const go = (r: ShopQuizRow) => navigate(r.live ? analyticsHref(r.id) : quizHref(r.id));
+  const dash = <td className={c("r none")}>—</td>;
+  const exportRows = () =>
+    downloadCsv("quizzes.csv", [
+      ["Quiz", "Status", "Starts", "Completion", "Contacts", "Orders", "Revenue", "Per completion"],
+      ...vis.map((r) => [
+        r.name,
+        r.live ? "Live" : "Draft",
+        r.starts ?? "",
+        r.completion && r.completion.n ? pct1(r.completion.rate) : "",
+        r.contacts ?? "",
+        r.orders ?? "",
+        r.revenueNumeric != null ? r.revenueNumeric.toFixed(2) : "",
+        r.perFinisherNumeric != null ? r.perFinisherNumeric.toFixed(2) : "",
+      ]),
+    ]);
+  const table = (
+    <section className={c("card sec")}>
+      <div className={c("sec-h")}>
+        <h2>Quizzes</h2>
+        <div className={c("ctl")}>
+          <div className={c("seg")} role="group" aria-label="Filter by status">
             {(
               [
-                ["all", "All", counts.all],
-                ["live", "Live", counts.live],
-                ["draft", "Draft", counts.draft],
+                ["all", "All", data.counts.all],
+                ["live", "Live", data.counts.live],
+                ["draft", "Draft", data.counts.draft],
               ] as const
-            ).map(([key, label, n]) => (
-              <button
-                key={key}
-                type="button"
-                className={status === key ? "is-on" : ""}
-                aria-pressed={status === key}
-                aria-label={`${label} — ${n} ${n === 1 ? "quiz" : "quizzes"}`}
-                onClick={() => setStatus(key)}
-              >
-                {label}{" "}
-                {/* Bracketed + italic so the number reads as a COUNT OF QUIZZES
-                    rather than as part of the label. */}
-                <span className="qz-anseg-n">({n})</span>
+            ).map(([k, label, n]) => (
+              <button key={k} type="button" aria-pressed={status === k} onClick={() => setStatus(k)}>
+                {label} <b>{n}</b>
               </button>
             ))}
           </div>
-          <label className="qz-ansearch">
-            <span aria-hidden>⌕</span>
-            <input
-              type="search"
-              value={search}
-              placeholder="Search quizzes"
-              aria-label="Search quizzes"
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <label className={c("search")}>
+            <Icon name="search" />
+            <input type="search" placeholder="Search quizzes" aria-label="Search quizzes" autoComplete="off" value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
+          <ExportBtn onClick={exportRows} />
         </div>
-
-        <QzCard flush style={{ marginBottom: 28 }}>
-          <div className="qz-antablewrap">
-            <table className="qz-table qz-antable">
-              <thead>
-                <tr>
-                  <SortTh label="Quiz" sortKey="name" active={sort.key === "name"} dir={sort.dir} onSort={onSort} />
-                  <SortTh label="Status" sortKey="status" active={sort.key === "status"} dir={sort.dir} onSort={onSort} />
-                  <SortTh label="Starts" sortKey="starts" active={sort.key === "starts"} dir={sort.dir} onSort={onSort} numeric />
-                  <SortTh label="Completion" sortKey="rate" active={sort.key === "rate"} dir={sort.dir} onSort={onSort} numeric />
-                  <SortTh label="Contacts" sortKey="contacts" active={sort.key === "contacts"} dir={sort.dir} onSort={onSort} numeric />
-                  <SortTh label="Orders" sortKey="orders" active={sort.key === "orders"} dir={sort.dir} onSort={onSort} numeric />
-                  <SortTh label="Revenue" sortKey="revenue" active={sort.key === "revenue"} dir={sort.dir} onSort={onSort} numeric />
-                  <SortTh label="Per finisher" sortKey="rpf" active={sort.key === "rpf"} dir={sort.dir} onSort={onSort} numeric />
+      </div>
+      <div className={c("twrap")}>
+        <table>
+          <thead>
+            <tr>
+              {th("name", "Quiz")}
+              {th("status", "Status")}
+              {th("starts", "Starts", true)}
+              {th("rate", "Completion", true)}
+              {th("contacts", "Contacts", true)}
+              {th("orders", "Orders", true)}
+              {th("rev", "Revenue", true)}
+              {th("rpf", "Per completion", true)}
+              <th>
+                <span className={c("sr")}>Open</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {vis.length ? (
+              vis.map((r) => (
+                <tr
+                  key={r.id}
+                  className={c("go")}
+                  onClick={() => go(r)}
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") go(r);
+                  }}
+                >
+                  <td>
+                    <span className={c("qlink")}>
+                      <Cut w={280}>{r.name}</Cut>
+                    </span>
+                  </td>
+                  <td>
+                    {r.live ? (
+                      <span className={c("tag is-live")}>Live</span>
+                    ) : r.flag ? (
+                      <span className={c("tag is-warn")}>{r.flag}</span>
+                    ) : (
+                      <span className={c("tag is-draft")}>Draft</span>
+                    )}
+                  </td>
+                  {r.live ? (
+                    <>
+                      <td className={c("r")}>{num(r.starts ?? 0)}</td>
+                      <td className={c("r")}>{r.completion ? <Rate g={r.completion} unit="sessions" /> : DASH}</td>
+                      <td className={c("r")}>{num(r.contacts ?? 0)}</td>
+                      {noRev ? (
+                        <>
+                          {dash}
+                          {dash}
+                          {dash}
+                        </>
+                      ) : (
+                        <>
+                          <td className={c("r")}>{num(r.orders ?? 0)}</td>
+                          <td className={c("r")}>{money(r.revenueNumeric ?? 0, cur)}</td>
+                          <td className={c("r")}>{r.perFinisherNumeric != null ? money(r.perFinisherNumeric, cur) : "—"}</td>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {dash}
+                      {dash}
+                      {dash}
+                      {dash}
+                      {dash}
+                      {dash}
+                    </>
+                  )}
+                  <td className={c("r")}>
+                    {r.live ? (
+                      <span className={c("rv")}>
+                        Review <Icon name="right" />
+                      </span>
+                    ) : (
+                      <span className={c("rv is-quiet")}>
+                        Edit <Icon name="right" />
+                      </span>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {visible.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="qz-dim" style={{ textAlign: "center", padding: 26 }}>
-                      No quizzes match.
-                    </td>
-                  </tr>
-                ) : (
-                  visible.map((q) => (
-                    <tr key={q.id}>
-                      <td>
-                        <Link to={q.live ? analyticsHref(q.id) : quizHref(q.id)} className="qz-anqlink">
-                          {q.name}
-                        </Link>
-                      </td>
-                      <td>
-                        <QuizStatePill live={q.live} flag={q.flag} />
-                      </td>
-                      <DashCell>{q.starts?.toLocaleString() ?? null}</DashCell>
-                      <DashCell>{completionCell(q)}</DashCell>
-                      <DashCell>{q.contacts?.toLocaleString() ?? null}</DashCell>
-                      <DashCell>{q.orders ?? null}</DashCell>
-                      <DashCell>{q.revenue}</DashCell>
-                      <DashCell>{q.perFinisher}</DashCell>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </QzCard>
-      </section>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={9} style={{ textAlign: "center", padding: 26, color: "var(--an-ink4)" }}>
+                  No quizzes match.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
 
-      <section className="qz-ansec">
-        <div className="qz-anhead">
-          <h2 className="qz-h1">What to fix</h2>
-          <span className="qz-dim" style={{ fontSize: 12.5 }}>
-            {findings.length > 0
-              ? `${findings.length} finding${findings.length === 1 ? "" : "s"} · checked after every publish`
-              : "checked after every publish"}
-            {dismissedCount > 0
-              ? ` · ${dismissedCount} dismissed, back within ${INSIGHT_SNOOZE_DAYS} days`
-              : ""}
-          </span>
-        </div>
-        {findings.length === 0 ? (
-          <div className="qz-anclean">
-            <span className="qz-anclean-ic" aria-hidden>✓</span>
-            <div>
-              <div style={{ fontWeight: 600 }}>Nothing needs attention</div>
-              <div className="qz-dim" style={{ fontSize: 13 }}>
-                Your quiz logic and the {data.range.label.toLowerCase()} of activity both came back clean.
+  // Findings across the shop, each headline starting with the quiz name.
+  const items = data.findings.map((f) => ({
+    quizId: f.quizId,
+    quizName: f.quizName,
+    card: {
+      id: f.cardId,
+      tier: "A",
+      severity: f.severity,
+      headline: f.headline,
+      body: f.body,
+      evidence: f.evidence,
+      basis: f.basis,
+      action: { label: "Open the quiz", kind: "builder" },
+      excess: 0,
+    } satisfies InsightCard,
+  }));
+  const shownItems = items.slice(0, 3);
+
+  return (
+    <AnContext.Provider value={ctx}>
+      <div className="an">
+        <header className={c("card head")}>
+          <div className={c("head-top")}>
+            <div className={c("head-id")}>
+              <div className={c("head-title")}>
+                <h1>Analytics Overview</h1>
               </div>
             </div>
           </div>
-        ) : (
-          <div className="qz-col qz-gap-16">
-            {findings.map((f, i) => (
-              <InsightCardView
-                key={`${f.quizId}-${i}`}
-                severity={f.severity}
-                headline={`${f.quizName}: ${f.headline}`}
-                body={f.body}
-                evidence={f.evidence}
-                basis={f.basis}
-                onDismiss={{ quizId: f.quizId, cardId: f.cardId }}
-                action={{ label: "Open the quiz", href: quizHref(f.quizId) }}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <MethodDrawer open={methodOpen} onClose={() => setMethodOpen(false)} />
-    </div>
+        </header>
+        <div className={c("view")}>
+          {top}
+          {table}
+          <Insights
+            items={shownItems}
+            more={items.length - shownItems.length}
+            onAction={(card) => {
+              const it = items.find((x) => x.card.id === card.id);
+              if (it) navigate(quizHref(it.quizId));
+            }}
+            cleanNote="Every quiz's logic came back clean."
+          />
+        </div>
+        <Dock title="Analytics Overview" bar={barProps} />
+        <TipLayer />
+        {toast.node}
+      </div>
+    </AnContext.Provider>
   );
+}
+
+/** The window before [from, to] of the same length, as the server counts it. */
+function prevDates(from: string, to: string): { from: string; to: string } {
+  const f = Date.parse(from);
+  const span = Date.parse(to) - f;
+  return { from: new Date(f - span).toISOString(), to: new Date(f - 1).toISOString() };
 }

@@ -56,6 +56,9 @@ export interface ContactsPanelRow {
   status: ContactStatus;
   consent: boolean | null;
   value: string | null;
+  /** The first recommended product, and how many more there were. */
+  recommended: string | null;
+  recommendedMore: number;
 }
 
 export interface ContactsPanelData {
@@ -217,6 +220,7 @@ export async function quizContactsForShop(
   const statusCounts = { all: base.length, bought: 0, added: 0, "no-purchase": 0 };
   for (const c of base) statusCounts[c.status] += 1;
   const resultRow = q.facet === "result" ? loaded.fig.results.find((r) => r.resultId === q.id) : undefined;
+  const titleOf = new Map(loaded.productMetaRows.map((p) => [p.productId, p.title]));
   const spec = segmentSpecOf(loaded, group, q.status);
   // Klaviyo only ever takes people it may email: the consenting part of the
   // status group, whatever the switch says.
@@ -245,6 +249,8 @@ export async function quizContactsForShop(
       status: c.status,
       consent: c.consent,
       value: c.orderValue,
+      recommended: c.matchedProductIds.map((id) => titleOf.get(id)).find((t): t is string => Boolean(t)) ?? null,
+      recommendedMore: Math.max(0, c.matchedProductIds.length - 1),
     })),
     total: shown.length,
     offset: q.offset,

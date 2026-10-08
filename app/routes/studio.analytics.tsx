@@ -1,15 +1,20 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { requireStudioAccess, resolveStudioShop } from "../lib/studioAccess.server";
 import { shopAnalyticsForShop, handleInsightDismissForm } from "../lib/quizAnalytics.server";
 import { QzPage } from "../components/qz";
 import { AnalyticsHomeView } from "../components/analytics/AnalyticsHomeView";
+import analyticsStyles from "../styles/analytics.css?url";
 
 // ANALYTICS P0 (spec Screen 1) — the all-quiz Analytics home. The per-quiz
 // card stack (three charts per quiz, drawn even for drafts) is replaced by one
 // comparison table over the shared server seam. All metric math lives in
 // quizAnalyticsForShop/shopAnalyticsForShop — never here (no-fork rule).
+// The analytics page's own stylesheet (generated from the mock), loaded here
+// rather than on every admin page.
+export const links: LinksFunction = () => [{ rel: "stylesheet", href: analyticsStyles }];
+
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
