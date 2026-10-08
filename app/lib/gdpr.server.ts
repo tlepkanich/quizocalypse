@@ -12,7 +12,8 @@ import type { PrismaClient } from "@prisma/client";
 // ORDER data is the exception: it is keyed by ORDER ID, not email, and arrives
 // on the same webhook as `orders_to_redact`. The only order data this app
 // holds is the `order_attributed` Event (payload.order_id + the order total)
-// written by webhooks.orders.create, plus the QuizSession.converted flag
+// written by webhooks.orders.create (and its `order_refunded` copies from
+// webhooks.refunds.create), plus the QuizSession.converted flag
 // derived from it. redactOrders() below erases both — see its comment for why
 // `converted` is cleared only when no OTHER order still backs it.
 // NOT shopper PII: Session / StudioLoginToken are MERCHANT auth (covered by
@@ -187,8 +188,11 @@ export async function redactOrders(
   // Atomic: a crash between the delete and the flag clear would leave
   // `converted` asserting a purchase whose evidence we just erased, and the
   // Shopify retry could not detect it — the events it would look for are gone.
-  const [deleted, ...updates] = await prisma.$transaction([
+  // The order's refund copies (order_refunded, analytics "Returned") carry
+  // the same order_id and go with it.
+  const [deleted, , ...updates] = await prisma.$transaction([
     prisma.event.deleteMany({ where: match }),
+    prisma.event.deleteMany({ where: { ...match, eventType: "order_refunded" } }),
     ...toUnconvert.map((x) =>
       prisma.quizSession.updateMany({
         where: { quizId: x.quizId, sessionId: x.sessionId, converted: true },

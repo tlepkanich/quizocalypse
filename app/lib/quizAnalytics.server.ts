@@ -34,6 +34,7 @@ import {
 } from "./analyticsCohort";
 import { buildResultContext } from "./sessionResult";
 import { lineRevenueByProduct } from "./orderLines";
+import { returnsByProduct } from "./orderRefunds";
 
 // ── Range ──────────────────────────────────────────────────────────────────
 
@@ -242,6 +243,10 @@ export interface ProductRow extends ProductPerfRow {
   revenueShare: number | null;
   /** Units across those lines. */
   units: number | null;
+  /** Units refunded as returns on attributed orders (null = no order carries lines). */
+  returned: number | null;
+  /** Median days from order to refund; null when nothing came back. */
+  daysToReturn: number | null;
   /** Mapped, but no answer path reaches it (the "No logic" flag). */
   noLogic: boolean;
   /** impressions ÷ finishers (exposure share). */
@@ -656,6 +661,16 @@ export async function quizAnalyticsForShop(
   // Line revenue (Data work 1) — a part of each order's total, never more.
   const lines = lineRevenueByProduct(orderEvents);
   const anyLineRevenue = lines.ordersWithLines > 0;
+  // Returns (Data work 2) — refunds of THIS cohort's attributed orders only.
+  const cohortOrderIds = new Set<string>();
+  for (const e of orderEvents) {
+    const id = asRecord(e.payload)?.order_id;
+    if (typeof id === "string") cohortOrderIds.add(id);
+  }
+  const returns = returnsByProduct(
+    cohortEvents.filter((e) => e.eventType === "order_refunded"),
+    cohortOrderIds,
+  );
   let lineRevenueTotal = 0;
   for (const v of lines.byProduct.values()) lineRevenueTotal += v.revenue;
 
@@ -693,6 +708,8 @@ export async function quizAnalyticsForShop(
       revenue: anyLineRevenue ? lr?.revenue ?? 0 : null,
       revenueShare: anyLineRevenue && lineRevenueTotal > 0 ? (lr?.revenue ?? 0) / lineRevenueTotal : null,
       units: anyLineRevenue ? lr?.units ?? 0 : null,
+      returned: anyLineItems ? returns.get(p.productId)?.units ?? 0 : null,
+      daysToReturn: returns.get(p.productId)?.medianDays ?? null,
       noLogic: reachability?.stateById.get(p.productId) === "unreachable",
       share: completed > 0 ? p.impressions / completed : null,
       paths: pathsByProduct.get(p.productId) ?? [],

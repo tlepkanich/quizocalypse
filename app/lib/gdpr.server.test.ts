@@ -156,8 +156,18 @@ describe("gdpr — redactOrders", () => {
     const p = mockPrisma({ id: "shop1" });
     await redactOrders(p as never, "s.myshopify.com", [1234]);
     expect(p.$transaction).toHaveBeenCalledTimes(1);
-    // delete + one update per session left with no surviving order
-    expect(p.$transaction.mock.calls[0]![0]).toHaveLength(3);
+    // order delete + refund delete + one update per session left with no
+    // surviving order
+    expect(p.$transaction.mock.calls[0]![0]).toHaveLength(4);
+  });
+
+  it("erases the order's refund copies (order_refunded) with it", async () => {
+    const p = mockPrisma({ id: "shop1" });
+    await redactOrders(p as never, "s.myshopify.com", [1234]);
+    const wheres = p.event.deleteMany.mock.calls.map((c) => (c[0] as { where: Record<string, unknown> }).where);
+    expect(wheres.map((w) => w.eventType)).toEqual(["order_attributed", "order_refunded"]);
+    expect(wheres[1]!.OR).toEqual([{ payload: { path: ["order_id"], equals: "1234" } }]);
+    expect(wheres[1]!.quiz).toEqual({ shopId: "shop1" });
   });
 
   it("reads the affected sessions BEFORE deleting, or they'd be unrecoverable", async () => {
