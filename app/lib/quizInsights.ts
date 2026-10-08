@@ -13,7 +13,7 @@
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { collectDeciderTargetIds } from "./quizPublish";
 import { enumeratePaths } from "./pathEnumeration";
-import type { StepLedger } from "./stepLedger";
+import { ledgerPathById, type LedgerPath, type StepLedger } from "./stepLedger";
 import type { ReachabilityReport } from "./quizReachability";
 import { GATES } from "./analyticsConfidence";
 
@@ -101,6 +101,21 @@ export interface InsightInputs {
 
 function words(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length;
+}
+
+/** "Dry", "Dry or Sensitive", "Combination, Oily or Not sure". */
+function orList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+}
+
+/** Who a path is, in the merchant's own words, as a leading sentence ("" if unnamed). */
+function pathSentence(path: LedgerPath): string {
+  if (path.entryAnswerTexts.length > 0) {
+    return `Path ${path.letter} is the shoppers who pick ${orList(path.entryAnswerTexts)}. `;
+  }
+  if (path.slotLabel) return `Path ${path.letter} is the "${path.slotLabel}" branch. `;
+  return "";
 }
 
 const SELECT_TYPES = new Set(["single_select", "multi_select", "image_tile", "image_picker", "searchable", "dropdown"]);
@@ -237,8 +252,11 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
   // ── Tier B — traffic-based, gated ────────────────────────────────────────
 
   // B1 QUESTION_LEAK — steepest RELATIVE drop vs the median of the others.
+  // Branching docs too (Data work 5b): the ledger's steps then include every
+  // path step, each measured against its own path's shoppers, and the card
+  // names the path the step sits on.
   const ledger = input.ledger;
-  if (ledger && !ledger.branching && ledger.steepestNodeId) {
+  if (ledger && ledger.steepestNodeId) {
     const qRows = ledger.steps.filter((s) => s.kind === "question" && s.dropoff != null);
     const target = qRows.find((s) => s.nodeId === ledger.steepestNodeId);
     if (target && target.reached != null && qRows.length >= 2) {
@@ -252,16 +270,24 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
         const exact = n >= GATES.dropoff_exact.provisional; // ≥100 → show numbers
         const excess = Math.max(0, Math.round(n * (drop - median)));
         const perMonth = input.rangeDays > 0 ? Math.round((excess / input.rangeDays) * 30) : 0;
+        const path = target.pathId ? ledgerPathById(ledger, target.pathId) : null;
+        const pathWho = path ? pathSentence(path) : "";
         cards.push({
           id: `leak:${target.nodeId}`,
           tier: "B",
           severity: exact && drop >= median * 3 ? "crit" : "warn",
-          headline: exact
-            ? `"${target.label}" loses ${Math.round(drop * 100)}% of the shoppers who reach it`
-            : `"${target.label}" is the steepest drop in this quiz`,
-          body: exact
-            ? `That's well above the ${Math.round(median * 100)}% typical step drop-off in this quiz.`
-            : "At this volume we can rank the step but an exact percentage would swing on luck. It appears here because it is consistently your worst step.",
+          headline: path
+            ? exact
+              ? `${(drop * 100).toFixed(1)}% of shoppers on Path ${path.letter} leave at "${target.label}"`
+              : `"${target.label}" on Path ${path.letter} is the steepest drop in this quiz`
+            : exact
+              ? `"${target.label}" loses ${Math.round(drop * 100)}% of the shoppers who reach it`
+              : `"${target.label}" is the steepest drop in this quiz`,
+          body:
+            pathWho +
+            (exact
+              ? `That's well above the ${Math.round(median * 100)}% typical step drop-off in this quiz.`
+              : "At this volume we can rank the step but an exact percentage would swing on luck. It appears here because it is consistently your worst step."),
           evidence: exact
             ? [
                 { label: "Reached", value: String(n) },
@@ -273,7 +299,7 @@ export function buildQuizInsights(input: InsightInputs): InsightsResult {
           basis: "Read from per-question answer events against the quiz's own step order",
           action: { label: "See it in the flow", kind: "flow", nodeId: target.nodeId },
           math: exact
-            ? `${n} shoppers reached this step. ${Math.round(drop * 100)}% left here, against a typical ${Math.round(median * 100)}% across the steps — so about ${excess} more shoppers left than the rest of the quiz would predict, across ${input.rangeDays} days. This is an estimate of how many shoppers are affected, not a measurement of lost sales.`
+            ? `${n} shoppers${path ? ` on Path ${path.letter}` : ""} reached this step. ${Math.round(drop * 100)}% left here, against a typical ${Math.round(median * 100)}% across the steps — so about ${excess} more shoppers left than the rest of the quiz would predict, across ${input.rangeDays} days. This is an estimate of how many shoppers are affected, not a measurement of lost sales.`
             : undefined,
           excess,
         });

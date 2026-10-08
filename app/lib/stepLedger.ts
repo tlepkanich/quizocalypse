@@ -11,14 +11,19 @@
 //   an answer (§03).
 // - Last write wins per (session, question) — back-nav re-answers replace.
 // - Reconciliation on the linear spine: reached = continued + skipped + left.
-// - Branch docs get per-lane answered counts, labeled "splits by answer",
-//   with NO cross-lane drop-off claims (§8.6: two renderings).
+// - Branching docs (a question whose answers route to different steps, or a
+//   `branch` node whose slots do) are counted PATH BY PATH (ANALYTICS-HANDOFF
+//   Data work 5b): shared steps stay spine rows, the steps between a split and
+//   its join are grouped into paths (`StepLedger.paths`), and every path step
+//   carries its own reached / left / drop-off against its OWN path's shoppers.
+//   A shopper on Path A never "left" Path B's steps.
 // - Drop-off is RELATIVE: left ÷ reached-this-step, never over total starts.
 //
 // Pure: no DB, no React. The loader feeds distinct-session event rows.
 
 import type { Quiz as QuizDoc } from "./quizSchema";
 import { orderFlow } from "./flowOrder";
+import { buildFlowPaths, routeFork, type FlowItem, type FlowPathTree } from "./flowPaths";
 
 export interface LedgerEvent {
   sessionId: string;
@@ -45,6 +50,64 @@ export interface LedgerStep {
   /** Branch rows: the split renders "splits by answer", never as abandonment. */
   splits: boolean;
   laneLabel: string | null;
+  /**
+   * Branching docs only (absent on linear docs): the path this row belongs to
+   * (`LedgerPath.pathId`), or null for a shared spine row.
+   */
+  pathId?: string | null;
+  /** Branching docs only: the path's letter ("A", "B", nested "A1"), or null. */
+  pathLetter?: string | null;
+}
+
+/**
+ * One path after a splitting question (ANALYTICS-HANDOFF "Branching
+ * quizzes"). Tie-outs that hold by construction:
+ * - the first counted step's `reached` is `shoppers`;
+ * - each step's reached − left is the next step's reached in this path, and
+ *   the last step's reached − left is `continue`;
+ * - Σ paths' `shoppers` = the fork's `started` (shoppers who continued from
+ *   the splitting question), Σ paths' `continue` = the fork's `joined`.
+ */
+export interface LedgerPath {
+  /** Unique across the ledger: `${splitNodeId}:${letter}`. */
+  pathId: string;
+  /** "A", "B", … in the order of the answers on the splitting question;
+   *  a path that splits again names its own paths "A1", "A2", … */
+  letter: string;
+  /** Answers on the splitting question that lead into this path. */
+  entryAnswerIds: string[];
+  /** Those answers' texts as the merchant wrote them; the UI makes the
+   *  sentence ("If they pick Dry or Sensitive"). Empty when the path is not
+   *  chosen by an answer (an A/B or tag branch) — use `slotLabel` then. */
+  entryAnswerTexts: string[];
+  /** The branch slot's label when the path comes from a `branch` node. */
+  slotLabel: string | null;
+  /** Shoppers who took this path. */
+  shoppers: number;
+  /** This path's own rows (a nested split's rows live in `forks`). */
+  steps: LedgerStep[];
+  /** A path that splits again. */
+  forks: LedgerFork[];
+  /**
+   * Shoppers from this path who reached the join. When the paths never rejoin
+   * (`LedgerFork.joinNodeId` null) it is the shoppers from this path who
+   * finished.
+   */
+  continue: number;
+}
+
+export interface LedgerFork {
+  /** The splitting question (or a `branch` node with no question before it). */
+  splitNodeId: string;
+  /** The `branch` node that routes, when the split is a branch node. */
+  branchNodeId: string | null;
+  /** Where the paths meet again; null when they never rejoin before the result. */
+  joinNodeId: string | null;
+  /** Shoppers who continued from the splitting question = Σ paths' shoppers. */
+  started: number;
+  /** Shoppers who reached the join (or finished, with no join) = Σ paths' continue. */
+  joined: number;
+  paths: LedgerPath[];
 }
 
 export interface StepLedger {
@@ -63,6 +126,13 @@ export interface StepLedger {
    * number, so the two can never disagree.
    */
   typicalDropoff: number | null;
+  /**
+   * Branching docs only (absent on linear docs): each split on the shared
+   * spine, in flow order, with its paths. Path rows also appear in `steps`
+   * (flow order, path by path), tagged with `pathId`, so `steepestNodeId` and
+   * `typicalDropoff` consider every step, path steps included.
+   */
+  paths?: LedgerFork[];
 }
 
 /** A step needs this many shoppers before it can be named the steepest drop,
@@ -137,6 +207,8 @@ export function buildStepLedger(
   engaged: number,
   completed: number,
 ): StepLedger {
+  const tree = buildFlowPaths(doc);
+  if (tree.hasFork) return buildBranchingLedger(doc, tree, events, engaged, completed);
   const flow = orderFlow(doc);
   const answers = lastAnswers(events);
   const branching = flow.branches.some((l) => l.steps.length > 0);
@@ -317,9 +389,15 @@ export function buildStepLedger(
     }
   }
 
-  // Steepest RELATIVE drop among the steps enough shoppers reached. The
-  // Start row counts: shoppers who press Start and answer nothing are a step's
-  // worth of loss like any other.
+  return { branching, steps, steepestNodeId: steepestStep(steps), typicalDropoff: typicalStepDropoff(steps) };
+}
+
+/**
+ * Steepest RELATIVE drop among the steps enough shoppers reached. The Start
+ * row counts: shoppers who press Start and answer nothing are a step's worth
+ * of loss like any other. On a branching doc `steps` holds the path rows too.
+ */
+function steepestStep(steps: LedgerStep[]): string | null {
   let steepestNodeId: string | null = null;
   let steepest = 0;
   for (const s of steps) {
@@ -329,6 +407,347 @@ export function buildStepLedger(
       steepestNodeId = s.nodeId;
     }
   }
+  return steepestNodeId;
+}
 
-  return { branching, steps, steepestNodeId, typicalDropoff: typicalStepDropoff(steps) };
+// ── Branching docs: path-by-path counting (Data work 5b) ──────────────────
+//
+// A sequence (the spine, or one path) is a list of counted slots — each
+// question, and each fork as ONE slot — plus uncounted rows (branch, email
+// gate). A session's "furthest" slot in a sequence is the deepest slot it
+// answered in, or past the end when it is known to have left the sequence
+// forward (finished, or reached the join). Reached(i) = sessions whose
+// furthest ≥ i: the same worst-case inference as the linear ledger, applied
+// within each path's own shoppers. At a fork every session there is put on
+// exactly ONE path (the one it answered in; else the one its answers route
+// to; else the runtime's fallback), which is what makes the paths add up.
+
+interface SessionAnswer {
+  /** Location relative to the sequence being counted: [slot, path, slot, …]. */
+  loc: number[];
+  ts: number;
+  skipped: boolean;
+}
+
+interface SeqSession {
+  sid: string;
+  /** The session is known to have gone past the end of this sequence. */
+  pastEnd: boolean;
+  answers: SessionAnswer[];
+}
+
+function isCountedSlot(it: FlowItem): boolean {
+  return it.kind === "fork" || it.nodeType === "question";
+}
+
+/** Each item's counted-slot index (uncounted rows get the next slot's index). */
+function slotIndexes(items: FlowItem[]): number[] {
+  const slots: number[] = [];
+  let n = 0;
+  for (const it of items) {
+    slots.push(n);
+    if (isCountedSlot(it)) n += 1;
+  }
+  return slots;
+}
+
+function locateQuestions(items: FlowItem[], prefix: number[], into: Map<string, number[]>): void {
+  const slots = slotIndexes(items);
+  items.forEach((it, k) => {
+    const idx = slots[k]!;
+    if (it.kind === "fork") {
+      it.fork.paths.forEach((p, pi) => locateQuestions(p.items, [...prefix, idx, pi], into));
+    } else if (it.nodeType === "question") {
+      into.set(it.nodeId, [...prefix, idx]);
+    }
+  });
+}
+
+interface RowCtx {
+  pathId: string | null;
+  letter: string | null;
+  laneLabel: string | null;
+}
+
+function buildBranchingLedger(
+  doc: QuizDoc,
+  tree: FlowPathTree,
+  events: LedgerEvent[],
+  engaged: number,
+  completed: number,
+): StepLedger {
+  const loc = new Map<string, number[]>();
+  locateQuestions(tree.items, [], loc);
+
+  // Last write wins per (session, question), keeping the answer ids: routing
+  // a session that left no answer inside a fork needs what it picked.
+  const last = new Map<string, Map<string, { ids: string[]; ts: number }>>();
+  const done = new Set<string>();
+  for (const e of events) {
+    if (e.eventType === "quiz_completed") {
+      done.add(e.sessionId);
+      continue;
+    }
+    if (e.eventType !== "question_answered") continue;
+    const p = e.payload as { question_id?: unknown; answer_ids?: unknown } | null;
+    const qid = typeof p?.question_id === "string" ? p.question_id : null;
+    if (!qid) continue;
+    const ids = Array.isArray(p?.answer_ids)
+      ? p.answer_ids.filter((x): x is string => typeof x === "string")
+      : [];
+    let per = last.get(e.sessionId);
+    if (!per) {
+      per = new Map();
+      last.set(e.sessionId, per);
+    }
+    const prev = per.get(qid);
+    if (!prev || e.ts >= prev.ts) per.set(qid, { ids, ts: e.ts });
+  }
+  const idsOf = (sid: string): Map<string, string[]> => {
+    const m = new Map<string, string[]>();
+    for (const [q, f] of last.get(sid) ?? []) m.set(q, f.ids);
+    return m;
+  };
+
+  // The spine cohort: every session that answered a placed question or finished.
+  const spine: SeqSession[] = [];
+  for (const sid of new Set([...last.keys(), ...done])) {
+    const answers: SessionAnswer[] = [];
+    for (const [qid, f] of last.get(sid) ?? []) {
+      const at = loc.get(qid);
+      if (at) answers.push({ loc: at, ts: f.ts, skipped: f.ids.length === 0 });
+    }
+    if (answers.length > 0 || done.has(sid)) spine.push({ sid, pastEnd: done.has(sid), answers });
+  }
+
+  const answerText = new Map<string, string>();
+  for (const n of doc.nodes) {
+    if (n.type === "question") for (const a of n.data.answers) answerText.set(a.id, a.text);
+  }
+
+  const steps: LedgerStep[] = [];
+
+  /** Count one sequence. Rows go to `steps` in flow order and come back too. */
+  const countSeq = (
+    items: FlowItem[],
+    sessions: SeqSession[],
+    ctx: RowCtx,
+  ): { rows: LedgerStep[]; forks: LedgerFork[]; firstReached: number } => {
+    const len = items.filter(isCountedSlot).length;
+    const furthest = new Map<string, number>();
+    for (const s of sessions) {
+      let f = -1;
+      for (const a of s.answers) f = Math.max(f, a.loc[0] ?? -1);
+      furthest.set(s.sid, s.pastEnd ? len : f);
+    }
+    const reachedAt = (i: number): number => {
+      let n = 0;
+      for (const f of furthest.values()) if (f >= i) n += 1;
+      return n;
+    };
+    const rows: LedgerStep[] = [];
+    const forks: LedgerFork[] = [];
+    const push = (r: LedgerStep): void => {
+      rows.push(r);
+      steps.push(r);
+    };
+    const tag = { laneLabel: ctx.laneLabel, pathId: ctx.pathId, pathLetter: ctx.letter };
+
+    const slots = slotIndexes(items);
+    for (const [k, it] of items.entries()) {
+      const idx = slots[k]!;
+      if (it.kind === "node") {
+        if (it.nodeType === "question") {
+          const reachedN = reachedAt(idx);
+          const nextN = reachedAt(idx + 1);
+          // A skip still continues; count skips only among those who moved on.
+          let skipped = 0;
+          for (const s of sessions) {
+            if ((furthest.get(s.sid) ?? -1) < idx + 1) continue;
+            if (s.answers.some((a) => a.loc.length === 1 && a.loc[0] === idx && a.skipped)) skipped += 1;
+          }
+          const left = Math.max(0, reachedN - nextN);
+          push({
+            nodeId: it.nodeId,
+            kind: "question",
+            label: nodeLabel(doc, it.nodeId),
+            reached: reachedN,
+            continued: Math.max(0, nextN - skipped),
+            skipped,
+            left,
+            dropoff: reachedN > 0 ? left / reachedN : null,
+            splits: false,
+            ...tag,
+          });
+        } else if (it.nodeType === "branch" || it.nodeType === "email_gate") {
+          // Branch: routing, never abandonment. Email gate: not measurable
+          // until email_gate events ship (P2). Neither takes a counted slot.
+          push({
+            nodeId: it.nodeId,
+            kind: it.nodeType,
+            label: nodeLabel(doc, it.nodeId),
+            reached: null,
+            continued: null,
+            skipped: null,
+            left: null,
+            dropoff: null,
+            splits: it.nodeType === "branch",
+            ...tag,
+          });
+        }
+        continue;
+      }
+
+      // A fork: every session that got here takes exactly one path.
+      const fork = it.fork;
+      const perPath: SeqSession[][] = fork.paths.map(() => []);
+      for (const s of sessions) {
+        const f = furthest.get(s.sid) ?? -1;
+        if (f < idx) continue;
+        const inside = s.answers.filter((a) => a.loc[0] === idx && a.loc.length > 2);
+        // Answered inside the fork: the path is observed. A back-nav that
+        // switched paths keeps the LATEST one, so nobody counts twice.
+        // Otherwise route the way the runtime would.
+        const latest = inside.reduce<SessionAnswer | null>((best, a) => (!best || a.ts > best.ts ? a : best), null);
+        const p = latest ? latest.loc[1] ?? 0 : routeFork(fork, idsOf(s.sid));
+        const bucket = perPath[p] ?? perPath[0]!;
+        bucket.push({
+          sid: s.sid,
+          pastEnd: f > idx,
+          answers: inside.filter((a) => a.loc[1] === p).map((a) => ({ ...a, loc: a.loc.slice(2) })),
+        });
+      }
+      const paths: LedgerPath[] = fork.paths.map((fp, pi) => {
+        const pathId = `${fork.splitNodeId}:${fp.letter}`;
+        const members = perPath[pi] ?? [];
+        const child = countSeq(fp.items, members, {
+          pathId,
+          letter: fp.letter,
+          laneLabel: fork.branchNodeId ? fp.slotLabel : null,
+        });
+        return {
+          pathId,
+          letter: fp.letter,
+          entryAnswerIds: fp.entryAnswerIds,
+          entryAnswerTexts: fp.entryAnswerIds.map((id) => answerText.get(id) ?? id),
+          slotLabel: fp.slotLabel,
+          shoppers: members.length,
+          steps: child.rows,
+          forks: child.forks,
+          continue: members.filter((m) => m.pastEnd).length,
+        };
+      });
+      forks.push({
+        splitNodeId: fork.splitNodeId,
+        branchNodeId: fork.branchNodeId,
+        joinNodeId: fork.joinNodeId,
+        started: reachedAt(idx),
+        joined: reachedAt(idx + 1),
+        paths,
+      });
+    }
+    return { rows, forks, firstReached: reachedAt(0) };
+  };
+
+  // Intro row first (its loss is the gap to the first counted step, exactly as
+  // on the linear ledger), then the walk, then the result rows.
+  const introRow: LedgerStep | null = tree.introId
+    ? {
+        nodeId: tree.introId,
+        kind: "intro",
+        label: nodeLabel(doc, tree.introId),
+        reached: engaged,
+        continued: null,
+        skipped: null,
+        left: null,
+        dropoff: null,
+        splits: false,
+        laneLabel: null,
+        pathId: null,
+        pathLetter: null,
+      }
+    : null;
+  if (introRow) steps.push(introRow);
+  const spineCount = countSeq(tree.items, spine, { pathId: null, letter: null, laneLabel: null });
+  if (introRow) {
+    const introLeft = Math.max(0, engaged - spineCount.firstReached);
+    introRow.continued = spineCount.firstReached;
+    introRow.left = introLeft;
+    introRow.dropoff = engaged > 0 ? introLeft / engaged : null;
+  }
+  // quiz_completed is quiz-wide: only a SINGLE result row can carry it.
+  const resultCount = doc.nodes.filter((n) => n.type === "result").length;
+  for (const rid of tree.resultIds) {
+    steps.push({
+      nodeId: rid,
+      kind: "result",
+      label: nodeLabel(doc, rid),
+      reached: resultCount === 1 ? completed : null,
+      continued: null,
+      skipped: null,
+      left: null,
+      dropoff: null,
+      splits: false,
+      laneLabel: null,
+      pathId: null,
+      pathLetter: null,
+    });
+  }
+
+  return {
+    branching: true,
+    steps,
+    steepestNodeId: steepestStep(steps),
+    typicalDropoff: typicalStepDropoff(steps),
+    paths: spineCount.forks,
+  };
+}
+
+// ── Lookups for the Questions & Answers tab and the insights ──────────────
+
+/** Every path in the ledger, nested ones included, each before its own nested paths. */
+export function allLedgerPaths(ledger: StepLedger): LedgerPath[] {
+  const found: LedgerPath[] = [];
+  const visit = (forks: LedgerFork[]): void => {
+    for (const f of forks) {
+      for (const p of f.paths) {
+        found.push(p);
+        visit(p.forks);
+      }
+    }
+  };
+  visit(ledger.paths ?? []);
+  return found;
+}
+
+/** The path with this id, or null. */
+export function ledgerPathById(ledger: StepLedger, pathId: string): LedgerPath | null {
+  return allLedgerPaths(ledger).find((p) => p.pathId === pathId) ?? null;
+}
+
+export interface QuestionPath {
+  pathId: string;
+  letter: string;
+  /** The path's shoppers: the denominator for "426 of 453 on this path answered". */
+  shoppers: number;
+  entryAnswerTexts: string[];
+  slotLabel: string | null;
+}
+
+/**
+ * Which path a question belongs to, or null when every shopper sees it (a
+ * shared spine question, or one the ledger does not place). A question in a
+ * path that splits again belongs to the innermost path, and counts out of
+ * that path's shoppers.
+ */
+export function questionPath(ledger: StepLedger, questionId: string): QuestionPath | null {
+  const p = allLedgerPaths(ledger).find((x) => x.steps.some((s) => s.nodeId === questionId));
+  if (!p) return null;
+  return {
+    pathId: p.pathId,
+    letter: p.letter,
+    shoppers: p.shoppers,
+    entryAnswerTexts: p.entryAnswerTexts,
+    slotLabel: p.slotLabel,
+  };
 }

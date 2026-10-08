@@ -188,8 +188,12 @@ describe("branching docs", () => {
     expect(q1.left).toBe(4);
     expect(q1.dropoff).toBeCloseTo(0.4);
     expect(q1.reached).toBe(q1.continued! + q1.skipped! + q1.left!);
-    // The lane question still refuses a drop-off claim.
-    expect(ledger.steps.find((s) => s.nodeId === "q2")!.dropoff).toBeNull();
+    // The lane question's drop-off is measured against ITS OWN path's
+    // shoppers (Data work 5b) — never across lanes: the 6 on Path A all went
+    // on, so 0, even though 4 shoppers left at q1.
+    const q2 = ledger.steps.find((s) => s.nodeId === "q2")!;
+    expect(q2).toMatchObject({ reached: 6, left: 0, dropoff: 0, pathLetter: "A" });
+    expect(ledger.paths![0]!.paths.map((p) => p.shoppers)).toEqual([6, 0]);
   });
 
   it("the intro row carries the shoppers who start and never answer", () => {
@@ -202,7 +206,7 @@ describe("branching docs", () => {
     expect(intro.dropoff).toBeCloseTo(0.75);
   });
 
-  it("renders per-lane counts with NO drop-off claims, and flags the split", () => {
+  it("renders per-lane counts against the lane's own shoppers, and flags the split", () => {
     const events = [ans("s1", "q1", ["a1"]), ans("s1", "q2", ["b1"]), done("s1")];
     const ledger = buildStepLedger(BRANCHED, events, 1, 1);
     expect(ledger.branching).toBe(true);
@@ -211,8 +215,16 @@ describe("branching docs", () => {
     const laneQ = ledger.steps.find((s) => s.nodeId === "q2")!;
     expect(laneQ.laneLabel).toBe("Yes");
     expect(laneQ.reached).toBe(1);
-    expect(laneQ.dropoff).toBeNull(); // never a cross-lane drop-off claim
+    expect(laneQ.dropoff).toBe(0); // its own path's drop-off, never cross-lane
     expect(ledger.steepestNodeId).toBeNull();
+    // The branch routes on q1's answers, so q1 is the splitting question and
+    // the paths are named by its answers; they never rejoin before the result.
+    const fork = ledger.paths![0]!;
+    expect(fork).toMatchObject({ splitNodeId: "q1", branchNodeId: "br", joinNodeId: null });
+    expect(fork.paths.map((p) => [p.letter, p.entryAnswerTexts, p.slotLabel])).toEqual([
+      ["A", ["A"], "Yes"],
+      ["B", ["B"], "No"],
+    ]);
   });
 });
 
