@@ -6,6 +6,8 @@ import prisma from "../db.server";
 import { Quiz } from "../lib/quizSchema";
 import { QzPage, QzPageHeader, QzCard, QzBadge } from "../components/qz";
 import { RecCopyToggleCard } from "../components/RecCopyToggleCard";
+import { KlaviyoConnectionCard } from "../components/KlaviyoConnectionCard";
+import { handleKlaviyoForm, klaviyoStatus } from "../lib/klaviyo.server";
 
 // QD-8 — Integrations: every place a quiz sends data when a shopper reaches an
 // integration node — Klaviyo profile syncs and outbound webhooks. Scans each
@@ -22,11 +24,15 @@ function hostOf(url: string): string {
 }
 
 // L2-12d — the per-shop runtime rec-copy kill switch lives here (the standalone
-// settings surface). Writing it is the ONLY thing this route's action does.
+// settings surface). Writing it, and the Klaviyo connection, are the only
+// things this route's action does.
 export const action = async ({ request }: ActionFunctionArgs) => {
   await requireStudioAccess(request);
   const shop = await resolveStudioShop();
   const form = await request.formData();
+  // The shop's ONE Klaviyo connection (analytics handoff §8).
+  const klaviyo = await handleKlaviyoForm(shop.id, form);
+  if (klaviyo) return json(klaviyo, { status: klaviyo.ok ? 200 : 400 });
   if (form.get("intent") === "toggle-rec-copy") {
     const enabled = form.get("enabled") === "true";
     await prisma.shop.update({ where: { id: shop.id }, data: { aiRecCopyEnabled: enabled } });
@@ -74,7 +80,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
   }
 
-  return json({ rows, klaviyoCount, webhookCount, aiRecCopyEnabled: shop.aiRecCopyEnabled });
+  return json({
+    rows,
+    klaviyoCount,
+    webhookCount,
+    aiRecCopyEnabled: shop.aiRecCopyEnabled,
+    klaviyo: await klaviyoStatus(shop.id),
+  });
 };
 
 const KIND_META: Record<string, { label: string; emoji: string }> = {
@@ -99,6 +111,8 @@ export default function StudioIntegrations() {
               : undefined
           }
         />
+
+        <KlaviyoConnectionCard status={data.klaviyo} />
 
         <RecCopyToggleCard enabled={data.aiRecCopyEnabled} />
 

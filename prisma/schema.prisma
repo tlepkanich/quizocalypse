@@ -66,6 +66,14 @@ model Shop {
   shopifyConnectToken  String?
   shopifyConnectedAt   DateTime?
 
+  // Analytics handoff §8 — ONE Klaviyo connection per shop (Integrations).
+  // The private API key is AES-256-GCM encrypted at rest (app/lib/crypto.ts),
+  // like shopifyConnectToken. Quiz Klaviyo actions and "Create Klaviyo
+  // segment" use it; a quiz action's own legacy `api_key` is only a fallback.
+  klaviyoApiKey      String?
+  klaviyoAccountName String?
+  klaviyoConnectedAt DateTime?
+
   // LOGIC v2 L2-12 — AI-written personalization. OPT-IN since 2026-10-04
   // (BILLING-HANDOFF: every per-use AI feature starts off; the 2026-07-03
   // call was "default on"). Shops that existed then keep their value. Gates

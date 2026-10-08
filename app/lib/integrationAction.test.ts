@@ -16,7 +16,11 @@ import { action as integrationAction } from "../routes/q.$id.integration";
 // precedent (route-dir test files break the Remix Vite plugin).
 
 vi.mock("../db.server", () => ({
-  default: { quiz: { findFirst: vi.fn() } },
+  default: {
+    quiz: { findFirst: vi.fn() },
+    shop: { findUnique: vi.fn() },
+    emailCapture: { findFirst: vi.fn() },
+  },
 }));
 
 // Real sync screening (protocol / hostname denylist / IP-literal ranges), DNS
@@ -33,7 +37,11 @@ vi.mock("./ssrfGuard.server", async (importOriginal) => {
   };
 });
 
-const p = prisma as unknown as { quiz: { findFirst: Mock } };
+const p = prisma as unknown as {
+  quiz: { findFirst: Mock };
+  shop: { findUnique: Mock };
+  emailCapture: { findFirst: Mock };
+};
 
 type ActionsInput = Array<Record<string, unknown>>;
 
@@ -116,7 +124,11 @@ function fetchCallsTo(urlPart: string): Array<[string, RequestInit]> {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("fetch", fetchMock);
-  fetchMock.mockResolvedValue(new Response("ok", { status: 200 }));
+  // A fresh body per call: the Klaviyo branch reads the profile id back.
+  fetchMock.mockImplementation(async () => new Response(JSON.stringify({ data: { id: "prof_1" } }), { status: 200 }));
+  p.shop.findUnique.mockResolvedValue(null);
+  // The quiz never asked for marketing consent.
+  p.emailCapture.findFirst.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -171,12 +183,16 @@ describe("klaviyo action", () => {
     expect(props.quiz_results_url).toBe(
       "https://shop.example/q/q1/results?session_id=3f2a9c04-77d1-4e2b-9a63-0d5b1c8e4f21",
     );
-    // Answers fold into per-question properties keyed by question id.
+    // Answers fold into per-question properties keyed by question id, and
+    // into a readable one named with the question text as written.
     expect(props.quiz_q_qn1).toBe("Dry");
+    expect(props["Skin type?"]).toBe("Dry");
 
-    // Best-effort list subscription for the configured list.
+    // Consent never asked: the profile joins the list BY ID (Klaviyo's
+    // relationship endpoint takes profile ids, not emails).
     const [listCall] = fetchCallsTo("/api/lists/Xy12Ab/relationships/profiles/");
-    expect(listCall).toBeTruthy();
+    expect(JSON.parse(listCall![1].body as string)).toEqual({ data: [{ type: "profile", id: "prof_1" }] });
+    expect(fetchCallsTo("/api/profile-subscription-bulk-create-jobs/")).toHaveLength(0);
 
     // The flow-trigger event carries the same grounding.
     const [eventCall] = fetchCallsTo("/api/events/");
@@ -193,6 +209,65 @@ describe("klaviyo action", () => {
     expect(event.data.attributes.metric.data.attributes.name).toBe("Completed Quiz");
     expect(event.data.attributes.profile.data.attributes.email).toBe("shopper@example.com");
     expect(event.data.attributes.properties.quiz_tags).toEqual(["dry"]);
+    expect(event.data.attributes.properties.quiz_id).toBe("q1");
+    expect(event.data.attributes.properties["Skin type?"]).toEqual(["Dry"]);
+  });
+
+  it("a shopper who said yes to marketing is subscribed to the list", async () => {
+    p.quiz.findFirst.mockResolvedValue({ publishedJson: publishedDoc([KLAVIYO]), name: "Skin quiz" });
+    p.emailCapture.findFirst.mockResolvedValue({ marketingConsent: true });
+    await integrationAction(args({ nodeId: "int1", path: PATH, session_id: "sess-1", email: "s@example.com" }));
+    const [job] = fetchCallsTo("/api/profile-subscription-bulk-create-jobs/");
+    const body = JSON.parse(job![1].body as string) as {
+      data: { attributes: { profiles: { data: Array<{ attributes: Record<string, unknown> }> } }; relationships: unknown };
+    };
+    expect(body.data.attributes.profiles.data[0]!.attributes).toMatchObject({
+      email: "s@example.com",
+      subscriptions: { email: { marketing: { consent: "SUBSCRIBED" } } },
+    });
+    expect(body.data.relationships).toEqual({ list: { data: { type: "list", id: "Xy12Ab" } } });
+    // The consent row must belong to THIS email, not just this session.
+    expect(p.emailCapture.findFirst.mock.calls[0]![0].where).toMatchObject({
+      quizId: "q1",
+      sessionId: "sess-1",
+      email: { equals: "s@example.com", mode: "insensitive" },
+    });
+    expect(fetchCallsTo("/relationships/profiles/")).toHaveLength(0);
+  });
+
+  it("a shopper who said no is left off the list", async () => {
+    p.quiz.findFirst.mockResolvedValue({ publishedJson: publishedDoc([KLAVIYO]), name: "Skin quiz" });
+    p.emailCapture.findFirst.mockResolvedValue({ marketingConsent: false });
+    await integrationAction(args({ nodeId: "int1", path: PATH, session_id: "sess-1", email: "s@example.com" }));
+    expect(fetchCallsTo("/api/profile-subscription-bulk-create-jobs/")).toHaveLength(0);
+    expect(fetchCallsTo("/relationships/profiles/")).toHaveLength(0);
+    expect(fetchCallsTo("/api/profile-import/")).toHaveLength(1);
+  });
+
+  it("the shop's Klaviyo connection wins over a quiz's own key", async () => {
+    const prev = process.env.TOKEN_ENCRYPTION_KEY;
+    process.env.TOKEN_ENCRYPTION_KEY = "a".repeat(64);
+    try {
+      const { encrypt } = await import("./crypto");
+      p.quiz.findFirst.mockResolvedValue({ publishedJson: publishedDoc([KLAVIYO]), name: "T", shopId: "shop1" });
+      p.shop.findUnique.mockResolvedValue({ klaviyoApiKey: encrypt("pk_shop_connection_key") });
+      await integrationAction(args({ nodeId: "int1", path: PATH, email: "s@example.com" }));
+      const [profileCall] = fetchCallsTo("/api/profile-import/");
+      expect((profileCall![1].headers as Record<string, string>).Authorization).toBe(
+        "Klaviyo-API-Key pk_shop_connection_key",
+      );
+    } finally {
+      process.env.TOKEN_ENCRYPTION_KEY = prev;
+    }
+  });
+
+  it("with no connection and no quiz key, the action reports it and advances", async () => {
+    p.quiz.findFirst.mockResolvedValue({ publishedJson: publishedDoc([{ kind: "klaviyo" }]), name: "T" });
+    const res = await integrationAction(args({ nodeId: "int1", path: PATH, email: "s@example.com" }));
+    const body = (await res.json()) as { ok: boolean; results: Array<{ ok: boolean; error?: string }> };
+    expect(body.ok).toBe(true);
+    expect(body.results[0]!.error).toContain("not connected");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("omits quiz_results_url when no session_id was sent", async () => {

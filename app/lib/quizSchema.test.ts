@@ -460,12 +460,10 @@ describe("IntegrationData", () => {
     }
   });
 
-  it("rejects a klaviyo action without api_key", () => {
-    expect(() =>
-      IntegrationData.parse({
-        actions: [{ kind: "klaviyo", api_key: "" }],
-      }),
-    ).toThrow();
+  it("accepts a klaviyo action without its own api_key (the shop's connection is used)", () => {
+    const parsed = IntegrationData.parse({ actions: [{ kind: "klaviyo" }] });
+    expect(parsed.actions[0]).toMatchObject({ kind: "klaviyo" });
+    expect("api_key" in parsed.actions[0]!).toBe(false);
   });
 });
 

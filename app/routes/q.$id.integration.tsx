@@ -12,6 +12,14 @@ import { assertPublicHttpsUrl } from "../lib/ssrfGuard.server";
 import { webhookSignatureHeader } from "../lib/webhookSignature.server";
 import { corsPreflight, withCors } from "../lib/publicCors";
 import { rateLimit } from "../lib/rateLimiters";
+import { klaviyoHeaders, shopKlaviyoKey } from "../lib/klaviyo.server";
+import { resolveTarget } from "../lib/recommendDecider";
+import { NO_MATCH_NAME } from "../lib/sessionResult";
+import {
+  eventAnswerProperties,
+  listActionFor,
+  profileAnswerProperties,
+} from "../lib/klaviyoProfile";
 
 // Integration node executor. When the storefront runtime reaches an
 // integration node it POSTs here with the session payload; we fire every
@@ -51,7 +59,7 @@ function resolveRecommendedProducts(
     targetProductIdsMap?: Record<string, string[]>;
     targetIndex?: Record<string, { type: "product" | "collection" | "tag"; name?: string }>;
   } = {},
-): { ids: string[]; titles: string[] } {
+): { ids: string[]; titles: string[]; resultNodeId: string | null } {
   const selectedAnswerIds = new Set<string>();
   const accumulatedTags = new Set<string>();
   for (const step of path) {
@@ -79,12 +87,34 @@ function resolveRecommendedProducts(
         ...(answerWeights ? { answerWeights } : {}),
         ...targetFields,
       });
-      return { ids: recs.map((r) => r.product_id), titles: recs.map((r) => r.title) };
+      return { ids: recs.map((r) => r.product_id), titles: recs.map((r) => r.title), resultNodeId: nextId };
     }
     if (n.type === "question") break; // more answers still needed
     cursor = nextId;
   }
-  return { ids: [], titles: [] };
+  return { ids: [], titles: [], resultNodeId: null };
+}
+
+/**
+ * The result name analytics shows for this shopper (sessionResult.ts): the
+ * resolved target on decider docs, the result node's headline on legacy
+ * docs, "No match" when nothing would be shown. null = not decided yet.
+ */
+function resultNameFor(
+  doc: QuizDoc,
+  path: Array<{ answerIds: string[] }>,
+  recommended: { ids: string[]; resultNodeId: string | null },
+  targetIndex: Record<string, { name?: string }> | undefined,
+): string | null {
+  if (!recommended.resultNodeId) return null;
+  if (recommended.ids.length === 0) return NO_MATCH_NAME;
+  if (doc.logic_model === "decider") {
+    const resolved = resolveTarget(path.flatMap((s) => s.answerIds), doc);
+    if (!resolved) return NO_MATCH_NAME;
+    return targetIndex?.[resolved.targetId]?.name ?? null;
+  }
+  const node = doc.nodes.find((n) => n.id === recommended.resultNodeId);
+  return node?.type === "result" ? node.data.headline || null : null;
 }
 
 // Hard cap on the outbound webhook timeout so a stuck receiver can't hang
@@ -151,7 +181,7 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
 
   const quiz = await prisma.quiz.findFirst({
     where: { id },
-    select: { publishedJson: true, name: true },
+    select: { publishedJson: true, name: true, shopId: true },
   });
   if (!quiz?.publishedJson) {
     return json({ error: "Quiz not published" }, { status: 404 });
@@ -183,6 +213,8 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
       : {}),
     ...(rawBake.target_index ? { targetIndex: rawBake.target_index } : {}),
   });
+
+  const resultName = resultNameFor(doc, body.path, recommended, rawBake.target_index);
 
   // Build the outbound payload from the path: question text → picked answer
   // text(s) + accumulated tags. Receivers get a flat readable shape.
@@ -240,6 +272,9 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
   // every webhook action sends.
   const rawOutboundBody = JSON.stringify(outboundPayload);
   const results: Array<{ kind: string; ok: boolean; status?: number; error?: string }> = [];
+  // Loaded once, on the first Klaviyo action that needs them.
+  let klaviyoKey: string | undefined;
+  let consent: boolean | null | undefined;
   for (const act of node.data.actions) {
     if (act.kind === "webhook") {
       // SSRF guard before POSTing the shopper payload to a merchant-set URL.
@@ -287,12 +322,50 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
         });
         continue;
       }
-      try {
+      // The shop's ONE connection (Integrations); a legacy per-quiz key only
+      // until the shop connects.
+      klaviyoKey ??= (quiz.shopId ? await shopKlaviyoKey(quiz.shopId) : null) ?? "";
+      const apiKey = klaviyoKey || act.api_key || "";
+      if (!apiKey) {
+        results.push({ kind: "klaviyo", ok: false, error: "Klaviyo is not connected (Integrations)." });
+        continue;
+      }
+      // The shopper's stored marketing consent decides the list (handoff §8).
+      // Matched on the session AND the email: this route is public, so a
+      // caller's own "yes" must never subscribe someone else's address.
+      if (consent === undefined) {
+        const cap = sessionId
+          ? await prisma.emailCapture.findFirst({
+              where: {
+                quizId: id,
+                sessionId,
+                email: { equals: body.email.trim(), mode: "insensitive" },
+                marketingConsent: { not: null },
+              },
+              orderBy: { capturedAt: "desc" },
+              select: { marketingConsent: true },
+            })
+          : null;
+        consent = cap?.marketingConsent ?? null;
+      }
+      const headers = klaviyoHeaders(apiKey);
+      const post = async (path: string, payload: unknown) => {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS);
-        // Klaviyo Profile API (v2024-02-15): create-or-update profile with
-        // quiz answers folded into custom properties.
-        const profilePayload = {
+        try {
+          return await fetch(`https://a.klaviyo.com${path}`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(t);
+        }
+      };
+      try {
+        // Create-or-update the profile with the quiz folded into properties.
+        const res = await post("/api/profile-import/", {
           data: {
             type: "profile",
             attributes: {
@@ -307,100 +380,80 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
                 quiz_recommended_products: recommended.titles,
                 quiz_recommended_product_ids: recommended.ids,
                 quiz_top_product: recommended.titles[0] ?? null,
+                ...(resultName ? { quiz_result: resultName } : {}),
                 // BIC P6 — flow emails can link straight back to the shopper's
                 // saved results ({{ person|lookup:'quiz_results_url' }}).
                 ...(resultsUrl ? { quiz_results_url: resultsUrl } : {}),
-                ...Object.fromEntries(
-                  outboundPayload.answers.map((a) => [
-                    `quiz_q_${a.question_id}`,
-                    a.answer_texts.join(", "),
-                  ]),
-                ),
+                ...profileAnswerProperties(outboundPayload.answers),
               },
             },
           },
-        };
-        const res = await fetch("https://a.klaviyo.com/api/profile-import/", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Klaviyo-API-Key ${act.api_key}`,
-            revision: "2024-02-15",
-          },
-          body: JSON.stringify(profilePayload),
-          signal: controller.signal,
         });
-        clearTimeout(t);
         results.push({ kind: "klaviyo", ok: res.ok, status: res.status });
-        // Best-effort list subscription if list_id is set. Failures here
-        // don't fail the action — the profile upsert is the primary goal.
-        if (res.ok && act.list_id) {
-          try {
-            const subController = new AbortController();
-            const subT = setTimeout(
-              () => subController.abort(),
-              WEBHOOK_TIMEOUT_MS,
-            );
-            await fetch(
-              `https://a.klaviyo.com/api/lists/${act.list_id}/relationships/profiles/`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Klaviyo-API-Key ${act.api_key}`,
-                  revision: "2024-02-15",
-                },
-                body: JSON.stringify({
-                  data: [{ type: "profile", attributes: { email: body.email } }],
-                }),
-                signal: subController.signal,
-              },
-            );
-            clearTimeout(subT);
-          } catch {
-            // Swallow — list sub is best-effort.
-          }
-        }
-        // Fire a "Completed Quiz" event (carrying tags + recommendations) so
-        // merchants can trigger Klaviyo flows on quiz completion. Best-effort.
+        let profileId: string | null = null;
         if (res.ok) {
           try {
-            const evController = new AbortController();
-            const evT = setTimeout(() => evController.abort(), WEBHOOK_TIMEOUT_MS);
-            await fetch("https://a.klaviyo.com/api/events/", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Klaviyo-API-Key ${act.api_key}`,
-                revision: "2024-02-15",
-              },
-              body: JSON.stringify({
-                data: {
-                  type: "event",
-                  attributes: {
-                    metric: {
-                      data: { type: "metric", attributes: { name: "Completed Quiz" } },
-                    },
-                    profile: {
-                      data: { type: "profile", attributes: { email: body.email } },
-                    },
-                    properties: {
-                      quiz_id: id,
-                      quiz_name: quiz.name,
-                      quiz_tags: outboundPayload.accumulated_tags,
-                      recommended_products: recommended.titles,
-                      recommended_product_ids: recommended.ids,
-                    },
-                    time: outboundPayload.timestamp,
-                  },
-                },
-              }),
-              signal: evController.signal,
-            });
-            clearTimeout(evT);
+            const created = (await res.json()) as { data?: { id?: unknown } };
+            profileId = typeof created.data?.id === "string" ? created.data.id : null;
           } catch {
-            // Swallow — event is best-effort.
+            profileId = null;
           }
+        }
+        // Lists follow consent: yes ⇒ subscribed, no ⇒ left off, not asked ⇒
+        // the profile (by id — the old call sent an email where Klaviyo
+        // expects ids) joins the list without a consent record.
+        const listAction = listActionFor(consent);
+        if (res.ok && listAction === "subscribe") {
+          const sub = await post("/api/profile-subscription-bulk-create-jobs/", {
+            data: {
+              type: "profile-subscription-bulk-create-job",
+              attributes: {
+                custom_source: `Wiskr quiz: ${quiz.name}`.slice(0, 120),
+                profiles: {
+                  data: [
+                    {
+                      type: "profile",
+                      attributes: {
+                        email: body.email,
+                        subscriptions: { email: { marketing: { consent: "SUBSCRIBED" } } },
+                      },
+                    },
+                  ],
+                },
+              },
+              ...(act.list_id ? { relationships: { list: { data: { type: "list", id: act.list_id } } } } : {}),
+            },
+          }).catch(() => null);
+          if (!sub?.ok) results.push({ kind: "klaviyo_subscribe", ok: false, status: sub?.status, error: "subscribe failed" });
+        } else if (res.ok && listAction === "add_profile" && act.list_id && profileId) {
+          const add = await post(`/api/lists/${encodeURIComponent(act.list_id)}/relationships/profiles/`, {
+            data: [{ type: "profile", id: profileId }],
+          }).catch(() => null);
+          if (!add?.ok) results.push({ kind: "klaviyo_list", ok: false, status: add?.status, error: "list add failed" });
+        }
+        // "Completed Quiz" — flows trigger on it, and "Create Klaviyo
+        // segment" filters on its quiz id, result, answers and products.
+        if (res.ok) {
+          const ev = await post("/api/events/", {
+            data: {
+              type: "event",
+              attributes: {
+                metric: { data: { type: "metric", attributes: { name: "Completed Quiz" } } },
+                profile: { data: { type: "profile", attributes: { email: body.email } } },
+                properties: {
+                  ...eventAnswerProperties(outboundPayload.answers),
+                  quiz_id: id,
+                  quiz_name: quiz.name,
+                  ...(resultName ? { quiz_result: resultName } : {}),
+                  quiz_tags: outboundPayload.accumulated_tags,
+                  recommended_products: recommended.titles,
+                  recommended_product_ids: recommended.ids,
+                },
+                time: outboundPayload.timestamp,
+              },
+            },
+          }).catch(() => null);
+          if (!ev?.ok) results.push({ kind: "klaviyo_event", ok: false, status: ev?.status, error: "event failed" });
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Unknown error";
@@ -409,7 +462,9 @@ async function actionImpl({ params, request }: ActionFunctionArgs) {
     }
   }
 
-  const anyFailed = results.some((r) => !r.ok);
+  // Only the primary actions decide advancement; the Klaviyo follow-ups
+  // (subscribe, list, event) are reported but stay best-effort, as before.
+  const anyFailed = results.some((r) => !r.ok && (r.kind === "webhook" || r.kind === "klaviyo"));
   if (anyFailed && !node.data.continue_on_error) {
     return json(
       { error: "One or more actions failed", results },

@@ -642,8 +642,11 @@ export const IntegrationWebhookAction = z.object({
 // profile without list subscription).
 export const IntegrationKlaviyoAction = z.object({
   kind: z.literal("klaviyo"),
-  // Klaviyo private API key (pk_xxxxx). Stored server-side only.
-  api_key: z.string().min(1),
+  // LEGACY per-quiz Klaviyo private API key (pk_xxxxx). Stored server-side
+  // only. The shop's Klaviyo connection (Integrations, encrypted on Shop)
+  // replaces it; when present it is only a fallback for a shop that has not
+  // connected yet. Optional so new actions carry no key at all.
+  api_key: z.string().optional(),
   // Optional list ID — if set, the profile is subscribed to this list as
   // well as upserted. Klaviyo list IDs are 6-character codes.
   list_id: z.string().optional(),

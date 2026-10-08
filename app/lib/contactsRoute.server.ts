@@ -13,7 +13,9 @@
 
 import { json } from "@remix-run/node";
 import { logFor } from "./log.server";
+import { createKlaviyoSegment } from "./klaviyo.server";
 import {
+  quizSegmentSpecForShop,
   quizContactEmailsForShop,
   quizContactsCsvForShop,
   quizContactsForShop,
@@ -46,4 +48,20 @@ export async function contactsResource(shop: { id: string }, quizId: string, req
     return json({ emails }, { headers: { "Cache-Control": "no-store" } });
   }
   return json(await quizContactsForShop(shop, quizId, sp), { headers: { "Cache-Control": "no-store" } });
+}
+
+/**
+ * POST intent=klaviyo-segment — "Create Klaviyo segment" for the panel's
+ * group. The facet and status come in the query string, exactly as the panel
+ * loaded them; only the segment name is free text.
+ */
+export async function contactsAction(shop: { id: string }, quizId: string, request: Request): Promise<Response> {
+  const form = await request.formData();
+  if (form.get("intent") !== "klaviyo-segment") return json({ ok: false, error: "unknown intent" }, { status: 400 });
+  const sp = new URL(request.url).searchParams;
+  const { spec, defaultName } = await quizSegmentSpecForShop(shop, quizId, sp);
+  const raw = form.get("name");
+  const name = typeof raw === "string" && raw.trim() ? raw.trim().slice(0, 120) : defaultName;
+  const result = await createKlaviyoSegment(shop.id, name, spec);
+  return json(result, { status: result.ok ? 200 : result.code === "not_connected" ? 409 : 502 });
 }

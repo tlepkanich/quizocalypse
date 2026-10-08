@@ -2777,29 +2777,14 @@ function ContentTab({
             )}
             {act.kind === "klaviyo" && (
               <>
-                <QzField
-                  label="Klaviyo API key"
-                  hint="Private key (pk_…). Stored server-side only."
-                >
-                  <QzInput
-                    type="password"
-                    value={act.api_key}
-                    placeholder="pk_…"
-                    onChange={(e) =>
-                      onChange({
-                        ...node,
-                        data: {
-                          ...node.data,
-                          actions: node.data.actions.map((a, i) =>
-                            i === idx && a.kind === "klaviyo"
-                              ? { ...a, api_key: e.target.value }
-                              : a,
-                          ),
-                        } as never,
-                      })
-                    }
-                  />
-                </QzField>
+                {/* Analytics handoff §8 — Klaviyo is connected ONCE per
+                    shop, in Integrations; no quiz asks for a key. A legacy
+                    per-quiz key keeps working until the shop connects. */}
+                <p className="qz-muted" style={{ fontSize: 12, margin: 0 }}>
+                  Uses your shop’s Klaviyo connection.{" "}
+                  <Link to="/app/integrations">Connect or change it in Integrations</Link>.
+                  {act.api_key ? " This step still carries its own key from before; the shop connection replaces it once connected." : ""}
+                </p>
                 <QzField
                   label="List ID (optional)"
                   hint="Subscribe the profile to this list after upsert."
@@ -2872,7 +2857,6 @@ function ContentTab({
                     ...node.data.actions,
                     {
                       kind: "klaviyo" as const,
-                      api_key: "",
                       label: `Klaviyo profile sync ${node.data.actions.length + 1}`,
                     },
                   ],

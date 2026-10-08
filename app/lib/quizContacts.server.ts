@@ -16,6 +16,8 @@ import { z } from "zod";
 import { loadQuizCohort, maskEmail } from "./quizAnalytics.server";
 import type { CohortContact, ContactStatus } from "./analyticsCohort";
 import { formatDate } from "./formatDate";
+import { defaultSegmentName, segmentRules, type SegmentSpec } from "./klaviyoSegment";
+import { NO_MATCH_RESULT_ID } from "./sessionResult";
 
 export const CONTACTS_PAGE = 40;
 const MAX_PAGE = 500;
@@ -65,6 +67,8 @@ export interface ContactsPanelData {
   statusCounts: Record<"all" | ContactStatus, number>;
   /** Orders that came from a result, for the note tying orders to contacts. */
   resultOrders: number | null;
+  /** "Create Klaviyo segment": the rules in words, a name, and who matches today. */
+  segment: { rules: string[]; defaultName: string; matchToday: number };
   rows: ContactsPanelRow[];
   /** Rows matching every filter (the page shows `rows.length` of these). */
   total: number;
@@ -97,6 +101,7 @@ interface Group {
   name: string;
   stat: { label: string; value: number } | null;
   members: CohortContact[];
+  facet: SegmentSpec["facet"];
 }
 
 function selectGroup(loaded: Loaded, q: ContactsQuery, answers: Map<string, Map<string, string[]>>): Group {
@@ -124,6 +129,7 @@ function selectGroup(loaded: Loaded, q: ContactsQuery, answers: Map<string, Map<
       name: answerText,
       stat: { label: "Picked this", value: pickedAll },
       members: all.filter((c) => picked(c.sessionId)),
+      facet: { kind: "answer", questionText: question.text, answerText },
     };
   }
   if (q.facet === "result" && q.id) {
@@ -134,6 +140,7 @@ function selectGroup(loaded: Loaded, q: ContactsQuery, answers: Map<string, Map<
       name: row?.name ?? "Result",
       stat: row ? { label: "Got this result", value: row.finished } : null,
       members: all.filter((c) => (c.result?.resultId ?? "__not_finished__") === q.id),
+      facet: { kind: "result", resultName: row?.name ?? "", noMatch: q.id === NO_MATCH_RESULT_ID },
     };
   }
   if (q.facet === "product" && q.id) {
@@ -154,6 +161,7 @@ function selectGroup(loaded: Loaded, q: ContactsQuery, answers: Map<string, Map<
       name: title,
       stat: { label: "Shown to", value: shown },
       members: all.filter((c) => c.matchedProductIds.includes(q.id!)),
+      facet: { kind: "product", productId: q.id, productTitle: title },
     };
   }
   return {
@@ -161,6 +169,7 @@ function selectGroup(loaded: Loaded, q: ContactsQuery, answers: Map<string, Map<
     name: "All contacts",
     stat: { label: "Finished", value: fig.finished },
     members: all,
+    facet: { kind: "all" },
   };
 }
 
@@ -208,6 +217,10 @@ export async function quizContactsForShop(
   const statusCounts = { all: base.length, bought: 0, added: 0, "no-purchase": 0 };
   for (const c of base) statusCounts[c.status] += 1;
   const resultRow = q.facet === "result" ? loaded.fig.results.find((r) => r.resultId === q.id) : undefined;
+  const spec = segmentSpecOf(loaded, group, q.status);
+  // Klaviyo only ever takes people it may email: the consenting part of the
+  // status group, whatever the switch says.
+  const statusGroup = q.status === "all" ? segmented : segmented.filter((c) => c.status === q.status);
   return {
     title: { eyebrow: group.eyebrow, name: group.name },
     stat: group.stat,
@@ -218,6 +231,11 @@ export async function quizContactsForShop(
     },
     statusCounts,
     resultOrders: resultRow ? resultRow.orders : null,
+    segment: {
+      rules: segmentRules(spec),
+      defaultName: defaultSegmentName(group.name, q.status),
+      matchToday: statusGroup.filter((c) => c.consent === true).length,
+    },
     rows: shown.slice(q.offset, q.offset + q.limit).map((c) => ({
       id: c.captureId,
       emailMasked: maskEmail(c.email),
@@ -232,6 +250,22 @@ export async function quizContactsForShop(
     offset: q.offset,
     limit: q.limit,
   };
+}
+
+function segmentSpecOf(loaded: Loaded, group: Group, status: ContactsQuery["status"]): SegmentSpec {
+  return { quizId: loaded.quiz.id, quizName: loaded.quiz.name, facet: group.facet, status };
+}
+
+/** The panel's group as a Klaviyo segment spec — built from the quiz itself,
+ *  never from text the browser sends. */
+export async function quizSegmentSpecForShop(
+  shop: { id: string },
+  quizId: string,
+  sp: URLSearchParams,
+  now = new Date(),
+): Promise<{ spec: SegmentSpec; defaultName: string }> {
+  const { q, loaded, group } = await resolveContacts(shop, quizId, sp, now);
+  return { spec: segmentSpecOf(loaded, group, q.status), defaultName: defaultSegmentName(group.name, q.status) };
 }
 
 /** "Copy emails": the full emails of the panel's current list. */
