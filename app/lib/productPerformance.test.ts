@@ -140,4 +140,29 @@ describe("productPerformance", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.productId).toBe("p2"); // 2 clicks beats p1's 1
   });
+
+  it("ignores mid-quiz preview views, clicks and adds", () => {
+    const rows = productPerformance(
+      [
+        { sessionId: "s1", eventType: "recommendation_viewed", payload: { stage: "preview", product_ids: ["p1"] } },
+        { sessionId: "s1", eventType: "recommendation_clicked", payload: { stage: "preview", product_id: "p1" } },
+        { sessionId: "s1", eventType: "add_to_cart", payload: { stage: "preview", product_id: "p1" } },
+      ],
+      META,
+    );
+    expect(rows).toEqual([]);
+  });
+
+  it("counts Add all to cart once per product it adds", () => {
+    const rows = productPerformance(
+      [
+        viewed("s1", ["p1", "p2"]),
+        { sessionId: "s1", eventType: "add_to_cart", payload: { add_all: true, product_ids: ["p1", "p2"] } },
+        { sessionId: "s1", eventType: "add_to_cart", payload: { product_id: "p1" } },
+      ],
+      META,
+    );
+    expect(rows.find((r) => r.productId === "p1")!.addToCart).toBe(1);
+    expect(rows.find((r) => r.productId === "p2")!.addToCart).toBe(1);
+  });
 });

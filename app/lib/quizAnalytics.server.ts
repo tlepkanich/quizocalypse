@@ -17,12 +17,23 @@ import type { Quiz as QuizDoc } from "./quizSchema";
 import { totalRevenue, formatRevenue } from "./funnelAggregation";
 import { productPerformance, type ProductPerfRow } from "./productPerformance";
 import { findAbBranches, aggregateVariantFunnel } from "./abAnalytics";
-import { buildStepLedger, type StepLedger } from "./stepLedger";
-import { answerDistributions, type QuestionDistribution } from "./answerDistribution";
+import type { StepLedger } from "./stepLedger";
+import type { QuestionDistribution } from "./answerDistribution";
 import { computeReachability } from "./quizReachability";
 import { buildQuizInsights, distinctOutcomes, INSIGHT_SNOOZE_DAYS, type InsightsResult } from "./quizInsights";
 import { gateRate, type GatedRate } from "./analyticsConfidence";
 import { ATTRIBUTION_WINDOW_DAYS } from "./conversionAttribution";
+import {
+  computeCohort,
+  revenueNumber,
+  type CohortCapture,
+  type CohortEvent,
+  type CohortFigures,
+  type CohortSessionRow,
+  type ContactStatus,
+} from "./analyticsCohort";
+import { buildResultContext } from "./sessionResult";
+import { lineRevenueByProduct } from "./orderLines";
 
 // ── Range ──────────────────────────────────────────────────────────────────
 
@@ -46,7 +57,7 @@ const PRESET_LABELS: Record<Exclude<RangePreset, "custom">, string> = {
   "90d": "Last 90 days",
   "6m": "Last 6 months",
   "12m": "Last 12 months",
-  all: "Since published",
+  all: "All time",
 };
 
 export const DEFAULT_PRESET: RangePreset = "90d";
@@ -105,18 +116,6 @@ interface CohortEventRow {
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
-}
-
-/** Distinct sessions with `eventType` among rows. */
-function distinct(rows: CohortEventRow[], eventType: string): Set<string> {
-  const s = new Set<string>();
-  for (const r of rows) if (r.eventType === eventType) s.add(r.sessionId);
-  return s;
-}
-
-/** W4 — mid-quiz preview impressions must not count as recommendation views. */
-function isPreviewImpression(r: CohortEventRow): boolean {
-  return r.eventType === "recommendation_viewed" && asRecord(r.payload)?.stage === "preview";
 }
 
 export function maskEmail(email: string): string {
@@ -205,17 +204,27 @@ export async function handleInsightDismissForm(
 
 export type AnalyticsDataState = "draft" | "no-data" | "low" | "healthy";
 
+/** Contacts shipped to the page per load; counts always cover every contact. */
+export const CONTACT_ROWS_SHIPPED = 500;
+
 export interface ContactRow {
   id: string;
+  sessionId: string;
   emailMasked: string;
   capturedAt: string;
+  /** Result id (see sessionResult.ts); null = left before a result. */
+  resultId: string | null;
   result: string | null;
   recommended: string | null;
   recommendedMore: number;
-  status: "bought" | "no-purchase" | "abandoned" | "unknown";
+  recommendedIds: string[];
+  /** Bought = an attributed order; Added = added to cart through the quiz, no order. */
+  status: ContactStatus;
+  /** null = the quiz never asked. */
+  consent: boolean | null;
   noMatch: boolean;
   backInStock: boolean;
-  /** Attributed order value for this contact's session ("" = none). */
+  /** Attributed order value for this contact's session (null = none). */
   value: string | null;
 }
 
@@ -227,7 +236,14 @@ export interface ProductRow extends ProductPerfRow {
    * order can win several sessions (W2), and each win writes its own event.
    */
   bought: number | null;
-  state: "over-shown" | "healthy" | "never-clicked" | "unreachable" | "no-data";
+  /** Line revenue (price × quantity after discounts); null = no order carries lines. */
+  revenue: number | null;
+  /** Share of all product line revenue in attributed orders. */
+  revenueShare: number | null;
+  /** Units across those lines. */
+  units: number | null;
+  /** Mapped, but no answer path reaches it (the "No logic" flag). */
+  noLogic: boolean;
   /** impressions ÷ finishers (exposure share). */
   share: number | null;
   /**
@@ -236,33 +252,81 @@ export interface ProductRow extends ProductPerfRow {
    * logic, so it is right at zero traffic. Empty on legacy docs.
    */
   paths: Array<{ answer: string; question: string; target: string }>;
-  /** How many result groups hold this product — the over-shown explanation. */
+  /** How many result groups hold this product. */
   groupCount: number;
+}
+
+export interface ResultSummaryRow {
+  resultId: string;
+  name: string;
+  noMatch: boolean;
+  /** Shoppers who finished on this result. */
+  count: number;
+  contacts: number;
+  contactsBought: number;
+  contactsAdded: number;
+  contactsNoPurchase: number;
+  bought: number;
+  orders: number;
+  revenue: number;
+  revenueFormatted: string;
+  aov: string | null;
+}
+
+/** The previous period, counted exactly like the current one (Data work 4). */
+export interface PeriodFigures {
+  from: string;
+  to: string;
+  started: number;
+  finished: number;
+  contacts: number;
+  canEmail: number;
+  bought: number;
+  orders: number;
+  revenue: number;
+  revenueFormatted: string;
+  /** nodeId → that step's figures. */
+  steps: Record<string, { reached: number | null; left: number | null; dropoff: number | null }>;
+  steepestNodeId: string | null;
+  typicalDropoff: number | null;
+  /** answerId → share of the question's answered shoppers. */
+  answerShares: Record<string, number>;
 }
 
 export interface QuizAnalyticsData {
   quiz: { id: string; name: string; status: string; publishedAt: string | null };
   range: { preset: RangePreset; from: string | null; to: string; label: string; widened: boolean };
+  /** True when ?cmp=1 asked for the previous period. */
+  compare: boolean;
   dataState: AnalyticsDataState;
   xtype: ReturnType<typeof experienceTypeOf>;
   /** "none" ⇒ order attribution is structurally impossible (standalone — W6). */
   attribution: "shopify" | "none";
   truncated: boolean;
+  /** The single currency revenue is in; null when none or several. */
+  currency: string | null;
   kpis: {
     engaged: number;
     completed: number;
     completion: GatedRate;
     captureSessions: number;
     capture: GatedRate;
+    canEmail: number;
+    /** Converted sessions — shoppers with at least one attributed order. */
     buyers: number;
     conversion: GatedRate;
-    revenue: { formatted: string; orders: number; perFinisher: string | null };
-    prior: { engaged: number; completed: number } | null;
+    revenue: {
+      formatted: string;
+      numeric: number;
+      orders: number;
+      perFinisher: string | null;
+      aov: string | null;
+    };
+    prior: PeriodFigures | null;
     /**
      * Period-over-period movement. Rates move in POINTS, counts and money in
      * percent (§7.3 rule 4: colour is goodness, not direction). Null whenever
-     * the prior period is too thin to compare — we never print a delta whose
-     * interval includes zero.
+     * the prior period is too thin to compare.
      */
     deltas: {
       completionPoints: number | null;
@@ -275,18 +339,29 @@ export interface QuizAnalyticsData {
   dismissed: Array<{ id: string; headline: string; severity: "info" | "warn" | "crit"; until: string }>;
   ledger: StepLedger | null;
   answers: QuestionDistribution[];
+  /** Finished shoppers per result (legacy result nodes, decider targets). */
   outcomes: Array<{ label: string; count: number }>;
+  results: ResultSummaryRow[];
   products: ProductRow[];
+  /** The five products with the most line revenue in attributed orders. */
+  topProducts: Array<{ productId: string; title: string; revenue: number; revenueFormatted: string; orders: number }>;
+  /** Earliest order carrying line items (ISO), null = none yet. */
+  lineItemsSince: string | null;
   productMeta: { mapped: number; unreachable: number } | null;
   contacts: {
     rows: ContactRow[];
     counts: {
       all: number;
+      canEmail: number;
       purchased: number;
+      added: number;
+      noPurchase: number;
+      addedCanEmail: number;
+      noPurchaseCanEmail: number;
       didntBuy: number;
       noMatch: number;
       backInStock: number;
-      /** Finishers who never gave an email — measurable without the P2 gate event. */
+      /** Finishers who never gave an email. */
       noEmail: number;
     };
     /** Distinct result names + products, for the two narrowing filters (§06). */
@@ -335,6 +410,117 @@ export interface QuizAnalyticsData {
   }>;
 }
 
+/** The previous window: the same number of days immediately before `from`. */
+export function previousRange(range: AnalyticsRange): AnalyticsRange | null {
+  if (!range.from) return null;
+  const span = +range.to - +range.from;
+  return {
+    preset: "custom",
+    from: new Date(+range.from - span),
+    to: new Date(+range.from - 1),
+    label: "Previous period",
+    days: range.days,
+    widened: false,
+  };
+}
+
+function money(totals: Record<string, number>): { numeric: number; formatted: string; single: string | null } {
+  const entries = Object.entries(totals);
+  return {
+    numeric: revenueNumber(totals),
+    formatted: formatRevenue({ orders: 0, totalsByCurrency: totals }),
+    single: entries.length === 1 ? entries[0]![0] : null,
+  };
+}
+
+function ratio(totals: Record<string, number>, n: number): string | null {
+  const entries = Object.entries(totals);
+  if (n <= 0 || entries.length !== 1) return null;
+  return formatRevenue({ orders: 0, totalsByCurrency: { [entries[0]![0]]: entries[0]![1] / n } });
+}
+
+/** Sessions whose quiz_engaged fell in range (most recent first, capped). */
+async function fetchCohortIds(quizId: string, r: AnalyticsRange) {
+  const rows = await prisma.event.findMany({
+    where: {
+      quizId,
+      eventType: "quiz_engaged",
+      ...(r.from ? { ts: { gte: r.from, lte: r.to } } : { ts: { lte: r.to } }),
+    },
+    select: { sessionId: true },
+    orderBy: { ts: "desc" },
+    take: ANALYTICS_SESSION_CAP + 1,
+  });
+  const ids = new Set(rows.map((x) => x.sessionId));
+  return { ids, truncated: rows.length > ANALYTICS_SESSION_CAP };
+}
+
+/** Every event, capture and session row of a cohort, regardless of ts. */
+async function loadCohort(quizId: string, ids: Set<string>) {
+  const cohortIds = [...ids];
+  if (cohortIds.length === 0) {
+    return { events: [] as CohortEventRow[], captures: [] as CohortCapture[], sessions: [] as CohortSessionRow[] };
+  }
+  const [events, captureRows, sessions] = await Promise.all([
+    prisma.event.findMany({
+      where: { quizId, sessionId: { in: cohortIds } },
+      select: { sessionId: true, eventType: true, payload: true, ts: true },
+    }),
+    // Captures — fetched BY COHORT SESSION, not by capturedAt: the range
+    // cohorts sessions, so a shopper who engages Monday and submits Thursday
+    // still counts once.
+    prisma.emailCapture.findMany({
+      where: { quizId, sessionId: { in: cohortIds } },
+      select: { id: true, sessionId: true, email: true, capturedAt: true, marketingConsent: true },
+      orderBy: { capturedAt: "desc" },
+    }),
+    prisma.quizSession.findMany({
+      where: { quizId, sessionId: { in: cohortIds } },
+      select: {
+        sessionId: true,
+        outcomeId: true,
+        answerIds: true,
+        matchedProductIds: true,
+        converted: true,
+        completedAt: true,
+      },
+    }),
+  ]);
+  return {
+    events: events as CohortEventRow[],
+    captures: captureRows.map((c) => ({ ...c, marketingConsent: c.marketingConsent ?? null })),
+    sessions,
+  };
+}
+
+function toCohortEvents(rows: CohortEventRow[]): CohortEvent[] {
+  return rows.map((e) => ({ sessionId: e.sessionId, eventType: e.eventType, payload: e.payload, ts: +e.ts }));
+}
+
+function periodFigures(range: AnalyticsRange, f: CohortFigures): PeriodFigures {
+  const m = money(f.revenue.totalsByCurrency);
+  const steps: PeriodFigures["steps"] = {};
+  for (const s of f.ledger?.steps ?? []) steps[s.nodeId] = { reached: s.reached, left: s.left, dropoff: s.dropoff };
+  const answerShares: Record<string, number> = {};
+  for (const q of f.answers) for (const o of q.options) answerShares[o.answerId] = o.share;
+  return {
+    from: range.from ? range.from.toISOString() : "",
+    to: range.to.toISOString(),
+    started: f.started,
+    finished: f.finished,
+    contacts: f.contacts,
+    canEmail: f.canEmail,
+    bought: f.bought,
+    orders: f.revenue.orders,
+    revenue: m.numeric,
+    revenueFormatted: formatRevenue(f.revenue),
+    steps,
+    steepestNodeId: f.ledger?.steepestNodeId ?? null,
+    typicalDropoff: f.ledger?.typicalDropoff ?? null,
+    answerShares,
+  };
+}
+
 export async function quizAnalyticsForShop(
   shop: { id: string; source?: string },
   quizId: string,
@@ -352,162 +538,102 @@ export async function quizAnalyticsForShop(
 
   let range = resolveAnalyticsRange(searchParams, now);
   const published = quiz.status === "published";
+  const compare = searchParams.get("cmp") === "1";
 
-  // Cohort: sessions whose ENGAGE fell in range (most recent first, capped).
-  const fetchCohort = async (r: AnalyticsRange) => {
-    const rows = await prisma.event.findMany({
-      where: {
-        quizId,
-        eventType: "quiz_engaged",
-        ...(r.from ? { ts: { gte: r.from, lte: r.to } } : { ts: { lte: r.to } }),
-      },
-      select: { sessionId: true },
-      orderBy: { ts: "desc" },
-      take: ANALYTICS_SESSION_CAP + 1,
-    });
-    const ids = new Set(rows.map((x) => x.sessionId));
-    return { ids, truncated: rows.length > ANALYTICS_SESSION_CAP };
-  };
-
-  let cohort = await fetchCohort(range);
+  let cohort = await fetchCohortIds(quizId, range);
   // Auto-widen (§8.3): a thin DEFAULT window opens on all time, and says so.
   if (published && range.preset === DEFAULT_PRESET && !searchParams.get("r") && cohort.ids.size < 30) {
     const wide = resolveAnalyticsRange(new URLSearchParams({ r: "all" }), now);
-    const wideCohort = await fetchCohort(wide);
+    const wideCohort = await fetchCohortIds(quizId, wide);
     if (wideCohort.ids.size > cohort.ids.size) {
       range = { ...wide, widened: true };
       cohort = wideCohort;
     }
   }
 
-  const cohortIds = [...cohort.ids];
-  // All events for the cohort, regardless of ts (the cohorting correction).
-  const events: CohortEventRow[] = cohortIds.length
-    ? await prisma.event.findMany({
-        where: { quizId, sessionId: { in: cohortIds } },
-        select: { sessionId: true, eventType: true, payload: true, ts: true },
-      })
-    : [];
-
-  const engagedSet = cohort.ids;
-  const completedSet = distinct(events, "quiz_completed");
-  // A completion outside its own engage-cohort can't happen by construction;
-  // intersect defensively anyway so the invariant completed ≤ engaged HOLDS.
-  for (const sid of completedSet) if (!engagedSet.has(sid)) completedSet.delete(sid);
-  const engaged = engagedSet.size;
-  const completed = completedSet.size;
-
-  // Captures — DISTINCT capture SESSIONS (W10: rows are not shoppers; the gate,
-  // the result form and a back-nav resubmit all write a row for one shopper).
-  // Fetched BY COHORT SESSION, not by capturedAt: the range cohorts sessions,
-  // so a shopper who engages Monday and submits Thursday still counts once, and
-  // the query is bounded by the cohort rather than by an arbitrary row cap.
-  const captureRows = cohortIds.length
-    ? await prisma.emailCapture.findMany({
-        where: { quizId, sessionId: { in: cohortIds } },
-        select: { id: true, sessionId: true, email: true, capturedAt: true },
-        orderBy: { capturedAt: "desc" },
-      })
-    : [];
-  const captureSessions = new Set<string>();
-  for (const c of captureRows) captureSessions.add(c.sessionId);
-
-  // Revenue — order_attributed within the cohort, deduped by order_id.
-  const orderEvents = events.filter((e) => e.eventType === "order_attributed");
-  const revenue = totalRevenue(orderEvents);
-  // "Buyers" — one order can be attributed to several sessions of the same
-  // shopper (W2). Dedupe by order_id FIRST, then count the crediting sessions,
-  // so buyers can never exceed orders for a single shared order.
-  const buyersSet = new Set<string>();
-  {
-    const seenOrderIds = new Set<string>();
-    for (const e of orderEvents) {
-      const pl = asRecord(e.payload);
-      const orderId = typeof pl?.order_id === "string" ? pl.order_id : null;
-      if (orderId) {
-        if (seenOrderIds.has(orderId)) continue;
-        seenOrderIds.add(orderId);
-      }
-      buyersSet.add(e.sessionId);
-    }
-  }
-  const buyers = buyersSet.size;
-  const currencies = Object.entries(revenue.totalsByCurrency);
-  const perFinisher =
-    completed > 0 && currencies.length === 1
-      ? formatRevenue({ orders: revenue.orders, totalsByCurrency: { [currencies[0]![0]]: currencies[0]![1] / completed } })
-      : null;
-
-  // Prior period (deltas) — same length immediately before `from`.
-  let prior: { engaged: number; completed: number } | null = null;
-  if (range.from) {
-    const priorFrom = new Date(+range.from - (+range.to - +range.from));
-    const priorRows = await prisma.event.findMany({
-      where: { quizId, eventType: { in: ["quiz_engaged", "quiz_completed"] }, ts: { gte: priorFrom, lt: range.from } },
-      select: { sessionId: true, eventType: true },
-      distinct: ["eventType", "sessionId"],
-      take: ANALYTICS_SESSION_CAP,
-    });
-    const pEng = new Set<string>();
-    const pCom = new Set<string>();
-    for (const r of priorRows) (r.eventType === "quiz_engaged" ? pEng : pCom).add(r.sessionId);
-    prior = { engaged: pEng.size, completed: Math.min(pCom.size, pEng.size) };
-  }
-
-  // Doc + pure aggregations.
+  // Doc + the result names.
   const parsed = Quiz.safeParse(quiz.publishedJson ?? quiz.draftJson);
   const doc: QuizDoc | null = parsed.success ? parsed.data : null;
   const xtype = doc ? experienceTypeOf(doc) : "product_match";
+  const [catRows, productMetaRows, bis] = await Promise.all([
+    prisma.category.findMany({ where: { shopId: shop.id }, select: { id: true, name: true } }),
+    prisma.product.findMany({
+      where: { shopId: shop.id },
+      select: { productId: true, title: true, imageUrl: true, handle: true },
+    }),
+    prisma.backInStockRequest.findMany({ where: { quizId }, select: { email: true } }),
+  ]);
+  const catName = new Map(catRows.map((c) => [c.id, c.name]));
+  const resultCtx = doc ? buildResultContext(doc, quiz.publishedJson ?? quiz.draftJson, catName) : null;
 
-  const ledgerEvents = events.map((e) => ({
-    sessionId: e.sessionId,
-    eventType: e.eventType,
-    payload: e.payload,
-    ts: +e.ts,
-  }));
-  const ledger = doc ? buildStepLedger(doc, ledgerEvents, engaged, completed) : null;
-  const answers = doc ? answerDistributions(doc, ledgerEvents) : [];
+  const loaded = await loadCohort(quizId, cohort.ids);
+  const events = loaded.events;
+  const cohortEvents = toCohortEvents(events);
+  const fig = computeCohort({
+    doc,
+    resultCtx,
+    cohortIds: cohort.ids,
+    events: cohortEvents,
+    captures: loaded.captures,
+    sessions: loaded.sessions,
+  });
+  const engaged = fig.started;
+  const completed = fig.finished;
+  const completedSet = fig.completedSet;
+  const revenue = fig.revenue;
+  const rev = money(revenue.totalsByCurrency);
+  const perFinisher = ratio(revenue.totalsByCurrency, completed);
+  const aov = ratio(revenue.totalsByCurrency, revenue.orders);
 
-  // Outcome distribution — legacy multi-result docs only (W9: a one-terminus
-  // decider doc has one outcomeId for everyone; rendering it is noise).
-  let outcomes: Array<{ label: string; count: number }> = [];
-  const resultNodes = doc?.nodes.filter((n) => n.type === "result") ?? [];
-  if (doc && doc.logic_model !== "decider" && resultNodes.length > 1) {
-    const grouped = await prisma.quizSession.groupBy({
-      by: ["outcomeId"],
-      where: {
-        quizId,
-        completedAt: { not: null },
-        ...(range.from ? { startedAt: { gte: range.from, lte: range.to } } : {}),
-      },
-      _count: { _all: true },
+  // Previous period (Compare) — the same cohort construction, same counting.
+  let prior: PeriodFigures | null = null;
+  const prevRange = compare ? previousRange(range) : null;
+  if (prevRange) {
+    const prevCohort = await fetchCohortIds(quizId, prevRange);
+    const prevLoaded = await loadCohort(quizId, prevCohort.ids);
+    const prevFig = computeCohort({
+      doc,
+      resultCtx,
+      cohortIds: prevCohort.ids,
+      events: toCohortEvents(prevLoaded.events),
+      captures: prevLoaded.captures,
+      sessions: prevLoaded.sessions,
     });
-    const headlineOf = (nid: string | null): string => {
-      const n = nid ? doc.nodes.find((x) => x.id === nid) : undefined;
-      return n && n.type === "result" ? n.data.headline || nid! : (nid ?? "unknown");
-    };
-    outcomes = grouped
-      .map((g) => ({ label: headlineOf(g.outcomeId), count: g._count._all }))
-      .sort((a, b) => b.count - a.count);
+    prior = periodFigures(prevRange, prevFig);
   }
 
-  // Products — preview impressions filtered OUT (W4), reachability joined in.
-  const productMetaRows = await prisma.product.findMany({
-    where: { shopId: shop.id },
-    select: { productId: true, title: true, imageUrl: true, handle: true },
-  });
-  const perfRows = productPerformance(
-    events.filter((e) => !isPreviewImpression(e)),
-    productMetaRows,
-    { limit: 50 },
-  );
-  const reachability = published ? computeReachability(quiz.publishedJson) : null;
+  const ledger = fig.ledger;
+  const answers = fig.answers;
 
-  // productId → how many distinct attributed ORDERS contained it (E7).
-  // Deduped by order_id first: one order can win several sessions and each win
-  // writes its own event, so counting rows would multiply every purchase.
-  // `anyLineItems` distinguishes "no orders bought it" from "these orders
-  // predate line-item capture", which must not both render as 0.
+  // Results — every doc model (Data work 3). Real results only in `outcomes`.
+  const results: ResultSummaryRow[] = fig.results.map((r) => {
+    const m = money(r.totalsByCurrency);
+    return {
+      resultId: r.resultId,
+      name: r.name,
+      noMatch: r.noMatch,
+      count: r.finished,
+      contacts: r.contacts,
+      contactsBought: r.contactsBought,
+      contactsAdded: r.contactsAdded,
+      contactsNoPurchase: r.contactsNoPurchase,
+      bought: r.bought,
+      orders: r.orders,
+      revenue: m.numeric,
+      revenueFormatted: r.orders > 0 ? m.formatted : "—",
+      aov: ratio(r.totalsByCurrency, r.orders),
+    };
+  });
+  const outcomes = results.filter((r) => r.count > 0).map((r) => ({ label: r.name, count: r.count }));
+
+  // Products — every product (no cap), preview events excluded (W4).
+  const perfRows = productPerformance(cohortEvents, productMetaRows, { limit: Number.POSITIVE_INFINITY });
+  const reachability = published ? computeReachability(quiz.publishedJson) : null;
+  const orderEvents = fig.orderEvents;
+
+  // productId → distinct attributed ORDERS that contained it (E7), deduped by
+  // order_id first. `anyLineItems` separates "no orders bought it" from
+  // "these orders predate line-item capture", which must not both read 0.
   const boughtByProduct = new Map<string, number>();
   let anyLineItems = false;
   {
@@ -527,26 +653,24 @@ export async function quizAnalyticsForShop(
       for (const pid of new Set(ids)) boughtByProduct.set(pid, (boughtByProduct.get(pid) ?? 0) + 1);
     }
   }
+  // Line revenue (Data work 1) — a part of each order's total, never more.
+  const lines = lineRevenueByProduct(orderEvents);
+  const anyLineRevenue = lines.ordersWithLines > 0;
+  let lineRevenueTotal = 0;
+  for (const v of lines.byProduct.values()) lineRevenueTotal += v.revenue;
 
   // productId → the (question, answer) pairs whose target group holds it.
-  // Decider-only: it reads the deciding question's answer→target mapping
-  // against the baked membership, so it needs no traffic at all.
   const pathsByProduct = new Map<string, Array<{ answer: string; question: string; target: string }>>();
   const groupsByProduct = new Map<string, Set<string>>();
   {
-    const baked = asRecord(quiz.publishedJson)?.target_product_ids_map as
-      | Record<string, string[]>
-      | undefined;
-    const targetIndex = asRecord(quiz.publishedJson)?.target_index as
-      | Record<string, { name?: string }>
-      | undefined;
-    if (doc?.logic_model === "decider" && baked) {
+    const baked = asRecord(quiz.publishedJson)?.target_product_ids_map as Record<string, string[]> | undefined;
+    if (doc?.logic_model === "decider" && baked && resultCtx) {
       for (const n of doc.nodes) {
         if (n.type !== "question" || n.data.role !== "decides") continue;
         for (const a of n.data.answers) {
           if (!a.target_id) continue;
           const members = baked[a.target_id] ?? [];
-          const targetName = targetIndex?.[a.target_id]?.name ?? a.target_id;
+          const targetName = resultCtx.targetIndex[a.target_id]?.name ?? a.target_id;
           for (const pid of members) {
             const arr = pathsByProduct.get(pid) ?? [];
             if (arr.length < 4) arr.push({ answer: a.text, question: n.data.text, target: targetName });
@@ -560,120 +684,108 @@ export async function quizAnalyticsForShop(
     }
   }
 
-  const products: ProductRow[] = perfRows.map((p) => {
-    const unreachable = reachability?.stateById.get(p.productId) === "unreachable";
-    const share = completed > 0 ? p.impressions / completed : null;
-    let state: ProductRow["state"] = "no-data";
-    if (unreachable) state = "unreachable";
-    else if (p.impressions >= 100 && p.clicks === 0) state = "never-clicked";
-    else if (share != null && share >= 0.4 && p.impressions >= 30) state = "over-shown";
-    else if (p.impressions > 0) state = "healthy";
+  const titleOf = new Map(productMetaRows.map((p) => [p.productId, p.title]));
+  const toRow = (p: ProductPerfRow): ProductRow => {
+    const lr = lines.byProduct.get(p.productId);
     return {
       ...p,
       bought: anyLineItems ? boughtByProduct.get(p.productId) ?? 0 : null,
-      state,
-      share,
+      revenue: anyLineRevenue ? lr?.revenue ?? 0 : null,
+      revenueShare: anyLineRevenue && lineRevenueTotal > 0 ? (lr?.revenue ?? 0) / lineRevenueTotal : null,
+      units: anyLineRevenue ? lr?.units ?? 0 : null,
+      noLogic: reachability?.stateById.get(p.productId) === "unreachable",
+      share: completed > 0 ? p.impressions / completed : null,
       paths: pathsByProduct.get(p.productId) ?? [],
       groupCount: groupsByProduct.get(p.productId)?.size ?? 0,
     };
-  });
-  // Unreachable products with zero events still belong in the table.
+  };
+  const products: ProductRow[] = perfRows.map(toRow);
+  // Every mapped product belongs in the table, traffic or not.
   if (reachability) {
     const seen = new Set(products.map((p) => p.productId));
-    for (const u of reachability.unreachable) {
-      if (seen.has(u.productId)) continue;
-      products.push({
-        productId: u.productId,
-        title: u.title,
-        imageUrl: null,
-        handle: null,
-        impressions: 0,
-        clicks: 0,
-        addToCart: 0,
-        ctr: 0,
-        atcRate: 0,
-        bought: anyLineItems ? 0 : null,
-        state: "unreachable",
-        share: null,
-        paths: [],
-        groupCount: 0,
-      });
+    for (const pid of reachability.stateById.keys()) {
+      if (seen.has(pid)) continue;
+      seen.add(pid);
+      const title =
+        titleOf.get(pid) ?? reachability.unreachable.find((u) => u.productId === pid)?.title ?? pid;
+      products.push(
+        toRow({
+          productId: pid,
+          title,
+          imageUrl: productMetaRows.find((m) => m.productId === pid)?.imageUrl ?? null,
+          handle: productMetaRows.find((m) => m.productId === pid)?.handle ?? null,
+          impressions: 0,
+          clicks: 0,
+          addToCart: 0,
+          ctr: 0,
+          atcRate: 0,
+        }),
+      );
     }
   }
+  const topProducts = [...lines.byProduct.entries()]
+    .filter(([, v]) => v.revenue > 0)
+    .sort((a, b) => b[1].revenue - a[1].revenue || a[0].localeCompare(b[0]))
+    .slice(0, 5)
+    .map(([pid, v]) => ({
+      productId: pid,
+      title: titleOf.get(pid) ?? pid,
+      revenue: v.revenue,
+      revenueFormatted: formatRevenue({ orders: 0, totalsByCurrency: { [rev.single ?? ""]: v.revenue } }),
+      orders: v.orders,
+    }));
 
-  // Contacts (Customer Engagement, rolled in — per-quiz, cohort-scoped rows).
-  // One row per SHOPPER, not per capture row: the same W10 duplication that
-  // inflated the rate would otherwise list one shopper twice in the table and
-  // twice in the export. Rows arrive capturedAt-desc, so first-seen is latest.
-  const seenContactSessions = new Set<string>();
-  const rangedCaptures = captureRows.filter((c) => {
-    if (seenContactSessions.has(c.sessionId)) return false;
-    seenContactSessions.add(c.sessionId);
-    return true;
-  });
-  const sessionRows = rangedCaptures.length
-    ? await prisma.quizSession.findMany({
-        where: { quizId, sessionId: { in: [...new Set(rangedCaptures.map((c) => c.sessionId))] } },
-        select: { sessionId: true, outcomeId: true, matchedProductIds: true, converted: true, completedAt: true },
-      })
-    : [];
-  const sessBySid = new Map(sessionRows.map((s) => [s.sessionId, s]));
-  const bis = await prisma.backInStockRequest.findMany({ where: { quizId }, select: { email: true } });
+  // Contacts — counted over EVERY contact; the first CONTACT_ROWS_SHIPPED ship.
   const bisEmails = new Set(bis.map((b) => b.email.toLowerCase()));
-  const prodTitle = new Map(productMetaRows.map((p) => [p.productId, p.title]));
-  const catRows = await prisma.category.findMany({ where: { shopId: shop.id }, select: { id: true, name: true } });
-  const catName = new Map(catRows.map((c) => [c.id, c.name]));
-  const orderValueBySession = new Map<string, string>();
-  {
-    const seenOrders = new Set<string>();
-    for (const e of orderEvents) {
-      const p = asRecord(e.payload);
-      const orderId = typeof p?.order_id === "string" ? p.order_id : null;
-      if (!orderId || seenOrders.has(orderId)) continue;
-      seenOrders.add(orderId);
-      const total = typeof p?.total_price === "string" ? p.total_price : null;
-      const currency = typeof p?.currency === "string" ? p.currency : "";
-      if (total) orderValueBySession.set(e.sessionId, `${total}${currency ? ` ${currency}` : ""}`);
-    }
-  }
-  const contactRows: ContactRow[] = rangedCaptures.slice(0, 500).map((c) => {
-    const s = sessBySid.get(c.sessionId);
-    const noMatch = Boolean(s && s.completedAt && s.matchedProductIds.length === 0);
-    const recTitles = (s?.matchedProductIds ?? []).map((id) => prodTitle.get(id)).filter((t): t is string => !!t);
+  const allContactRows: ContactRow[] = fig.contactList.map((c) => {
+    const recTitles = c.matchedProductIds.map((id) => titleOf.get(id)).filter((t): t is string => !!t);
     return {
-      id: c.id,
+      id: c.captureId,
+      sessionId: c.sessionId,
       emailMasked: maskEmail(c.email),
       capturedAt: c.capturedAt.toISOString(),
-      result: s?.outcomeId ? catName.get(s.outcomeId) ?? null : null,
+      resultId: c.result?.resultId ?? null,
+      result: c.result?.name ?? null,
       recommended: recTitles[0] ?? null,
-      recommendedMore: Math.max(0, (s?.matchedProductIds.length ?? 0) - 1),
-      status: s ? (s.converted ? "bought" : s.completedAt ? "no-purchase" : "abandoned") : "unknown",
-      noMatch,
+      recommendedMore: Math.max(0, c.matchedProductIds.length - 1),
+      recommendedIds: c.matchedProductIds,
+      status: c.status,
+      consent: c.consent,
+      noMatch: Boolean(c.result?.noMatch),
       backInStock: bisEmails.has(c.email.toLowerCase()),
-      value: orderValueBySession.get(c.sessionId) ?? null,
+      value: c.orderValue,
     };
   });
+  const count = (pred: (c: ContactRow) => boolean) => allContactRows.reduce((n, c) => n + (pred(c) ? 1 : 0), 0);
   const contactCounts = {
-    all: contactRows.length,
-    purchased: contactRows.filter((c) => c.status === "bought").length,
-    didntBuy: contactRows.filter((c) => c.status !== "bought").length,
-    noMatch: contactRows.filter((c) => c.noMatch).length,
-    backInStock: contactRows.filter((c) => c.backInStock).length,
-    // The spec's "skipped the gate" needs an email_gate_skipped event that
-    // doesn't exist yet (P2). What IS measurable today: finishers who never
-    // gave an email. Labelled for what it is, not for what we wish it were.
-    noEmail: Math.max(0, completed - captureSessions.size),
+    all: allContactRows.length,
+    canEmail: count((c) => c.consent === true),
+    purchased: count((c) => c.status === "bought"),
+    added: count((c) => c.status === "added"),
+    noPurchase: count((c) => c.status === "no-purchase"),
+    addedCanEmail: count((c) => c.status === "added" && c.consent === true),
+    noPurchaseCanEmail: count((c) => c.status === "no-purchase" && c.consent === true),
+    didntBuy: count((c) => c.status !== "bought"),
+    noMatch: count((c) => c.noMatch),
+    backInStock: count((c) => c.backInStock),
+    // Finishers who never gave an email.
+    noEmail: Math.max(0, completed - count((c) => completedSet.has(c.sessionId))),
   };
+  const contactRows = allContactRows.slice(0, CONTACT_ROWS_SHIPPED);
   const contactFilterOptions = {
-    results: [...new Set(contactRows.map((c) => c.result).filter((v): v is string => !!v))].sort(),
-    products: [...new Set(contactRows.map((c) => c.recommended).filter((v): v is string => !!v))].sort(),
+    results: [...new Set(allContactRows.map((c) => c.result).filter((v): v is string => !!v))].sort(),
+    products: [...new Set(allContactRows.map((c) => c.recommended).filter((v): v is string => !!v))].sort(),
   };
 
-  // Revenue by DAY — bucketed server-side (never ship 5,000 rows to draw 13
-  // bars). The view rolls days up to week/month for the grain toggle, so
-  // switching grain costs no round-trip and every grain sums the same total.
+  // Revenue by DAY — bucketed server-side. Orders sit on the day they were
+  // PLACED (the order's own created_at; receipt time for older events).
   const dayKey = (d: Date) => d.toISOString().slice(0, 10);
-  const dayBuckets = new Map<string, { orders: CohortEventRow[]; finishers: Set<string> }>();
+  const orderTime = (e: CohortEvent): Date => {
+    const raw = asRecord(e.payload)?.order_created_at;
+    const t = typeof raw === "string" ? Date.parse(raw) : NaN;
+    return new Date(Number.isFinite(t) ? t : e.ts);
+  };
+  const dayBuckets = new Map<string, { orders: CohortEvent[]; finishers: Set<string> }>();
   const dayOf = (k: string) => {
     let b = dayBuckets.get(k);
     if (!b) {
@@ -682,44 +794,49 @@ export async function quizAnalyticsForShop(
     }
     return b;
   };
-  for (const e of orderEvents) dayOf(dayKey(e.ts)).orders.push(e);
-  // Finishers land on the day the session ENGAGED, matching the cohort basis —
-  // otherwise per-finisher revenue divides two different populations.
-  const engageDay = new Map<string, string>();
-  for (const e of events) {
-    if (e.eventType !== "quiz_engaged") continue;
-    const prev = engageDay.get(e.sessionId);
-    const k = dayKey(e.ts);
-    if (!prev || k < prev) engageDay.set(e.sessionId, k);
+  // Each order once, on its first event — so the days add up to the total.
+  {
+    const seen = new Set<string>();
+    for (const e of [...orderEvents].sort((a, b) => a.ts - b.ts)) {
+      const id = asRecord(e.payload)?.order_id;
+      if (typeof id === "string") {
+        if (seen.has(id)) continue;
+        seen.add(id);
+      }
+      dayOf(dayKey(orderTime(e))).orders.push(e);
+    }
   }
-  for (const sid of completedSet) {
-    const k = engageDay.get(sid);
-    if (k) dayOf(k).finishers.add(sid);
-  }
-  const revenueDays = [...dayBuckets.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([day, b]) => {
-      const rev = totalRevenue(b.orders);
-      const [cur, amt] = Object.entries(rev.totalsByCurrency)[0] ?? ["", 0];
-      return { day, total: amt, orders: rev.orders, finishers: b.finishers.size, currency: cur };
-    });
-
-  // Month-by-month compare — recomputed per month, never averaged (§ spec 07).
-  const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  const monthAgg = new Map<
-    string,
-    { engaged: Set<string>; completed: Set<string>; orders: CohortEventRow[] }
-  >();
+  // Finishers land on the day the session ENGAGED, matching the cohort basis.
   const engageTs = new Map<string, Date>();
   for (const e of events) {
     if (e.eventType !== "quiz_engaged") continue;
     const prev = engageTs.get(e.sessionId);
     if (!prev || e.ts < prev) engageTs.set(e.sessionId, e.ts);
   }
+  for (const sid of completedSet) {
+    const ts = engageTs.get(sid);
+    if (ts) dayOf(dayKey(ts)).finishers.add(sid);
+  }
+  const revenueDays = [...dayBuckets.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([day, b]) => {
+      const r = totalRevenue(b.orders);
+      const [cur, amt] = Object.entries(r.totalsByCurrency)[0] ?? ["", 0];
+      return { day, total: amt, orders: r.orders, finishers: b.finishers.size, currency: cur };
+    });
+
+  // Month-by-month compare — recomputed per month, never averaged (§ spec 07).
+  // A session's month is its engage month; so are its contact and its orders,
+  // which is what makes the months add up to the range totals.
+  const monthKey = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  const monthAgg = new Map<
+    string,
+    { engaged: Set<string>; completed: Set<string>; captures: number; orders: CohortEvent[] }
+  >();
   const bucketOf = (k: string) => {
     let b = monthAgg.get(k);
     if (!b) {
-      b = { engaged: new Set(), completed: new Set(), orders: [] };
+      b = { engaged: new Set(), completed: new Set(), captures: 0, orders: [] };
       monthAgg.set(k, b);
     }
     return b;
@@ -727,13 +844,15 @@ export async function quizAnalyticsForShop(
   for (const [sid, ts] of engageTs) {
     const b = bucketOf(monthKey(ts));
     b.engaged.add(sid);
-    if (completedSet.has(sid)) b.completed.add(sid); // a session's month = its engage month
+    if (completedSet.has(sid)) b.completed.add(sid);
   }
-  for (const e of orderEvents) bucketOf(monthKey(e.ts)).orders.push(e);
-  const captureMonth = new Map<string, number>();
-  for (const c of rangedCaptures) {
-    const k = monthKey(c.capturedAt);
-    captureMonth.set(k, (captureMonth.get(k) ?? 0) + 1);
+  for (const e of orderEvents) {
+    const ts = engageTs.get(e.sessionId);
+    if (ts) bucketOf(monthKey(ts)).orders.push(e);
+  }
+  for (const c of fig.contactList) {
+    const ts = engageTs.get(c.sessionId);
+    if (ts) bucketOf(monthKey(ts)).captures += 1;
   }
   const nowKey = monthKey(now);
   const months = [...monthAgg.keys()]
@@ -742,37 +861,31 @@ export async function quizAnalyticsForShop(
     .slice(0, 24)
     .map((k) => {
       const b = monthAgg.get(k)!;
-      const rev = totalRevenue(b.orders);
+      const r = totalRevenue(b.orders);
       const [y, m] = k.split("-");
       const label = new Date(Date.UTC(Number(y), Number(m) - 1, 1)).toLocaleDateString("en-US", {
         month: "short",
         year: "numeric",
         timeZone: "UTC",
       });
-      const entries = Object.entries(rev.totalsByCurrency);
-      const revTotal = entries.reduce((sum, [, amt]) => sum + amt, 0);
-      const finishers = b.completed.size;
       return {
         key: k,
         label,
         engaged: b.engaged.size,
-        completed: finishers,
-        captures: captureMonth.get(k) ?? 0,
-        orders: rev.orders,
-        revenue: formatRevenue(rev),
-        revenueNumeric: revTotal,
-        perFinisher:
-          finishers > 0 && entries.length === 1
-            ? formatRevenue({ orders: 0, totalsByCurrency: { [entries[0]![0]]: revTotal / finishers } })
-            : null,
+        completed: b.completed.size,
+        captures: b.captures,
+        orders: r.orders,
+        revenue: formatRevenue(r),
+        revenueNumeric: revenueNumber(r.totalsByCurrency),
+        perFinisher: ratio(r.totalsByCurrency, b.completed.size),
         partial: k === nowKey,
       };
     });
 
-  // A/B variants (previously embedded-only — W14; now both surfaces).
+  // A/B variants.
   const abTests = doc
     ? findAbBranches(doc).map((br) => {
-        const funnels = aggregateVariantFunnel(ledgerEvents, br.id, br.data.slots);
+        const funnels = aggregateVariantFunnel(cohortEvents, br.id, br.data.slots);
         const totalWeight = br.data.slots.reduce((s, sl) => s + sl.weight, 0);
         return {
           id: br.id,
@@ -796,13 +909,12 @@ export async function quizAnalyticsForShop(
     dataState = any ? "low" : "no-data";
   } else dataState = engaged < 30 ? "low" : "healthy";
 
-  // Dismissals — a snoozed card is hidden until its 14 days lapse.
+  // Dismissals — a snoozed card is hidden until its 14 days lapse, and leaves
+  // the list BEFORE the cap so the next finding moves up.
   const dismissalState = (await loadDismissals([quizId], now)).get(quizId) ?? {
     active: new Set<string>(),
     until: new Map<string, Date>(),
   };
-
-  // Insights — doc-static rules always run; traffic rules gate themselves.
   const insightsRaw: InsightsResult = doc
     ? buildQuizInsights({
         doc,
@@ -816,48 +928,35 @@ export async function quizAnalyticsForShop(
         published,
         contactsNoMatch: contactCounts.noMatch,
         contactsTotal: contactCounts.all,
-        contactsNoMatchBought: contactRows.filter((c) => c.noMatch && c.status === "bought").length,
+        contactsNoMatchBought: count((c) => c.noMatch && c.status === "bought"),
+        dismissed: dismissalState.active,
       })
     : { cards: [], more: 0, clean: true };
+  const { hidden, ...insights } = insightsRaw;
+  const dismissed = (hidden ?? []).map((c) => ({
+    id: c.id,
+    headline: c.headline,
+    severity: c.severity,
+    until: (dismissalState.until.get(c.id) ?? now).toISOString(),
+  }));
 
-  // Filter AFTER ranking so the 3-card cap fills with the next real finding
-  // rather than leaving a hole where a dismissed one sat.
-  const visibleCards = insightsRaw.cards.filter((c) => !dismissalState.active.has(c.id));
-  const insights: InsightsResult = {
-    cards: visibleCards,
-    more: insightsRaw.more,
-    clean: visibleCards.length === 0,
-  };
-  const dismissed = insightsRaw.cards
-    .filter((c) => dismissalState.active.has(c.id))
-    .map((c) => ({
-      id: c.id,
-      headline: c.headline,
-      severity: c.severity,
-      until: (dismissalState.until.get(c.id) ?? now).toISOString(),
-    }));
-
-  // Period-over-period deltas. Rates move in POINTS, counts in percent. We
-  // suppress a delta whenever either side is too thin to mean anything —
-  // a "+40%" off 5 sessions is noise dressed as a result (§7.3 rule 1).
+  // Period-over-period deltas. Rates move in POINTS, counts in percent; a
+  // delta is suppressed whenever either side is too thin to mean anything.
   const DELTA_MIN = 30;
-  const priorCompletion =
-    prior && prior.engaged > 0 ? prior.completed / prior.engaged : null;
+  const priorCompletion = prior && prior.started > 0 ? prior.finished / prior.started : null;
   const deltas = {
     completionPoints:
-      prior && prior.engaged >= DELTA_MIN && engaged >= DELTA_MIN && priorCompletion != null
+      prior && prior.started >= DELTA_MIN && engaged >= DELTA_MIN && priorCompletion != null
         ? Math.round((completed / Math.max(1, engaged) - priorCompletion) * 1000) / 10
         : null,
     sessionsPct:
-      prior && prior.engaged >= DELTA_MIN
-        ? Math.round(((engaged - prior.engaged) / prior.engaged) * 100)
-        : null,
-    revenuePct: null as number | null,
+      prior && prior.started >= DELTA_MIN ? Math.round(((engaged - prior.started) / prior.started) * 100) : null,
+    revenuePct:
+      prior && prior.revenue > 0 && rev.single ? Math.round(((rev.numeric - prior.revenue) / prior.revenue) * 100) : null,
   };
 
-  // Per-shopper response log (§03). Sessions rows only exist for shoppers who
-  // reached a result, so reading QuizSession alone drops the ~30% who left —
-  // the log unions the cohort's ANSWER events with the session facts.
+  // Per-shopper response log (§03) — the cohort's ANSWER events, so the
+  // shoppers who left before a result are in it too.
   const answerBySession = new Map<string, Map<string, string[]>>();
   const lastTs = new Map<string, Date>();
   for (const e of events) {
@@ -865,9 +964,7 @@ export async function quizAnalyticsForShop(
     const pl = asRecord(e.payload);
     const qid = typeof pl?.question_id === "string" ? pl.question_id : null;
     if (!qid) continue;
-    const ids = Array.isArray(pl?.answer_ids)
-      ? pl.answer_ids.filter((v): v is string => typeof v === "string")
-      : [];
+    const ids = Array.isArray(pl?.answer_ids) ? pl.answer_ids.filter((v): v is string => typeof v === "string") : [];
     let per = answerBySession.get(e.sessionId);
     if (!per) {
       per = new Map();
@@ -877,7 +974,6 @@ export async function quizAnalyticsForShop(
     const prevTs = lastTs.get(e.sessionId);
     if (!prevTs || e.ts > prevTs) lastTs.set(e.sessionId, e.ts);
   }
-  // Answer id → label, and question order, straight from the doc.
   const answerLabel = new Map<string, string>();
   const questionOrder: string[] = [];
   if (doc) {
@@ -889,45 +985,31 @@ export async function quizAnalyticsForShop(
   }
   const RESPONSE_PAGE = 100;
   const orderedSessions = [...answerBySession.keys()].sort(
-    (a, b) => (+(lastTs.get(b) ?? 0)) - (+(lastTs.get(a) ?? 0)),
+    (a, b) => +(lastTs.get(b) ?? 0) - +(lastTs.get(a) ?? 0),
   );
-  const buyerSessions = buyersSet;
-  const sessionFacts = cohortIds.length
-    ? await prisma.quizSession.findMany({
-        where: { quizId, sessionId: { in: orderedSessions.slice(0, RESPONSE_PAGE) } },
-        select: { sessionId: true, outcomeId: true },
-      })
-    : [];
-  const outcomeBySession = new Map(sessionFacts.map((f) => [f.sessionId, f.outcomeId]));
   const responseRows = orderedSessions.slice(0, RESPONSE_PAGE).map((sid) => {
     const per = answerBySession.get(sid)!;
     const finished = completedSet.has(sid);
-    // Where an unfinished shopper stopped — the last question they answered.
     let lastAnswered: string | null = null;
     for (const qid of questionOrder) if (per.has(qid)) lastAnswered = qid;
     const labelOf = (qid: string) =>
       (per.get(qid) ?? []).map((id) => answerLabel.get(id) ?? "—").join(", ") || "skipped";
-    const outcomeId = outcomeBySession.get(sid) ?? null;
     return {
       sessionId: sid,
-      // Sessions ids are opaque already; show a short form so the column stays
-      // scannable and no full identifier is pasted around.
       short: `${sid.slice(0, 4)}…${sid.slice(-3)}`,
       when: (lastTs.get(sid) ?? range.to).toISOString(),
       answers: questionOrder.filter((qid) => per.has(qid)).map((qid) => ({ questionId: qid, text: labelOf(qid) })),
-      result: finished ? (outcomeId ? catName.get(outcomeId) ?? null : null) : null,
-      bought: buyerSessions.has(sid),
+      result: finished ? fig.resultBySession.get(sid)?.name ?? null : null,
+      bought: fig.boughtSet.has(sid),
       leftAt: finished
         ? null
         : lastAnswered
-          ? `left at ${questionOrder.indexOf(lastAnswered) + 1 <= questionOrder.length ? `Q${questionOrder.indexOf(lastAnswered) + 1}` : "the end"}`
+          ? `left at Q${questionOrder.indexOf(lastAnswered) + 1}`
           : "left at the start",
     };
   });
 
   // Effective catalogue size — exp(Shannon entropy) over impression share.
-  // "You map 84 products but effectively recommend 4.2 of them" is the honest
-  // read of concentration; a raw count of shown products is not.
   let effectiveCatalog: { effective: number; mapped: number } | null = null;
   {
     const totalImp = products.reduce((sum, p) => sum + p.impressions, 0);
@@ -942,37 +1024,34 @@ export async function quizAnalyticsForShop(
     }
   }
 
-  // W6 — standalone workspaces have no Shopify order feed; a confident "0.0%"
-  // conversion rate there is a category error, not a measurement.
+  // W6 — standalone workspaces have no Shopify order feed.
   const attribution: "shopify" | "none" = (shop.source ?? "shopify") === "standalone" ? "none" : "shopify";
 
   return {
-    quiz: {
-      id: quiz.id,
-      name: quiz.name,
-      status: quiz.status,
-      publishedAt,
-    },
+    quiz: { id: quiz.id, name: quiz.name, status: quiz.status, publishedAt },
     range: {
       preset: range.preset,
       from: range.from ? range.from.toISOString() : null,
       to: range.to.toISOString(),
-      label: range.widened ? "Since published" : range.label,
+      label: range.widened ? PRESET_LABELS.all : range.label,
       widened: range.widened,
     },
+    compare,
     dataState,
     xtype,
     attribution,
     truncated: cohort.truncated,
+    currency: rev.single,
     kpis: {
       engaged,
       completed,
       completion: gateRate("completion_rate", completed, engaged),
-      captureSessions: captureSessions.size,
-      capture: gateRate("capture_rate", captureSessions.size, completed),
-      buyers,
-      conversion: gateRate("conversion_rate", buyers, completed),
-      revenue: { formatted: formatRevenue(revenue), orders: revenue.orders, perFinisher },
+      captureSessions: fig.contacts,
+      capture: gateRate("capture_rate", fig.contacts, completed),
+      canEmail: fig.canEmail,
+      buyers: fig.bought,
+      conversion: gateRate("conversion_rate", fig.bought, completed),
+      revenue: { formatted: formatRevenue(revenue), numeric: rev.numeric, orders: revenue.orders, perFinisher, aov },
       prior,
       deltas,
     },
@@ -981,7 +1060,10 @@ export async function quizAnalyticsForShop(
     ledger,
     answers,
     outcomes,
+    results,
     products,
+    topProducts,
+    lineItemsSince: lines.since != null ? new Date(lines.since).toISOString() : null,
     productMeta: reachability ? { mapped: reachability.mapped, unreachable: reachability.unreachable.length } : null,
     contacts: { rows: contactRows, counts: contactCounts, filterOptions: contactFilterOptions },
     revenueDays,
@@ -994,6 +1076,16 @@ export async function quizAnalyticsForShop(
 }
 
 // ── Shop-level home (Screen 1) ─────────────────────────────────────────────
+
+/** One period's figures for a quiz row (or the roll-up). */
+export interface ShopPeriod {
+  starts: number;
+  finished: number;
+  contacts: number;
+  orders: number;
+  revenueNumeric: number;
+  revenue: string;
+}
 
 /**
  * One row per quiz — live AND draft in the SAME table (spec Screen 1). A
@@ -1017,10 +1109,13 @@ export interface ShopQuizRow {
   perFinisherNumeric: number | null;
   questions: number;
   outcomes: number;
+  /** The previous period (Compare on, live quizzes only). */
+  prior: ShopPeriod | null;
 }
 
 export interface ShopAnalyticsData {
   range: { preset: RangePreset; from: string | null; to: string; label: string };
+  compare: boolean;
   tiles: {
     sessions: number;
     sessionsDeltaPct: number | null;
@@ -1029,8 +1124,13 @@ export interface ShopAnalyticsData {
     contacts: number;
     captureOfFinishers: GatedRate;
     revenue: string;
+    revenueNumeric: number;
     orders: number;
     perFinisher: string | null;
+    /** How many live quizzes the tiles add up. */
+    liveQuizzes: number;
+    /** The previous period's totals (Compare on). */
+    prior: ShopPeriod | null;
   };
   rows: ShopQuizRow[];
   counts: { all: number; live: number; draft: number };
@@ -1052,13 +1152,89 @@ export interface ShopAnalyticsData {
 type InsightSeverityLike = "info" | "warn" | "crit";
 
 /**
- * The page shows only the most recently updated LIVE quizzes — analytics are
- * about what's earning, and a shop's drafts pile up far faster than its
- * published quizzes. Every cost on this page scales with quiz count × doc
- * size (full draft+published JSON fetched, Zod-parsed, and run through the
- * insights engine per quiz), so the cap is what keeps the loader flat.
+ * Every quiz is listed, drafts included (ANALYTICS-HANDOFF.md, Data work 9).
+ * The cap is a safety net, far above any real shop; the doc parse and the
+ * insight rules per quiz are what it bounds.
  */
-const SHOP_ANALYTICS_QUIZ_LIMIT = 10;
+export const SHOP_ANALYTICS_QUIZ_LIMIT = 200;
+
+/** Per-quiz cohort totals for a range: the same construction as a quiz page. */
+async function shopPeriodByQuiz(quizIds: string[], r: AnalyticsRange): Promise<Map<string, ShopPeriod & { totals: Record<string, number> }>> {
+  const out = new Map<string, ShopPeriod & { totals: Record<string, number> }>();
+  if (quizIds.length === 0) return out;
+  const engageRows = await prisma.event.findMany({
+    where: {
+      quizId: { in: quizIds },
+      eventType: "quiz_engaged",
+      ...(r.from ? { ts: { gte: r.from, lte: r.to } } : { ts: { lte: r.to } }),
+    },
+    select: { quizId: true, sessionId: true },
+    distinct: ["quizId", "sessionId"],
+    take: 50_000,
+  });
+  const key = (q: string, s: string) => `${q}\u0000${s}`;
+  const cohort = new Set(engageRows.map((e) => key(e.quizId, e.sessionId)));
+  const sessionIds = [...new Set(engageRows.map((e) => e.sessionId))];
+  const [laterRows, captureRows] = sessionIds.length
+    ? await Promise.all([
+        prisma.event.findMany({
+          where: {
+            quizId: { in: quizIds },
+            eventType: { in: ["quiz_completed", "order_attributed"] },
+            sessionId: { in: sessionIds },
+          },
+          select: { quizId: true, sessionId: true, eventType: true, payload: true, ts: true },
+          orderBy: { ts: "asc" },
+        }),
+        prisma.emailCapture.findMany({
+          where: { quizId: { in: quizIds }, sessionId: { in: sessionIds } },
+          select: { quizId: true, sessionId: true },
+        }),
+      ])
+    : [[], []];
+
+  const agg = new Map<string, { started: Set<string>; finished: Set<string>; contacts: Set<string>; orders: CohortEventRow[] }>();
+  const aggOf = (q: string) => {
+    let a = agg.get(q);
+    if (!a) {
+      a = { started: new Set(), finished: new Set(), contacts: new Set(), orders: [] };
+      agg.set(q, a);
+    }
+    return a;
+  };
+  for (const e of engageRows) aggOf(e.quizId).started.add(e.sessionId);
+  // One order credits ONE quiz on this page: dedupe globally, earliest first.
+  const seenOrders = new Set<string>();
+  for (const e of laterRows) {
+    if (!cohort.has(key(e.quizId, e.sessionId))) continue;
+    if (e.eventType === "quiz_completed") {
+      aggOf(e.quizId).finished.add(e.sessionId);
+      continue;
+    }
+    const orderId = asRecord(e.payload)?.order_id;
+    if (typeof orderId === "string") {
+      if (seenOrders.has(orderId)) continue;
+      seenOrders.add(orderId);
+    }
+    aggOf(e.quizId).orders.push(e as CohortEventRow);
+  }
+  for (const c of captureRows) {
+    if (cohort.has(key(c.quizId, c.sessionId))) aggOf(c.quizId).contacts.add(c.sessionId);
+  }
+  for (const [q, a] of agg) {
+    const rev = totalRevenue(a.orders);
+    out.set(q, {
+      starts: a.started.size,
+      finished: a.finished.size,
+      contacts: a.contacts.size,
+      orders: rev.orders,
+      revenueNumeric: revenueNumber(rev.totalsByCurrency),
+      revenue: formatRevenue(rev),
+      totals: rev.totalsByCurrency,
+    });
+  }
+  return out;
+}
 
 export async function shopAnalyticsForShop(
   shop: { id: string; source?: string },
@@ -1066,109 +1242,31 @@ export async function shopAnalyticsForShop(
   now = new Date(),
 ): Promise<ShopAnalyticsData> {
   const range = resolveAnalyticsRange(searchParams, now);
+  const compare = searchParams.get("cmp") === "1";
   const quizzes = await prisma.quiz.findMany({
     where: {
       shopId: shop.id,
-      status: "published",
+      // A quiz still inside its creation funnel is not a quiz yet.
       OR: [{ buildState: null }, { buildState: { not: "step1" } }],
     },
     select: { id: true, name: true, status: true, draftJson: true, publishedJson: true },
     orderBy: { updatedAt: "desc" },
     take: SHOP_ANALYTICS_QUIZ_LIMIT,
   });
-  const quizIds = quizzes.map((q) => q.id);
-  const tsFilter = range.from ? { ts: { gte: range.from, lte: range.to } } : { ts: { lte: range.to } };
-
-  const [funnelRows, orderRows, captureRows, priorFunnelRows] = await Promise.all([
-    quizIds.length
-      ? prisma.event.findMany({
-          where: { quizId: { in: quizIds }, eventType: { in: ["quiz_engaged", "quiz_completed"] }, ...tsFilter },
-          select: { quizId: true, eventType: true, sessionId: true },
-          distinct: ["quizId", "eventType", "sessionId"],
-          take: 50_000,
-        })
-      : Promise.resolve([]),
-    quizIds.length
-      ? prisma.event.findMany({
-          where: { quizId: { in: quizIds }, eventType: "order_attributed", ...tsFilter },
-          select: { quizId: true, sessionId: true, eventType: true, payload: true, ts: true },
-          orderBy: { ts: "asc" },
-          take: 20_000,
-        })
-      : Promise.resolve([]),
-    quizIds.length
-      ? prisma.emailCapture.findMany({
-          where: {
-            quizId: { in: quizIds },
-            ...(range.from ? { capturedAt: { gte: range.from, lte: range.to } } : { capturedAt: { lte: range.to } }),
-          },
-          select: { quizId: true, sessionId: true },
-          take: 50_000,
-        })
-      : Promise.resolve([]),
-    quizIds.length && range.from
-      ? prisma.event.findMany({
-          where: {
-            quizId: { in: quizIds },
-            eventType: "quiz_engaged",
-            ts: { gte: new Date(+range.from - (+range.to - +range.from)), lt: range.from },
-          },
-          select: { quizId: true, eventType: true, sessionId: true },
-          distinct: ["quizId", "eventType", "sessionId"],
-          take: 50_000,
-        })
-      : Promise.resolve([]),
+  const liveIds = quizzes.filter((q) => q.status === "published").map((q) => q.id);
+  const prevRange = compare ? previousRange(range) : null;
+  const [current, previous, dismissals] = await Promise.all([
+    shopPeriodByQuiz(liveIds, range),
+    prevRange ? shopPeriodByQuiz(liveIds, prevRange) : Promise.resolve(null),
+    loadDismissals(quizzes.map((q) => q.id), now),
   ]);
-
-  // Per-quiz distinct engage/complete.
-  const agg = new Map<string, { engaged: Set<string>; completed: Set<string> }>();
-  const aggOf = (id: string) => {
-    let a = agg.get(id);
-    if (!a) {
-      a = { engaged: new Set(), completed: new Set() };
-      agg.set(id, a);
-    }
-    return a;
-  };
-  for (const r of funnelRows) {
-    (r.eventType === "quiz_engaged" ? aggOf(r.quizId).engaged : aggOf(r.quizId).completed).add(r.sessionId);
-  }
-
-  // W2 (display-side) — dedupe orders GLOBALLY by order_id first, keeping the
-  // earliest row, THEN shard to quizzes. One order can no longer credit
-  // several quizzes at once on this page.
-  const seenOrders = new Set<string>();
-  const ordersByQuiz = new Map<string, Array<{ sessionId: string; eventType: string; payload: unknown }>>();
-  for (const r of orderRows) {
-    const p = asRecord(r.payload);
-    const orderId = typeof p?.order_id === "string" ? p.order_id : null;
-    if (orderId) {
-      if (seenOrders.has(orderId)) continue;
-      seenOrders.add(orderId);
-    }
-    const arr = ordersByQuiz.get(r.quizId) ?? [];
-    arr.push({ sessionId: r.sessionId, eventType: r.eventType, payload: r.payload });
-    ordersByQuiz.set(r.quizId, arr);
-  }
-
-  // Distinct capture SESSIONS per quiz (W10).
-  const capturesByQuiz = new Map<string, Set<string>>();
-  for (const c of captureRows) {
-    const s = capturesByQuiz.get(c.quizId) ?? new Set();
-    s.add(c.sessionId);
-    capturesByQuiz.set(c.quizId, s);
-  }
 
   const rows: ShopQuizRow[] = [];
   const findings: ShopAnalyticsData["findings"] = [];
-  const dismissals = await loadDismissals(quizIds, now);
   let dismissedCount = 0;
-
-  let totalEngaged = 0;
-  let totalCompleted = 0;
-  let totalContacts = 0;
-  let totalOrders = 0;
-  const totalRevenueByCur: Record<string, number> = {};
+  const total = { starts: 0, finished: 0, contacts: 0, orders: 0, byCur: {} as Record<string, number> };
+  const priorTotal = { starts: 0, finished: 0, contacts: 0, orders: 0, byCur: {} as Record<string, number> };
+  const empty = { starts: 0, finished: 0, contacts: 0, orders: 0, revenueNumeric: 0, revenue: "—", totals: {} as Record<string, number> };
 
   for (const q of quizzes) {
     const parsed = Quiz.safeParse(q.publishedJson ?? q.draftJson);
@@ -1188,6 +1286,7 @@ export async function shopAnalyticsForShop(
         completed: 0,
         rangeDays: range.days,
         published: isLive,
+        cap: Number.POSITIVE_INFINITY,
       });
       const tierA = r.cards.filter((c) => c.tier === "A");
       for (const card of tierA) {
@@ -1206,23 +1305,11 @@ export async function shopAnalyticsForShop(
           basis: card.basis,
         });
       }
-      // The Status cell carries the worst structural finding as a short chip,
-      // so a broken quiz is visible in the list without opening it.
       flag = tierA.find((c) => c.chip)?.chip ?? null;
     }
 
-    const a = aggOf(q.id);
-    // W11 — clamp the numerator to the denominator and NEVER fall back to the
-    // raw completed count when the clamp lands on 0. A quiz whose engages fell
-    // outside the window would otherwise report 100% completion and poison the
-    // pooled shop average.
-    const completedN = Math.min(a.completed.size, a.engaged.size);
-    const rev = totalRevenue(ordersByQuiz.get(q.id) ?? []);
-    const revEntries = Object.entries(rev.totalsByCurrency);
-    const revTotal = revEntries.reduce((s, [, amt]) => s + amt, 0);
-    const perFinisherNumeric = completedN > 0 && revEntries.length === 1 ? revTotal / completedN : null;
-    const contacts = capturesByQuiz.get(q.id)?.size ?? 0;
-
+    const cur = isLive ? current.get(q.id) ?? empty : null;
+    const prev = isLive && previous ? previous.get(q.id) ?? empty : null;
     rows.push({
       id: q.id,
       name: q.name,
@@ -1230,27 +1317,42 @@ export async function shopAnalyticsForShop(
       flag,
       questions: doc ? doc.nodes.filter((n) => n.type === "question").length : 0,
       outcomes: doc ? distinctOutcomes(doc) : 0,
-      // A draft's metrics are null, never 0 — it has no data, which is not the
-      // same as having none. The table renders an em-dash for the difference.
-      starts: isLive ? a.engaged.size : null,
-      completion: isLive ? gateRate("completion_rate", completedN, a.engaged.size) : null,
-      contacts: isLive ? contacts : null,
-      orders: isLive ? rev.orders : null,
-      revenue: isLive ? formatRevenue(rev) : null,
-      revenueNumeric: isLive ? revTotal : null,
-      perFinisher:
-        isLive && perFinisherNumeric != null && revEntries.length === 1
-          ? formatRevenue({ orders: 0, totalsByCurrency: { [revEntries[0]![0]]: perFinisherNumeric } })
-          : null,
-      perFinisherNumeric: isLive ? perFinisherNumeric : null,
+      starts: cur ? cur.starts : null,
+      completion: cur ? gateRate("completion_rate", cur.finished, cur.starts) : null,
+      contacts: cur ? cur.contacts : null,
+      orders: cur ? cur.orders : null,
+      revenue: cur ? cur.revenue : null,
+      revenueNumeric: cur ? cur.revenueNumeric : null,
+      perFinisher: cur ? ratio(cur.totals, cur.finished) : null,
+      perFinisherNumeric:
+        cur && cur.finished > 0 && Object.keys(cur.totals).length === 1 ? cur.revenueNumeric / cur.finished : null,
+      prior: prev
+        ? {
+            starts: prev.starts,
+            finished: prev.finished,
+            contacts: prev.contacts,
+            orders: prev.orders,
+            revenueNumeric: prev.revenueNumeric,
+            revenue: prev.revenue,
+          }
+        : null,
     });
 
-    if (!isLive) continue;
-    totalEngaged += a.engaged.size;
-    totalCompleted += completedN;
-    totalContacts += contacts;
-    totalOrders += rev.orders;
-    for (const [cur, amt] of revEntries) totalRevenueByCur[cur] = (totalRevenueByCur[cur] ?? 0) + amt;
+    // The first card's figures are the totals of the live rows.
+    if (cur) {
+      total.starts += cur.starts;
+      total.finished += cur.finished;
+      total.contacts += cur.contacts;
+      total.orders += cur.orders;
+      for (const [c, a] of Object.entries(cur.totals)) total.byCur[c] = (total.byCur[c] ?? 0) + a;
+    }
+    if (prev) {
+      priorTotal.starts += prev.starts;
+      priorTotal.finished += prev.finished;
+      priorTotal.contacts += prev.contacts;
+      priorTotal.orders += prev.orders;
+      for (const [c, a] of Object.entries(prev.totals)) priorTotal.byCur[c] = (priorTotal.byCur[c] ?? 0) + a;
+    }
   }
 
   // Default order: revenue desc (the mock's default sort). Drafts have no
@@ -1263,16 +1365,7 @@ export async function shopAnalyticsForShop(
   );
   findings.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
 
-  const priorEngaged = new Set(priorFunnelRows.map((r) => `${r.quizId}:${r.sessionId}`)).size;
-  const totalCurEntries = Object.entries(totalRevenueByCur);
-  const perFinisher =
-    totalCompleted > 0 && totalCurEntries.length === 1
-      ? formatRevenue({
-          orders: 0,
-          totalsByCurrency: { [totalCurEntries[0]![0]]: totalCurEntries[0]![1] / totalCompleted },
-        })
-      : null;
-
+  const revenueSummary = { orders: total.orders, totalsByCurrency: total.byCur };
   return {
     range: {
       preset: range.preset,
@@ -1280,17 +1373,32 @@ export async function shopAnalyticsForShop(
       to: range.to.toISOString(),
       label: range.label,
     },
+    compare,
     tiles: {
-      sessions: totalEngaged,
+      sessions: total.starts,
       sessionsDeltaPct:
-        range.from && priorEngaged > 0 ? Math.round(((totalEngaged - priorEngaged) / priorEngaged) * 100) : null,
-      completion: gateRate("completion_rate", totalCompleted, totalEngaged),
-      finished: totalCompleted,
-      contacts: totalContacts,
-      captureOfFinishers: gateRate("capture_rate", totalContacts, totalCompleted),
-      revenue: formatRevenue({ orders: totalOrders, totalsByCurrency: totalRevenueByCur }),
-      orders: totalOrders,
-      perFinisher,
+        previous && priorTotal.starts > 0
+          ? Math.round(((total.starts - priorTotal.starts) / priorTotal.starts) * 100)
+          : null,
+      completion: gateRate("completion_rate", total.finished, total.starts),
+      finished: total.finished,
+      contacts: total.contacts,
+      captureOfFinishers: gateRate("capture_rate", total.contacts, total.finished),
+      revenue: formatRevenue(revenueSummary),
+      revenueNumeric: revenueNumber(total.byCur),
+      orders: total.orders,
+      perFinisher: ratio(total.byCur, total.finished),
+      liveQuizzes: liveIds.length,
+      prior: previous
+        ? {
+            starts: priorTotal.starts,
+            finished: priorTotal.finished,
+            contacts: priorTotal.contacts,
+            orders: priorTotal.orders,
+            revenueNumeric: revenueNumber(priorTotal.byCur),
+            revenue: formatRevenue({ orders: priorTotal.orders, totalsByCurrency: priorTotal.byCur }),
+          }
+        : null,
     },
     rows,
     counts: {
@@ -1298,7 +1406,7 @@ export async function shopAnalyticsForShop(
       live: rows.filter((r) => r.live).length,
       draft: rows.filter((r) => !r.live).length,
     },
-    findings: findings.slice(0, 3),
+    findings,
     dismissedCount,
   };
 }

@@ -1,6 +1,8 @@
 import prisma from "../db.server";
 import { formatDate } from "./formatDate";
 import { contactSegments, type ContactSession } from "./customerSegments";
+import { Quiz } from "./quizSchema";
+import { buildResultContext, resolveSessionResult, type ResultContext } from "./sessionResult";
 
 // §R-8 — shared enrichment for the Customers hub, used by BOTH the hub route
 // (renders JSON) and the CSV export resource route (returns a download). Kept
@@ -23,7 +25,7 @@ export async function loadCustomerContacts(shopId: string): Promise<HubContact[]
   const captureRows = await prisma.emailCapture.findMany({
     where: { quiz: { shopId } },
     orderBy: { capturedAt: "desc" },
-    include: { quiz: { select: { id: true, name: true } } },
+    include: { quiz: { select: { id: true, name: true, publishedJson: true, draftJson: true } } },
   });
   // ANALYTICS P0 (W10) — EmailCapture has no unique constraint, so the gate,
   // the result-page form and a back-nav resubmit each write a row for ONE
@@ -52,6 +54,17 @@ export async function loadCustomerContacts(shopId: string): Promise<HubContact[]
 
   const sessMap = new Map(sessions.map((s) => [`${s.quizId}:${s.sessionId}`, s]));
   const catName = new Map(cats.map((c) => [c.id, c.name]));
+  // Result names come from the ONE resolver analytics uses (sessionResult.ts):
+  // a session's outcomeId is a result NODE id, not a category id.
+  const ctxByQuiz = new Map<string, ResultContext | null>();
+  const ctxOf = (quiz: { id: string; publishedJson: unknown; draftJson: unknown }): ResultContext | null => {
+    if (!ctxByQuiz.has(quiz.id)) {
+      const raw = quiz.publishedJson ?? quiz.draftJson;
+      const parsed = Quiz.safeParse(raw);
+      ctxByQuiz.set(quiz.id, parsed.success ? buildResultContext(parsed.data, raw, catName) : null);
+    }
+    return ctxByQuiz.get(quiz.id) ?? null;
+  };
   const allProductIds = [...new Set(sessions.flatMap((s) => s.matchedProductIds))];
   const products = allProductIds.length
     ? await prisma.product.findMany({ where: { shopId, productId: { in: allProductIds } }, select: { productId: true, title: true } })
@@ -63,7 +76,12 @@ export async function loadCustomerContacts(shopId: string): Promise<HubContact[]
     const s = sessMap.get(`${c.quizId}:${c.sessionId}`);
     const session: ContactSession | null = s
       ? {
-          persona: s.outcomeId ? catName.get(s.outcomeId) ?? null : null,
+          persona: (() => {
+            const ctx = ctxOf(c.quiz);
+            if (!ctx || !s.completedAt) return null;
+            const r = resolveSessionResult(ctx, { finished: true, views: [], row: s });
+            return r && r.source !== "none" ? r.name : null;
+          })(),
           answerCount: s.answerIds.length,
           matchedCount: s.matchedProductIds.length,
           recommended: s.matchedProductIds.map((id) => prodTitle.get(id)).filter((t): t is string => !!t).slice(0, 8),

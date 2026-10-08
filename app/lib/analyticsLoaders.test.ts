@@ -237,8 +237,23 @@ describe("KPI honesty", () => {
     const data = await runLoader();
     expect(data.kpis.revenue.orders).toBe(1);
     expect(data.kpis.revenue.formatted).toBe("50.00 USD");
-    // One shared order across two sessions = ONE buyer, never two.
-    expect(data.kpis.buyers).toBe(1);
+    expect(data.kpis.revenue.aov).toBe("50.00 USD");
+  });
+
+  it("Bought counts converted sessions (shoppers), not orders", async () => {
+    const row = (sessionId: string, converted: boolean) => ({
+      sessionId,
+      outcomeId: "r1",
+      answerIds: [],
+      matchedProductIds: ["p1"],
+      converted,
+      completedAt: T0,
+    });
+    p.quizSession.findMany.mockResolvedValue([row("s1", true), row("s2", true)]);
+    const data = await runLoader();
+    // One order won by two of the shopper's sessions: both are converted.
+    expect(data.kpis.buyers).toBe(2);
+    expect(data.kpis.buyers).toBeLessThanOrEqual(data.kpis.completed);
   });
 });
 
@@ -269,6 +284,28 @@ describe("step ledger", () => {
     const q2 = data.answers.find((a) => a.questionId === "q2")!;
     expect(q2.answered).toBe(1);
     expect(q2.skipped).toBe(1);
+  });
+});
+
+describe("compare (previous period)", () => {
+  it("is off by default — no previous-period queries", async () => {
+    const data = await runLoader();
+    expect(data.compare).toBe(false);
+    expect(data.kpis.prior).toBeNull();
+  });
+
+  it("?cmp=1 cohorts the previous window by ENGAGE time and counts it the same way", async () => {
+    const data = await runLoader("?r=30d&cmp=1");
+    const engageCalls = p.event.findMany.mock.calls
+      .map((c) => (c[0] as { where: Record<string, unknown> }).where)
+      .filter((w) => w.eventType === "quiz_engaged" && !("sessionId" in w));
+    expect(engageCalls).toHaveLength(2);
+    const [cur, prev] = engageCalls.map((w) => w.ts as { gte: Date; lte: Date });
+    expect(+prev!.lte).toBeLessThan(+cur!.gte);
+    expect(+cur!.gte - +prev!.gte).toBe(+cur!.lte - +cur!.gte);
+    // The fixture returns the same sessions for both windows: same figures.
+    expect(data.kpis.prior).toMatchObject({ started: 3, finished: 2, contacts: 1, orders: 1 });
+    expect(data.kpis.prior!.steps.q1).toMatchObject({ reached: 3, left: 1 });
   });
 });
 
@@ -376,7 +413,7 @@ describe("product reach paths (decider docs)", () => {
   it("a product in no group is UNREACHABLE and still listed, with no paths", async () => {
     const data = await runLoader();
     const orphan = data.products.find((r) => r.productId === "p9")!;
-    expect(orphan.state).toBe("unreachable");
+    expect(orphan.noLogic).toBe(true);
     expect(orphan.paths).toEqual([]);
     expect(orphan.impressions).toBe(0);
   });

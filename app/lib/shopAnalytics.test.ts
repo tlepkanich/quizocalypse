@@ -53,7 +53,28 @@ function doc(questions: number, results: number) {
   });
 }
 
-const ev = (quizId: string, eventType: string, sessionId: string) => ({ quizId, eventType, sessionId });
+const ev = (quizId: string, eventType: string, sessionId: string, payload: unknown = {}, ts = new Date()) => ({
+  quizId,
+  eventType,
+  sessionId,
+  payload,
+  ts,
+});
+
+/** The seam's two event queries: the engage cohort, then the cohort's later events. */
+function installEvents(rows: ReturnType<typeof ev>[], prior: ReturnType<typeof ev>[] = []) {
+  p.event.findMany.mockImplementation((q: { where: Record<string, unknown> }) => {
+    const w = q.where;
+    const isPrior = Boolean((w.ts as { lte?: Date } | undefined)?.lte && +(w.ts as { lte: Date }).lte < Date.now() - 86_400_000);
+    const pool = isPrior ? prior : rows;
+    if (w.eventType === "quiz_engaged") return Promise.resolve(pool.filter((r) => r.eventType === "quiz_engaged"));
+    const types = (w.eventType as { in: string[] }).in;
+    const sids = (w.sessionId as { in: string[] }).in;
+    return Promise.resolve(
+      [...rows, ...prior].filter((r) => types.includes(r.eventType) && sids.includes(r.sessionId)),
+    );
+  });
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -63,21 +84,11 @@ beforeEach(() => {
     { id: "draft1", name: "Skill & Terrain Match", status: "draft", draftJson: doc(4, 1), publishedJson: null },
     { id: "draft2", name: "Gift Finder", status: "draft", draftJson: doc(3, 3), publishedJson: null },
   ]);
-  p.event.findMany.mockImplementation((q: { where: Record<string, unknown> }) => {
-    const et = q.where.eventType;
-    if (typeof et === "object" && et !== null) {
-      // funnel rows (engaged + completed), or the prior-period query
-      if ((q.where.ts as { lt?: unknown } | undefined)?.lt) return Promise.resolve([]);
-      return Promise.resolve([
-        ev("live1", "quiz_engaged", "s1"),
-        ev("live1", "quiz_engaged", "s2"),
-        ev("live1", "quiz_completed", "s1"),
-      ]);
-    }
-    if (et === "order_attributed") return Promise.resolve([]);
-    if (et === "quiz_engaged") return Promise.resolve([]);
-    return Promise.resolve([]);
-  });
+  installEvents([
+    ev("live1", "quiz_engaged", "s1"),
+    ev("live1", "quiz_engaged", "s2"),
+    ev("live1", "quiz_completed", "s1"),
+  ]);
   p.emailCapture.findMany.mockResolvedValue([{ quizId: "live1", sessionId: "s1" }]);
   p.insightDismissal.findMany.mockResolvedValue([]);
 });
@@ -124,11 +135,7 @@ describe("home rows", () => {
   });
 
   it("a live quiz with zero sessions carries n=0, so the view can dash it", async () => {
-    p.event.findMany.mockImplementation((q: { where: Record<string, unknown> }) => {
-      const et = q.where.eventType;
-      if (typeof et === "object" && et !== null) return Promise.resolve([]);
-      return Promise.resolve([]);
-    });
+    installEvents([]);
     const data = await run();
     const live = data.rows.find((r) => r.id === "live1")!;
     expect(live.starts).toBe(0);
@@ -149,18 +156,50 @@ describe("home rows", () => {
     expect(data.findings[0]!.quizName).toBe("Skill & Terrain Match");
   });
 
-  it("asks the DB for only the 10 most recently updated LIVE quizzes", async () => {
-    // Every cost on this page scales with quiz count × doc size, so the cap
-    // in the query itself (not a post-fetch slice) is the load-time guarantee.
-    // Live-only because analytics are about what's earning — drafts pile up
-    // far faster than published quizzes and were crowding them out.
+  it("lists every quiz, drafts included, behind a safety cap", async () => {
     await run();
-    expect(p.quiz.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        take: 10,
-        orderBy: { updatedAt: "desc" },
-        where: expect.objectContaining({ status: "published" }),
-      }),
+    const call = p.quiz.findMany.mock.calls[0]![0] as { where: Record<string, unknown>; take: number };
+    expect("status" in call.where).toBe(false);
+    expect(call.take).toBe(200);
+  });
+
+  it("counts by session cohort: a completion belongs to its engage period", async () => {
+    // s3 engaged long before the range and finished inside it: not counted.
+    installEvents([
+      ev("live1", "quiz_engaged", "s1"),
+      ev("live1", "quiz_completed", "s1"),
+      ev("live1", "quiz_completed", "s3"),
+    ]);
+    const data = await run();
+    const live = data.rows.find((r) => r.id === "live1")!;
+    expect(live.starts).toBe(1);
+    expect(live.completion!.rate).toBeCloseTo(1);
+  });
+
+  it("one order credits one quiz, and the tiles equal the sum of the live rows", async () => {
+    installEvents([
+      ev("live1", "quiz_engaged", "s1"),
+      ev("live1", "quiz_completed", "s1"),
+      ev("live1", "order_attributed", "s1", { order_id: "o1", total_price: "30.00", currency: "USD" }),
+      ev("live1", "order_attributed", "s1", { order_id: "o1", total_price: "30.00", currency: "USD" }),
+    ]);
+    const data = await run();
+    const live = data.rows.filter((r) => r.live);
+    expect(data.tiles.orders).toBe(live.reduce((n, r) => n + (r.orders ?? 0), 0));
+    expect(data.tiles.orders).toBe(1);
+    expect(data.tiles.revenueNumeric).toBe(30);
+    expect(data.tiles.liveQuizzes).toBe(1);
+  });
+
+  it("Compare adds the previous period, counted the same way", async () => {
+    installEvents(
+      [ev("live1", "quiz_engaged", "s1")],
+      [ev("live1", "quiz_engaged", "p1"), ev("live1", "quiz_engaged", "p2"), ev("live1", "quiz_completed", "p1")],
     );
+    const data = await shopAnalyticsForShop({ id: "shop1" }, new URLSearchParams("r=30d&cmp=1"));
+    expect(data.compare).toBe(true);
+    expect(data.tiles.prior).toMatchObject({ starts: 2, finished: 1 });
+    expect(data.rows.find((r) => r.id === "live1")!.prior).toMatchObject({ starts: 2, finished: 1 });
+    expect(data.tiles.sessionsDeltaPct).toBe(-50);
   });
 });

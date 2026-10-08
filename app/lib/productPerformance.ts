@@ -80,6 +80,9 @@ export function productPerformance(
     if (!e.sessionId) continue;
     const p = asRecord(e.payload);
     if (!p) continue;
+    // Mid-quiz preview cards (W4) are not the results page: their views,
+    // clicks and adds never count toward a product's journey.
+    if (p.stage === "preview") continue;
     if (e.eventType === "recommendation_viewed") {
       // Both primary + secondary recs are rendered, so both are impressions.
       const ids = [...stringArray(p.product_ids), ...stringArray(p.secondary_product_ids)];
@@ -88,6 +91,8 @@ export function productPerformance(
       if (typeof p.product_id === "string") record(clicks, p.product_id, e.sessionId);
     } else if (e.eventType === "add_to_cart") {
       if (typeof p.product_id === "string") record(addToCart, p.product_id, e.sessionId);
+      // "Add all to cart" adds every product it lists: one add for each.
+      for (const id of stringArray(p.product_ids)) record(addToCart, id, e.sessionId);
     }
   }
 

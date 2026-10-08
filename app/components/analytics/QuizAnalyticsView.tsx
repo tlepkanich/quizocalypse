@@ -902,7 +902,7 @@ function ProductsSection({ data }: { data: QuizAnalyticsData }) {
             </thead>
             <tbody>
               {data.products.map((p) => {
-                const st = PRODUCT_STATE_LABEL[p.state] ?? PRODUCT_STATE_LABEL["no-data"]!;
+                const st = PRODUCT_STATE_LABEL[p.noLogic ? "unreachable" : p.impressions > 0 ? "healthy" : "no-data"]!;
                 const expandable = p.paths.length > 0;
                 const isOpen = open === p.productId;
                 return [
@@ -1081,9 +1081,8 @@ function exportSegment(c: string): string {
 
 const CONTACT_STATUS: Record<ContactRow["status"], { label: string; tone: "ok" | "warn" | "draft" }> = {
   bought: { label: "Bought", tone: "ok" },
-  abandoned: { label: "Abandoned", tone: "warn" },
+  added: { label: "Added, not bought", tone: "warn" },
   "no-purchase": { label: "No purchase yet", tone: "draft" },
-  unknown: { label: "—", tone: "draft" },
 };
 
 function CustomersSection({
