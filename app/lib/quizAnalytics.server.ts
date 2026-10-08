@@ -526,12 +526,17 @@ function periodFigures(range: AnalyticsRange, f: CohortFigures): PeriodFigures {
   };
 }
 
-export async function quizAnalyticsForShop(
-  shop: { id: string; source?: string },
+/**
+ * The quiz, its doc and the session cohort the request's range selects —
+ * shared by the analytics page and the contacts panel, so the panel always
+ * counts the same shoppers the page shows (auto-widen included).
+ */
+export async function loadQuizCohort(
+  shop: { id: string },
   quizId: string,
   searchParams: URLSearchParams,
   now = new Date(),
-): Promise<QuizAnalyticsData> {
+) {
   const quiz = await prisma.quiz.findFirst({
     where: { id: quizId, shopId: shop.id },
     select: { id: true, name: true, status: true, publishedJson: true, draftJson: true },
@@ -582,6 +587,47 @@ export async function quizAnalyticsForShop(
     captures: loaded.captures,
     sessions: loaded.sessions,
   });
+  return {
+    quiz,
+    publishedAt,
+    range,
+    published,
+    compare,
+    cohort,
+    doc,
+    xtype,
+    catName,
+    productMetaRows,
+    bis,
+    resultCtx,
+    events,
+    cohortEvents,
+    fig,
+  };
+}
+
+export async function quizAnalyticsForShop(
+  shop: { id: string; source?: string },
+  quizId: string,
+  searchParams: URLSearchParams,
+  now = new Date(),
+): Promise<QuizAnalyticsData> {
+  const {
+    quiz,
+    publishedAt,
+    range,
+    published,
+    compare,
+    cohort,
+    doc,
+    xtype,
+    productMetaRows,
+    bis,
+    resultCtx,
+    events,
+    cohortEvents,
+    fig,
+  } = await loadQuizCohort(shop, quizId, searchParams, now);
   const engaged = fig.started;
   const completed = fig.finished;
   const completedSet = fig.completedSet;
