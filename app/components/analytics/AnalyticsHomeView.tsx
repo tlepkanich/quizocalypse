@@ -104,7 +104,7 @@ export function AnalyticsHomeView({
       aria="All quizzes"
       bar={bar}
       main={
-        <LeadK eyebrow="Quiz sessions" tip={`Across ${t.liveQuizzes} live quiz${t.liveQuizzes === 1 ? "" : "zes"} in this range.`}>
+        <LeadK eyebrow="Quiz sessions" tip={`Across ${t.liveQuizzes} live quiz${t.liveQuizzes === 1 ? "" : "zes"} ${data.range.preset === "all" ? "since they went live" : data.range.preset === "custom" ? "in this range" : `in the ${data.range.label.toLowerCase()}`}.`}>
           <p className={c("lead-n")}>{num(t.sessions)}</p>
         </LeadK>
       }

@@ -35,7 +35,7 @@ import { lineRevenueByProduct } from "./orderLines";
 import { returnsByProduct } from "./orderRefunds";
 import { logicReachability } from "./logicReachability";
 import type { ReachWay } from "./productReach";
-import { questionPath, type QuestionPath, type StepLedger } from "./stepLedger";
+import { buildStepLedger, questionPath, type QuestionPath, type StepLedger } from "./stepLedger";
 
 // ── Range ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +118,24 @@ interface CohortEventRow {
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+}
+
+/**
+ * Did this contact ask to be told when something is back in stock? Matched
+ * on THIS quiz's request from the same session (handoff: "not by email across
+ * the whole shop"); a request saved before sessions were recorded falls back
+ * to the email, still within this quiz.
+ */
+export function backInStockMatcher(
+  requests: Array<{ email: string; sessionId: string | null }>,
+): (sessionId: string, email: string) => boolean {
+  const sessions = new Set<string>();
+  const legacyEmails = new Set<string>();
+  for (const r of requests) {
+    if (r.sessionId) sessions.add(r.sessionId);
+    else legacyEmails.add(r.email.toLowerCase());
+  }
+  return (sessionId, email) => sessions.has(sessionId) || legacyEmails.has(email.toLowerCase());
 }
 
 export function maskEmail(email: string): string {
@@ -581,7 +599,7 @@ export async function loadQuizCohort(
       where: { shopId: shop.id },
       select: { productId: true, title: true, imageUrl: true, handle: true },
     }),
-    prisma.backInStockRequest.findMany({ where: { quizId }, select: { email: true } }),
+    prisma.backInStockRequest.findMany({ where: { quizId }, select: { email: true, sessionId: true } }),
   ]);
   const catName = new Map(catRows.map((c) => [c.id, c.name]));
   const resultCtx = doc ? buildResultContext(doc, quiz.publishedJson ?? quiz.draftJson, catName) : null;
@@ -862,7 +880,7 @@ export async function quizAnalyticsForShop(
     }));
 
   // Contacts — counted over EVERY contact; the first CONTACT_ROWS_SHIPPED ship.
-  const bisEmails = new Set(bis.map((b) => b.email.toLowerCase()));
+  const isBackInStock = backInStockMatcher(bis);
   const allContactRows: ContactRow[] = fig.contactList.map((c) => {
     const recTitles = c.matchedProductIds.map((id) => titleOf.get(id)).filter((t): t is string => !!t);
     return {
@@ -878,7 +896,7 @@ export async function quizAnalyticsForShop(
       status: c.status,
       consent: c.consent,
       noMatch: Boolean(c.result?.noMatch),
-      backInStock: bisEmails.has(c.email.toLowerCase()),
+      backInStock: isBackInStock(c.sessionId, c.email),
       value: c.orderValue,
     };
   });
@@ -1261,8 +1279,18 @@ type InsightSeverityLike = "info" | "warn" | "crit";
 export const SHOP_ANALYTICS_QUIZ_LIMIT = 200;
 
 /** Per-quiz cohort totals for a range: the same construction as a quiz page. */
-async function shopPeriodByQuiz(quizIds: string[], r: AnalyticsRange): Promise<Map<string, ShopPeriod & { totals: Record<string, number> }>> {
-  const out = new Map<string, ShopPeriod & { totals: Record<string, number> }>();
+type ShopQuizPeriod = ShopPeriod & {
+  totals: Record<string, number>;
+  /** The cohort's answer + completion events (withSteps), for the step ledger. */
+  stepEvents: CohortEvent[];
+};
+
+async function shopPeriodByQuiz(
+  quizIds: string[],
+  r: AnalyticsRange,
+  opts: { withSteps?: boolean } = {},
+): Promise<Map<string, ShopQuizPeriod>> {
+  const out = new Map<string, ShopQuizPeriod>();
   if (quizIds.length === 0) return out;
   const engageRows = await prisma.event.findMany({
     where: {
@@ -1282,7 +1310,11 @@ async function shopPeriodByQuiz(quizIds: string[], r: AnalyticsRange): Promise<M
         prisma.event.findMany({
           where: {
             quizId: { in: quizIds },
-            eventType: { in: ["quiz_completed", "order_attributed"] },
+            eventType: {
+              in: opts.withSteps
+                ? ["quiz_completed", "order_attributed", "question_answered"]
+                : ["quiz_completed", "order_attributed"],
+            },
             sessionId: { in: sessionIds },
           },
           select: { quizId: true, sessionId: true, eventType: true, payload: true, ts: true },
@@ -1295,11 +1327,14 @@ async function shopPeriodByQuiz(quizIds: string[], r: AnalyticsRange): Promise<M
       ])
     : [[], []];
 
-  const agg = new Map<string, { started: Set<string>; finished: Set<string>; contacts: Set<string>; orders: CohortEventRow[] }>();
+  const agg = new Map<
+    string,
+    { started: Set<string>; finished: Set<string>; contacts: Set<string>; orders: CohortEventRow[]; steps: CohortEvent[] }
+  >();
   const aggOf = (q: string) => {
     let a = agg.get(q);
     if (!a) {
-      a = { started: new Set(), finished: new Set(), contacts: new Set(), orders: [] };
+      a = { started: new Set(), finished: new Set(), contacts: new Set(), orders: [], steps: [] };
       agg.set(q, a);
     }
     return a;
@@ -1309,8 +1344,9 @@ async function shopPeriodByQuiz(quizIds: string[], r: AnalyticsRange): Promise<M
   const seenOrders = new Set<string>();
   for (const e of laterRows) {
     if (!cohort.has(key(e.quizId, e.sessionId))) continue;
-    if (e.eventType === "quiz_completed") {
-      aggOf(e.quizId).finished.add(e.sessionId);
+    if (e.eventType === "quiz_completed" || e.eventType === "question_answered") {
+      if (e.eventType === "quiz_completed") aggOf(e.quizId).finished.add(e.sessionId);
+      if (opts.withSteps) aggOf(e.quizId).steps.push({ sessionId: e.sessionId, eventType: e.eventType, payload: e.payload, ts: +e.ts });
       continue;
     }
     const orderId = asRecord(e.payload)?.order_id;
@@ -1333,6 +1369,7 @@ async function shopPeriodByQuiz(quizIds: string[], r: AnalyticsRange): Promise<M
       revenueNumeric: revenueNumber(rev.totalsByCurrency),
       revenue: formatRevenue(rev),
       totals: rev.totalsByCurrency,
+      stepEvents: a.steps,
     });
   }
   return out;
@@ -1358,7 +1395,7 @@ export async function shopAnalyticsForShop(
   const liveIds = quizzes.filter((q) => q.status === "published").map((q) => q.id);
   const prevRange = compare ? previousRange(range) : null;
   const [current, previous, dismissals] = await Promise.all([
-    shopPeriodByQuiz(liveIds, range),
+    shopPeriodByQuiz(liveIds, range, { withSteps: true }),
     prevRange ? shopPeriodByQuiz(liveIds, prevRange) : Promise.resolve(null),
     loadDismissals(quizzes.map((q) => q.id), now),
   ]);
@@ -1375,23 +1412,29 @@ export async function shopAnalyticsForShop(
     const doc = parsed.success ? parsed.data : null;
     const isLive = q.status === "published";
 
-    // Doc-static findings run on EVERY quiz, drafts included — they read the
-    // quiz's own logic, so they need no traffic (spec Screen 1/3).
+    // Findings run on EVERY quiz. Drafts get the doc-static ones (they read the
+    // quiz's own logic, so they need no traffic); live quizzes also get the
+    // traffic rules over their own cohort (drop-off, too few sessions), the
+    // same rules and figures the quiz's own page shows.
     let flag: string | null = null;
+    const curStats = isLive ? current.get(q.id) : undefined;
     if (doc) {
       const reachability = isLive ? logicReachability(doc, q.publishedJson).report : null;
+      const engagedN = curStats?.starts ?? 0;
+      const completedN = curStats?.finished ?? 0;
+      const ledger = isLive && curStats ? buildStepLedger(doc, curStats.stepEvents, engagedN, completedN) : null;
       const r = buildQuizInsights({
         doc,
         reachability,
-        ledger: null,
-        engaged: 0,
-        completed: 0,
-        rangeDays: range.days,
+        ledger,
+        engaged: engagedN,
+        completed: completedN,
+        rangeDays: range.days || 90,
         published: isLive,
         cap: Number.POSITIVE_INFINITY,
       });
       const tierA = r.cards.filter((c) => c.tier === "A");
-      for (const card of tierA) {
+      for (const card of r.cards) {
         if (dismissals.get(q.id)?.active.has(card.id)) {
           dismissedCount += 1;
           continue;

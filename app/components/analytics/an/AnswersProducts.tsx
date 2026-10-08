@@ -437,7 +437,7 @@ export function ProductsTab({ data, bar }: { data: D; bar: ReactNode }) {
     { h: "Product", asc: true, v: (p) => p.title.toLowerCase() },
     {
       h: "Shown",
-      sub: "% of finishers",
+      sub: "% who finished",
       t: "Times the product was on a shopper’s results page, and the share of shoppers who finished that saw it.",
       v: (p) => p.impressions,
       f: (p) => (p.impressions ? two(num(p.impressions), pct0(p.share ?? 0)) : DASH),

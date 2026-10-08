@@ -202,4 +202,13 @@ describe("home rows", () => {
     expect(data.rows.find((r) => r.id === "live1")!.prior).toMatchObject({ starts: 2, finished: 1 });
     expect(data.tiles.sessionsDeltaPct).toBe(-50);
   });
+
+  it("live quizzes also get the traffic findings over their own cohort", async () => {
+    const data = await run();
+    const starved = data.findings.find((f) => f.quizId === "live1" && f.cardId === "traffic-starved");
+    expect(starved).toBeTruthy();
+    // Drafts never get a traffic finding.
+    expect(data.findings.some((f) => f.quizId !== "live1" && f.cardId === "traffic-starved")).toBe(false);
+  });
 });
+

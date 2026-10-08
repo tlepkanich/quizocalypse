@@ -13,7 +13,7 @@
 // enforced by loadQuizCohort (a foreign quiz id 404s).
 
 import { z } from "zod";
-import { loadQuizCohort, maskEmail } from "./quizAnalytics.server";
+import { backInStockMatcher, loadQuizCohort, maskEmail } from "./quizAnalytics.server";
 import type { CohortContact, ContactStatus } from "./analyticsCohort";
 import { formatDate } from "./formatDate";
 import { defaultSegmentName, segmentRules, type SegmentSpec } from "./klaviyoSegment";
@@ -185,8 +185,8 @@ function applySegment(loaded: Loaded, list: CohortContact[], segment: ContactsQu
     case "no_match":
       return list.filter((c) => c.result?.noMatch);
     case "back_in_stock": {
-      const bis = new Set(loaded.bis.map((b) => b.email.toLowerCase()));
-      return list.filter((c) => bis.has(c.email.toLowerCase()));
+      const isBackInStock = backInStockMatcher(loaded.bis);
+      return list.filter((c) => isBackInStock(c.sessionId, c.email));
     }
     default:
       return list;

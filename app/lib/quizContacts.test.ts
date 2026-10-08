@@ -180,3 +180,22 @@ describe("copy and export", () => {
     expect(csv.split("\n")[0]).toContain("Skin type?");
   });
 });
+
+describe("back-in-stock", () => {
+  it("matches the request's own session, not the same email from another session", async () => {
+    p.backInStockRequest.findMany.mockResolvedValue([
+      { email: "bo@example.com", sessionId: "s2" },
+      { email: "amy@example.com", sessionId: "other-session" },
+    ]);
+    const d = await quizContactsForShop({ id: "shop1" }, "qz1", new URLSearchParams("r=90d&segment=back_in_stock"));
+    expect(d.total).toBe(1);
+    expect(d.rows[0]!.emailMasked.startsWith("b")).toBe(true);
+  });
+
+  it("a request saved before sessions were recorded falls back to the email", async () => {
+    p.backInStockRequest.findMany.mockResolvedValue([{ email: "AMY@example.com", sessionId: null }]);
+    const d = await quizContactsForShop({ id: "shop1" }, "qz1", new URLSearchParams("r=90d&segment=back_in_stock"));
+    expect(d.total).toBe(1);
+  });
+});
+
